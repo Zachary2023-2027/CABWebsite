@@ -294,6 +294,7 @@ js/state.js       — state shape, defaults, localStorage, mutations
 js/layout.js      — the two-cursor layout engine, countertop segmentation
 js/pricing.js     — pure pricing functions and the summary rollup
 js/preview.js     — SVG scene + reusable per-unit and palette-icon renderers
+js/format.js      — money / length / percentage display formatting
 js/app.js         — DOM wiring, event handling, render loop
 README.md         — what it is, how to run it locally
 ```
