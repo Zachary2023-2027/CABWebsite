@@ -1,0 +1,361 @@
+/* ===========================================================================
+   Kitchen Cabinet Builder. Design tokens.
+   Single source of truth. No colour, size, or duration is defined anywhere
+   else in the app. Values are raw primitives first, then mapped to semantic
+   names. Only the semantic names are used by components.
+   =========================================================================== */
+
+/* --- Typefaces. Local files, no network request, works offline. ---------- */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin-500-normal.woff2') format('woff2');
+}
+
+/* --- Primitives. Never used directly by a component. --------------------- */
+
+:root {
+  /* Warm neutral ramp. Hue held near 40deg, saturation under 8%. */
+  --n-00: #FBFAF7;
+  --n-05: #F4F2EE;
+  --n-10: #EAE7E1;
+  --n-20: #DFDAD2;
+  --n-30: #C4BDB2;
+  --n-40: #A39C92;
+  --n-50: #6A645B;
+  --n-60: #443F38;
+  --n-70: #2D2A25;
+  --n-80: #1C1A17;
+  --n-90: #131210;
+  --n-95: #0D0C0B;
+  --n-light-text: #F1EEE8;
+  --n-dark-text: #1B1916;
+
+  /* Steel marking blue. The only accent. */
+  --a-40: #124265;
+  --a-50: #17507A;
+  --a-60: #1D5E8C;
+  --a-70: #5A9DCB;
+  --a-80: #6FB0DC;
+  --a-90: #86BEE4;
+  --a-tint-light: #E3EDF4;
+  --a-tint-dark: #1B2E3B;
+
+  /* Semantic. Muted, mixed toward the warm neutral, never fluorescent. */
+  --warn-dark: #8F5A0B;
+  --warn-light: #E0A94A;
+  --warn-tint-light: #F6EEDF;
+  --warn-tint-dark: #2E2416;
+
+  --err-dark: #A32E28;
+  --err-light: #E88A82;
+  --err-tint-light: #F7E7E5;
+  --err-tint-dark: #331B19;
+
+  --ok-dark: #2F6B3D;
+  --ok-light: #6FBF84;
+  --ok-tint-light: #E6F0E7;
+  --ok-tint-dark: #17291B;
+}
+
+/* --- Semantic mapping, light. -------------------------------------------- */
+
+:root,
+.t-light {
+  color-scheme: light;
+
+  --bg: var(--n-05);
+  --surface: var(--n-00);
+  --sunken: var(--n-10);
+  --border: var(--n-20);
+  --border-strong: var(--n-30);
+
+  --text: var(--n-dark-text);
+  --text-2: var(--n-50);
+  --text-disabled: var(--n-40);
+
+  --accent: var(--a-60);
+  --accent-hover: var(--a-50);
+  --accent-press: var(--a-40);
+  --accent-fg: var(--n-00);
+  --accent-weak: var(--a-tint-light);
+
+  --warn: var(--warn-dark);
+  --warn-weak: var(--warn-tint-light);
+  --error: var(--err-dark);
+  --error-weak: var(--err-tint-light);
+  --ok: var(--ok-dark);
+  --ok-weak: var(--ok-tint-light);
+
+  --scrim: rgb(27 25 22 / 0.32);
+
+  /* Drawing tokens. Shared by the 2D elevation and the 3D materials. */
+  --dw-carcass: #E9E3D7;
+  --dw-door: #D8D0C1;
+  --dw-drawer: #CBC2B1;
+  --dw-benchtop: #A9A196;
+  --dw-kick: #5F594F;
+  --dw-appliance: #C8CACB;
+  --dw-filler: #EFEAE0;
+  --dw-obstacle: #BFB5A6;
+  --dw-selected: var(--accent);
+  --dw-ghost: #E5E2DC;
+  --dw-line: #2A2722;
+  --dw-dim: #7A736A;
+  --dw-hatch: #B4AB9C;
+}
+
+/* --- Semantic mapping, dark. Not an inversion. --------------------------
+   The ramp is re-picked: surfaces sit closer together than in light so
+   hairlines still read, text drops to 94% white to avoid halation, and the
+   accent moves up the ramp because the dark blue disappears on a dark ground.
+   Drawing strokes flip to light on dark, the way a reversed drawing reads. */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not(.t-light) {
+    color-scheme: dark;
+
+    --bg: var(--n-90);
+    --surface: var(--n-80);
+    --sunken: var(--n-95);
+    --border: var(--n-70);
+    --border-strong: var(--n-60);
+
+    --text: var(--n-light-text);
+    --text-2: #A29B91;
+    --text-disabled: var(--n-50);
+
+    --accent: var(--a-80);
+    --accent-hover: var(--a-90);
+    --accent-press: var(--a-70);
+    --accent-fg: #0F1418;
+    --accent-weak: var(--a-tint-dark);
+
+    --warn: var(--warn-light);
+    --warn-weak: var(--warn-tint-dark);
+    --error: var(--err-light);
+    --error-weak: var(--err-tint-dark);
+    --ok: var(--ok-light);
+    --ok-weak: var(--ok-tint-dark);
+
+    --scrim: rgb(0 0 0 / 0.55);
+
+    --dw-carcass: #35302A;
+    --dw-door: #423C33;
+    --dw-drawer: #4B443A;
+    --dw-benchtop: #5A5349;
+    --dw-kick: #201D19;
+    --dw-appliance: #3E4245;
+    --dw-filler: #2C2822;
+    --dw-obstacle: #52483C;
+    --dw-selected: var(--accent);
+    --dw-ghost: #26231F;
+    --dw-line: #C9C3B8;
+    --dw-dim: #8A8378;
+    --dw-hatch: #5A5248;
+  }
+}
+
+:root[data-theme='dark'],
+.t-dark {
+  color-scheme: dark;
+
+  --bg: var(--n-90);
+  --surface: var(--n-80);
+  --sunken: var(--n-95);
+  --border: var(--n-70);
+  --border-strong: var(--n-60);
+
+  --text: var(--n-light-text);
+  --text-2: #A29B91;
+  --text-disabled: var(--n-50);
+
+  --accent: var(--a-80);
+  --accent-hover: var(--a-90);
+  --accent-press: var(--a-70);
+  --accent-fg: #0F1418;
+  --accent-weak: var(--a-tint-dark);
+
+  --warn: var(--warn-light);
+  --warn-weak: var(--warn-tint-dark);
+  --error: var(--err-light);
+  --error-weak: var(--err-tint-dark);
+  --ok: var(--ok-light);
+  --ok-weak: var(--ok-tint-dark);
+
+  --scrim: rgb(0 0 0 / 0.55);
+
+  --dw-carcass: #35302A;
+  --dw-door: #423C33;
+  --dw-drawer: #4B443A;
+  --dw-benchtop: #5A5349;
+  --dw-kick: #201D19;
+  --dw-appliance: #3E4245;
+  --dw-filler: #2C2822;
+  --dw-obstacle: #52483C;
+  --dw-selected: var(--accent);
+  --dw-ghost: #26231F;
+  --dw-line: #C9C3B8;
+  --dw-dim: #8A8378;
+  --dw-hatch: #5A5248;
+}
+
+/* Forced theme scopes. Used to show both palettes at once, and by the print
+   layouts, which are always light regardless of the app theme.
+   Setting colour here is required, not cosmetic: descendants that do not
+   declare their own colour inherit the computed value from an ancestor
+   outside the scope, so without this they keep the other theme's text. */
+
+.t-light,
+.t-dark {
+  color: var(--text);
+  background: var(--surface);
+}
+
+/* --- Type. Five sizes. Set once. ----------------------------------------- */
+
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --fs-1: 11px;   /* section labels only, uppercase, tracked */
+  --fs-2: 13px;   /* table cells, secondary text, dense UI */
+  --fs-3: 15px;   /* body, form controls, default */
+  --fs-4: 19px;   /* panel and section headings */
+  --fs-5: 25px;   /* page title */
+
+  --lh-1: 16px;
+  --lh-2: 18px;
+  --lh-3: 22px;
+  --lh-4: 26px;
+  --lh-5: 32px;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  --track-label: 0.06em;
+
+  /* Documented exception. Workshop view only, read at arm's length. */
+  --fs-workshop: 64px;
+  --lh-workshop: 68px;
+}
+
+/* Every number, dimension, part code and table cell. Tabular figures on. */
+.num,
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+/* --- Spacing. One 4px scale. Number is the multiple of 4. ---------------- */
+
+:root {
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+}
+
+/* --- Borders and radius. Hairlines only. No shadow as decoration. -------- */
+
+:root {
+  --bw: 1px;
+  --r-0: 0px;
+  --r-1: 2px;   /* buttons, inputs, badges */
+  --r-2: 3px;   /* cards, panels, dialogs */
+}
+
+/* --- Motion. 120 to 160ms, ease-out, opacity and small transforms only. -- */
+
+:root {
+  --dur-1: 120ms;
+  --dur-2: 160ms;
+  --dur-camera: 400ms;  /* 3D camera preset moves only */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0ms;
+    --dur-2: 0ms;
+    --dur-camera: 0ms;
+  }
+}
+
+/* --- Density. Comfortable on the planner, compact on the cut list. ------- */
+
+:root,
+[data-density='comfortable'] {
+  --row-h: 40px;
+  --ctl-h: 36px;
+  --pad-x: 12px;
+  --pad-y: 8px;
+  --gap: var(--sp-3);
+}
+
+[data-density='compact'] {
+  --row-h: 30px;
+  --ctl-h: 28px;
+  --pad-x: 8px;
+  --pad-y: 4px;
+  --gap: var(--sp-2);
+}
+
+/* --- Layout and focus ---------------------------------------------------- */
+
+:root {
+  --max-content: 1280px;
+  --rail-w: 56px;
+  --panel-w: 340px;
+  --topbar-h: 52px;
+  --tabbar-h: 56px;
+  --touch-min: 44px;
+
+  --focus-w: 2px;
+  --focus-offset: 2px;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: var(--focus-w) solid var(--accent);
+  outline-offset: var(--focus-offset);
+}

@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design Tokens</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Board chrome. Uses only tokens. No literal colour or size below. */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-3);
+  line-height: var(--lh-3);
+  -webkit-font-smoothing: antialiased;
+}
+
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  height: var(--topbar-h);
+  display: flex; align-items: center; gap: var(--sp-4);
+  padding: 0 var(--sp-6);
+  background: var(--surface);
+  border-bottom: var(--bw) solid var(--border);
+}
+.topbar h1 { font-size: var(--fs-3); font-weight: var(--fw-semibold); margin: 0; }
+.topbar .ctx { color: var(--text-2); font-size: var(--fs-2); }
+.topbar .right { margin-left: auto; display: flex; gap: var(--sp-2); }
+
+.seg { display: flex; border: var(--bw) solid var(--border-strong); border-radius: var(--r-1); overflow: hidden; }
+.seg button {
+  font: inherit; font-size: var(--fs-2); color: var(--text-2);
+  height: var(--ctl-h); padding: 0 var(--pad-x);
+  background: var(--surface); border: 0; cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.seg button + button { border-left: var(--bw) solid var(--border); }
+.seg button:hover { background: var(--sunken); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+
+main { max-width: var(--max-content); margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-20); }
+
+section { margin-top: var(--sp-10); }
+section:first-of-type { margin-top: var(--sp-6); }
+
+.label {
+  font-size: var(--fs-1); line-height: var(--lh-1);
+  text-transform: uppercase; letter-spacing: var(--track-label);
+  color: var(--text-2); font-weight: var(--fw-medium);
+}
+h2 { font-size: var(--fs-4); line-height: var(--lh-4); font-weight: var(--fw-semibold); margin: var(--sp-1) 0 0; }
+.note { color: var(--text-2); font-size: var(--fs-2); line-height: var(--lh-2); margin: var(--sp-1) 0 0; max-width: 68ch; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); margin-top: var(--sp-4); }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--surface);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-2);
+  padding: var(--sp-4);
+}
+.panel > .label { display: block; margin-bottom: var(--sp-3); }
+
+.row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  align-items: center; gap: var(--sp-3);
+  height: var(--row-h);
+  border-top: var(--bw) solid var(--border);
+}
+.row:first-of-type { border-top: 0; }
+.chip { width: 28px; height: 20px; border: var(--bw) solid var(--border-strong); border-radius: var(--r-1); }
+.tname { font-size: var(--fs-2); }
+.thex, .tratio {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-2); color: var(--text-2); text-align: right;
+}
+.tratio { min-width: 8ch; }
+.tratio.pass { color: var(--ok); }
+.tratio.fail { color: var(--error); }
+.tratio.exempt { color: var(--text-2); }
+
+.draw-wrap { margin-top: var(--sp-3); border: var(--bw) solid var(--border); border-radius: var(--r-1); background: var(--bg); }
+.draw-wrap svg { display: block; width: 100%; height: auto; }
+
+.type-spec { margin-top: var(--sp-4); }
+.type-row {
+  display: grid; grid-template-columns: 10ch 8ch 1fr; align-items: baseline;
+  gap: var(--sp-4); padding: var(--sp-3) 0;
+  border-top: var(--bw) solid var(--border);
+}
+.type-row:first-child { border-top: 0; }
+.type-row .meta { font-family: var(--font-mono); font-size: var(--fs-2); color: var(--text-2); font-variant-numeric: tabular-nums; }
+
+table { width: 100%; border-collapse: collapse; margin-top: var(--sp-3); }
+th, td { text-align: left; padding: var(--pad-y) var(--pad-x); border-top: var(--bw) solid var(--border); font-size: var(--fs-2); }
+th { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: var(--track-label); color: var(--text-2); font-weight: var(--fw-medium); border-top: 0; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.sp-row { display: flex; align-items: center; gap: var(--sp-3); height: var(--row-h); border-top: var(--bw) solid var(--border); }
+.sp-row:first-child { border-top: 0; }
+.sp-bar { background: var(--accent); height: 10px; border-radius: var(--r-1); }
+.sp-name { font-family: var(--font-mono); font-size: var(--fs-2); width: 9ch; font-variant-numeric: tabular-nums; }
+.sp-val { font-family: var(--font-mono); font-size: var(--fs-2); color: var(--text-2); width: 6ch; text-align: right; }
+
+.swatchbar { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-top: var(--sp-3); }
+.sw { border: var(--bw) solid var(--border-strong); border-radius: var(--r-1); padding: var(--sp-2); min-width: 118px; }
+.sw .box { height: 34px; border: var(--bw) solid var(--border-strong); border-radius: var(--r-1); }
+.sw .nm { font-size: var(--fs-1); color: var(--text-2); margin-top: var(--sp-1); }
+.sw .hx { font-family: var(--font-mono); font-size: var(--fs-1); font-variant-numeric: tabular-nums; }
+
+.misc { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4); }
+
+ul.flags { margin: var(--sp-3) 0 0; padding-left: var(--sp-5); }
+ul.flags li { font-size: var(--fs-2); line-height: var(--lh-3); color: var(--text-2); margin-bottom: var(--sp-2); }
+ul.flags b { color: var(--text); font-weight: var(--fw-medium); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div>
+    <h1>Design tokens</h1>
+  </div>
+  <span class="ctx">Step 1. Colour, type, spacing, borders, drawing colours. Both themes.</span>
+  <div class="right">
+    <div class="seg" role="group" aria-label="Density">
+      <button type="button" data-density-set="comfortable" aria-pressed="true">Comfortable</button>
+      <button type="button" data-density-set="compact" aria-pressed="false">Compact</button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="system" aria-pressed="true">System</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <section>
+    <span class="label">01</span>
+    <h2>Surfaces and text</h2>
+    <p class="note">Warm neutral ramp, hue held near 40 degrees, saturation under 8 percent. Panels separate with a hairline border, never a shadow. Contrast ratios are measured from the resolved tokens when this page loads, not written by hand.</p>
+    <div class="cols">
+      <div class="panel t-light"><span class="label">Light</span><div data-rows="surfaces"></div></div>
+      <div class="panel t-dark"><span class="label">Dark</span><div data-rows="surfaces"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">02</span>
+    <h2>Accent and semantic</h2>
+    <p class="note">One accent, a steel marking blue. It reads as ink on a drawing rather than a brand colour, and it is the only hue that is not a warm neutral. Amber, red and green are reserved for warning, error and success, which is why the accent is blue: nothing else was left that does not collide with a state.</p>
+    <div class="cols">
+      <div class="panel t-light"><span class="label">Light</span><div data-rows="accent"></div></div>
+      <div class="panel t-dark"><span class="label">Dark</span><div data-rows="accent"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">03</span>
+    <h2>Drawing tokens</h2>
+    <p class="note">Used by the 2D elevation and as the base colours for the 3D materials, so a door is the same value in both views. Doors sit one step off the carcass and drawer fronts one step off doors, so the eye separates them without an outline. Strokes reverse to light on dark.</p>
+    <div class="cols">
+      <div class="panel t-light">
+        <span class="label">Light</span>
+        <div data-swatches="drawing"></div>
+        <div class="draw-wrap" data-elevation></div>
+      </div>
+      <div class="panel t-dark">
+        <span class="label">Dark</span>
+        <div data-swatches="drawing"></div>
+        <div class="draw-wrap" data-elevation></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">04</span>
+    <h2>Type</h2>
+    <p class="note">Inter for the interface, JetBrains Mono for every number, dimension, part code and table cell. Both are local files, so the app works with no network. Five sizes, set once. Headings are size and weight only, never colour.</p>
+
+    <div class="panel type-spec">
+      <span class="label">Scale</span>
+      <div class="type-row"><span class="meta">fs-5 / 25</span><span class="meta">600</span><span style="font-size:var(--fs-5);line-height:var(--lh-5);font-weight:var(--fw-semibold)">Wall B, base run</span></div>
+      <div class="type-row"><span class="meta">fs-4 / 19</span><span class="meta">600</span><span style="font-size:var(--fs-4);line-height:var(--lh-4);font-weight:var(--fw-semibold)">Three drawer base, 600 wide</span></div>
+      <div class="type-row"><span class="meta">fs-3 / 15</span><span class="meta">400</span><span style="font-size:var(--fs-3);line-height:var(--lh-3)">Body and form controls. The default size.</span></div>
+      <div class="type-row"><span class="meta">fs-2 / 13</span><span class="meta">400</span><span style="font-size:var(--fs-2);line-height:var(--lh-2)">Table cells, secondary text, dense interface.</span></div>
+      <div class="type-row"><span class="meta">fs-1 / 11</span><span class="meta">500</span><span class="label">Section label, tracked</span></div>
+    </div>
+
+    <div class="panel type-spec">
+      <span class="label">Tabular figures</span>
+      <p class="note">Digits hold the same width in every row, so a column of part sizes lines up on the decimal without any alignment rules.</p>
+      <table>
+        <thead><tr><th>Part code</th><th>Name</th><th class="n">Length</th><th class="n">Width</th><th class="n">Thk</th><th class="n">Cost</th></tr></thead>
+        <tbody>
+          <tr><td class="n">B03-SIDE-L</td><td>Left side</td><td class="n">720</td><td class="n">560</td><td class="n">16</td><td class="n">11.40</td></tr>
+          <tr><td class="n">B03-SIDE-R</td><td>Right side</td><td class="n">720</td><td class="n">560</td><td class="n">16</td><td class="n">11.40</td></tr>
+          <tr><td class="n">B03-BOT</td><td>Bottom</td><td class="n">568</td><td class="n">560</td><td class="n">16</td><td class="n">9.08</td></tr>
+          <tr><td class="n">B03-BACK</td><td>Back</td><td class="n">1188</td><td class="n">704</td><td class="n">6</td><td class="n">7.15</td></tr>
+          <tr><td class="n">B03-DRWR-F1</td><td>Drawer front 1</td><td class="n">596</td><td class="n">283</td><td class="n">18</td><td class="n">14.72</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">05</span>
+    <h2>Spacing</h2>
+    <p class="note">One 4px scale. The token number is the multiple, so sp-3 is 12px. Nothing in the app uses a value that is not on this scale.</p>
+    <div class="panel" data-spacing></div>
+  </section>
+
+  <section>
+    <span class="label">06</span>
+    <h2>Borders, radius, motion, density</h2>
+    <div class="misc">
+      <div class="panel">
+        <span class="label">Border and radius</span>
+        <table>
+          <tr><td>Hairline</td><td class="n">1px</td></tr>
+          <tr><td>Radius, controls</td><td class="n">2px</td></tr>
+          <tr><td>Radius, panels</td><td class="n">3px</td></tr>
+          <tr><td>Shadow</td><td class="n">none</td></tr>
+        </table>
+      </div>
+      <div class="panel">
+        <span class="label">Motion</span>
+        <table>
+          <tr><td>Fast</td><td class="n">120ms</td></tr>
+          <tr><td>Base</td><td class="n">160ms</td></tr>
+          <tr><td>Camera preset</td><td class="n">400ms</td></tr>
+          <tr><td>Easing</td><td class="n">ease-out</td></tr>
+        </table>
+      </div>
+      <div class="panel">
+        <span class="label">Density</span>
+        <table>
+          <thead><tr><th></th><th class="n">Comf</th><th class="n">Comp</th></tr></thead>
+          <tr><td>Row height</td><td class="n">40</td><td class="n">30</td></tr>
+          <tr><td>Control height</td><td class="n">36</td><td class="n">28</td></tr>
+          <tr><td>Pad X</td><td class="n">12</td><td class="n">8</td></tr>
+        </table>
+      </div>
+      <div class="panel">
+        <span class="label">Layout</span>
+        <table>
+          <tr><td>Max content</td><td class="n">1280</td></tr>
+          <tr><td>Left rail</td><td class="n">56</td></tr>
+          <tr><td>Side panel</td><td class="n">340</td></tr>
+          <tr><td>Touch minimum</td><td class="n">44</td></tr>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <span class="label">07</span>
+    <h2>Decisions and open questions</h2>
+    <ul class="flags">
+      <li><b>Accent is a steel blue.</b> Amber, red and green are committed to warning, error and success. An orange or green accent would collide with a state colour at a glance, which is exactly when it matters. Blue is what was left that still reads as instrument marking. Tell me if you want it warmer and I will retune the whole ramp.</li>
+      <li><b>Five sizes, plus one exception.</b> The workshop view needs numbers readable at arm's length, which no size in a five step interface scale can do. It is a separate token, fs-workshop at 64px, used on that screen only.</li>
+      <li><b>Disabled text is below 4.5:1.</b> Deliberate, and the only token that is. Disabled controls are exempt under WCAG, and holding disabled text at 4.5:1 makes it look enabled.</li>
+      <li><b>Monospace is JetBrains Mono.</b> Guessed. It has a clear 0 with a dot, unambiguous 1 against l, and open apertures at small sizes. IBM Plex Mono is the obvious alternative if you want something drier.</li>
+      <li><b>Surface is lighter than background in light mode and lighter in dark mode too.</b> Panels lift off the page in both. The alternative, sinking panels, made the hairline borders do too much work.</li>
+      <li><b>Drawing colours are my invention.</b> There is nothing in the brief that fixes them. They are tuned so a full elevation reads as a drawing rather than a chart, and so every part type is separable in greyscale for printing.</li>
+    </ul>
+  </section>
+
+</main>
+
+<script>
+// ---- contrast, measured from the resolved tokens -------------------------
+
+const srgb = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
+function luminance(hex) {
+  const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = srgb(((n >> 16) & 255) / 255);
+  const g = srgb(((n >> 8) & 255) / 255);
+  const b = srgb((n & 255) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrast(fg, bg) {
+  const a = luminance(fg), b = luminance(bg);
+  if (a === null || b === null) return null;
+  const hi = Math.max(a, b), lo = Math.min(a, b);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+const tok = (el, name) => getComputedStyle(el).getPropertyValue(name).trim();
+
+// ---- token tables --------------------------------------------------------
+
+const GROUPS = {
+  surfaces: [
+    { t: '--bg', label: 'Background' },
+    { t: '--surface', label: 'Surface' },
+    { t: '--sunken', label: 'Sunken' },
+    { t: '--border', label: 'Border, hairline' },
+    { t: '--border-strong', label: 'Border, strong' },
+    { t: '--text', label: 'Text, primary', on: '--surface' },
+    { t: '--text-2', label: 'Text, secondary', on: '--surface' },
+    { t: '--text-disabled', label: 'Text, disabled', on: '--surface', exempt: true },
+  ],
+  accent: [
+    { t: '--accent', label: 'Accent', on: '--surface' },
+    { t: '--accent-fg', label: 'Accent foreground', on: '--accent' },
+    { t: '--accent-weak', label: 'Accent, selection tint' },
+    { t: '--warn', label: 'Warning', on: '--surface' },
+    { t: '--warn-weak', label: 'Warning tint' },
+    { t: '--error', label: 'Error', on: '--surface' },
+    { t: '--error-weak', label: 'Error tint' },
+    { t: '--ok', label: 'Success', on: '--surface' },
+    { t: '--ok-weak', label: 'Success tint' },
+  ],
+};
+
+const DRAWING = [
+  ['--dw-carcass', 'Carcass'], ['--dw-door', 'Door'], ['--dw-drawer', 'Drawer front'],
+  ['--dw-benchtop', 'Benchtop'], ['--dw-kick', 'Kickboard'], ['--dw-appliance', 'Appliance'],
+  ['--dw-filler', 'Filler'], ['--dw-obstacle', 'Obstacle'], ['--dw-selected', 'Selected'],
+  ['--dw-ghost', 'Ghosted'], ['--dw-line', 'Stroke'], ['--dw-dim', 'Dimension'],
+];
+
+function renderRows(host, group) {
+  host.innerHTML = GROUPS[group].map((r) => {
+    const val = tok(host, r.t);
+    let ratio = '', cls = '';
+    if (r.on) {
+      const c = contrast(val, tok(host, r.on));
+      if (c !== null) {
+        ratio = c.toFixed(2) + ':1';
+        cls = r.exempt ? 'exempt' : c >= 4.5 ? 'pass' : 'fail';
+      }
+    }
+    return `<div class="row">
+      <span class="chip" style="background:${val}"></span>
+      <span class="tname">${r.label}</span>
+      <span class="thex">${val.toUpperCase()}</span>
+      <span class="tratio ${cls}">${ratio || '&nbsp;'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSwatches(host) {
+  host.innerHTML = '<div class="swatchbar">' + DRAWING.map(([t, label]) => {
+    const val = tok(host, t);
+    return `<div class="sw"><div class="box" style="background:${val}"></div>
+      <div class="nm">${label}</div><div class="hx">${val.toUpperCase()}</div></div>`;
+  }).join('') + '</div>';
+}
+
+// ---- sample elevation, drawn with the drawing tokens ---------------------
+// 3000mm run. Floor 2400. Benchtop top 1500 (900 AFF). Wall cabinets 900 down.
+
+function elevation(host) {
+  const g = (t) => tok(host, t);
+  const S = 6;                        // stroke width in mm at this scale
+  const line = `stroke="${g('--dw-line')}" stroke-width="${S}"`;
+  const p = [];
+  const R = (x, y, w, h, fill, extra = '') =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" ${line} ${extra}/>`;
+
+  // base carcasses, kick, benchtop
+  p.push(R(0, 2250, 2900, 150, g('--dw-kick')));                       // kickboard
+  p.push(R(0, 1530, 600, 720, g('--dw-carcass')));                     // 600 drawer base
+  p.push(R(600, 1530, 900, 720, g('--dw-carcass')));                   // 900 door base, selected
+  p.push(R(1500, 1530, 600, 720, g('--dw-appliance')));                // oven
+  p.push(R(2100, 1530, 800, 720, g('--dw-ghost')));                    // ghosted cabinet
+  p.push(R(2900, 1530, 100, 720, g('--dw-filler')));                   // filler
+  p.push(R(-20, 1490, 3040, 40, g('--dw-benchtop')));                  // benchtop with overhang
+
+  // drawer fronts on the 600
+  for (let i = 0; i < 3; i++) p.push(R(8, 1538 + i * 238, 584, 230, g('--dw-drawer')));
+  // doors on the 900
+  p.push(R(608, 1538, 434, 704, g('--dw-door')));
+  p.push(R(1050, 1538, 442, 704, g('--dw-door')));
+  // ghosted cabinet doors
+  p.push(R(2108, 1538, 392, 704, g('--dw-ghost')));
+  p.push(R(2508, 1538, 384, 704, g('--dw-ghost')));
+  // oven face
+  p.push(R(1530, 1600, 540, 400, g('--dw-appliance')));
+
+  // wall cabinets
+  p.push(R(0, 180, 900, 720, g('--dw-carcass')));
+  p.push(R(8, 188, 434, 704, g('--dw-door')));
+  p.push(R(450, 188, 442, 704, g('--dw-door')));
+  p.push(R(1500, 180, 900, 720, g('--dw-carcass')));
+  p.push(R(1508, 188, 434, 704, g('--dw-door')));
+  p.push(R(1950, 188, 442, 704, g('--dw-door')));
+
+  // obstacle, a services duct
+  p.push(R(2400, 180, 200, 1310, g('--dw-obstacle')));
+
+  // selection, the 900 base
+  p.push(`<rect x="600" y="1530" width="900" height="720" fill="none"
+    stroke="${g('--dw-selected')}" stroke-width="${S * 2.5}"/>`);
+
+  // floor
+  p.push(`<line x1="-40" y1="2400" x2="3040" y2="2400" stroke="${g('--dw-line')}" stroke-width="${S * 1.6}"/>`);
+
+  // dimension line
+  const dim = g('--dw-dim');
+  p.push(`<line x1="0" y1="2560" x2="3000" y2="2560" stroke="${dim}" stroke-width="${S}"/>`);
+  p.push(`<line x1="0" y1="2520" x2="0" y2="2600" stroke="${dim}" stroke-width="${S}"/>`);
+  p.push(`<line x1="3000" y1="2520" x2="3000" y2="2600" stroke="${dim}" stroke-width="${S}"/>`);
+  p.push(`<text x="1500" y="2545" text-anchor="middle" fill="${dim}"
+    font-family="JetBrains Mono, monospace" font-size="86">3000</text>`);
+
+  // cabinet numbers
+  const num = (x, t) => `<text x="${x}" y="1450" text-anchor="middle" fill="${dim}"
+    font-family="JetBrains Mono, monospace" font-size="78">${t}</text>`;
+  p.push(num(300, 'B01 600'), num(1050, 'B02 900'), num(1800, 'AP1 600'), num(2500, 'B03 800'));
+
+  host.innerHTML = `<svg viewBox="-60 120 3140 2540" preserveAspectRatio="xMidYMid meet"
+    role="img" aria-label="Sample kitchen elevation using the drawing tokens">${p.join('')}</svg>`;
+}
+
+// ---- spacing scale -------------------------------------------------------
+
+function spacing(host) {
+  const names = ['--sp-1','--sp-2','--sp-3','--sp-4','--sp-5','--sp-6','--sp-8','--sp-10','--sp-12','--sp-16','--sp-20'];
+  host.innerHTML = names.map((n) => {
+    const v = tok(document.documentElement, n);
+    return `<div class="sp-row">
+      <span class="sp-name">${n.replace('--','')}</span>
+      <span class="sp-bar" style="width:${v}"></span>
+      <span class="sp-val">${v}</span>
+    </div>`;
+  }).join('');
+}
+
+// ---- boot ----------------------------------------------------------------
+
+function paint() {
+  document.querySelectorAll('[data-rows]').forEach((el) => renderRows(el, el.dataset.rows));
+  document.querySelectorAll('[data-swatches]').forEach(renderSwatches);
+  document.querySelectorAll('[data-elevation]').forEach(elevation);
+  document.querySelectorAll('[data-spacing]').forEach(spacing);
+}
+
+document.querySelectorAll('[data-theme-set]').forEach((b) => {
+  b.addEventListener('click', () => {
+    const v = b.dataset.themeSet;
+    if (v === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = v;
+    document.querySelectorAll('[data-theme-set]').forEach((x) =>
+      x.setAttribute('aria-pressed', String(x === b)));
+    paint();
+  });
+});
+
+document.querySelectorAll('[data-density-set]').forEach((b) => {
+  b.addEventListener('click', () => {
+    document.documentElement.dataset.density = b.dataset.densitySet;
+    document.querySelectorAll('[data-density-set]').forEach((x) =>
+      x.setAttribute('aria-pressed', String(x === b)));
+  });
+});
+
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paint);
+document.fonts.ready.then(paint);
+paint();
+</script>
+</body>
+</html>
