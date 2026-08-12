@@ -1,0 +1,535 @@
+/* ===========================================================================
+   Kitchen Cabinet Builder. Component library.
+   Every value comes from tokens.css. No literal colour, size or duration.
+   Class per component, single modifier suffix. Flat specificity, so nothing
+   here can silently cancel anything else out.
+   =========================================================================== */
+
+/* --- Derived measures ---------------------------------------------------- */
+
+:root {
+  --btn-pad-x: calc(var(--pad-x) + var(--sp-1));  /* 16 comfortable, 12 compact */
+  --field-pad-x: var(--pad-x);
+  --icon: 16px;
+}
+
+/* Touch. Controls only, not table rows, so the cut list stays dense on a
+   tablet while every tap target still clears 44px.
+   The density selectors have to be listed too: they set --ctl-h on a nested
+   element, which would otherwise beat a :root only override for everything
+   inside them. */
+@media (pointer: coarse) {
+  :root,
+  [data-density='comfortable'],
+  [data-density='compact'] {
+    --ctl-h: var(--touch-min);
+  }
+}
+
+/* --- Button -------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  height: var(--ctl-h);
+  padding: 0 var(--btn-pad-x);
+  border: var(--bw) solid transparent;
+  border-radius: var(--r-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-3);
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  background: none;
+  color: var(--text);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease),
+              color var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease);
+}
+
+.btn--primary { background: var(--accent); color: var(--accent-fg); }
+.btn--primary:hover:not(:disabled) { background: var(--accent-hover); }
+.btn--primary:active:not(:disabled) { background: var(--accent-press); }
+
+.btn--secondary { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
+.btn--secondary:hover:not(:disabled) { background: var(--sunken); }
+.btn--secondary:active:not(:disabled) { background: var(--sunken); border-color: var(--text-2); }
+
+.btn--ghost { color: var(--text-2); }
+.btn--ghost:hover:not(:disabled) { background: var(--sunken); color: var(--text); }
+.btn--ghost:active:not(:disabled) { background: var(--sunken); }
+
+.btn--danger { background: var(--error); color: var(--n-00); }
+.btn--danger:hover:not(:disabled) { filter: saturate(1.1) brightness(0.94); }
+.btn--danger:active:not(:disabled) { filter: saturate(1.1) brightness(0.88); }
+
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn__icon { width: var(--icon); height: var(--icon); flex: none; }
+
+/* --- IconButton ---------------------------------------------------------- */
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--ctl-h); height: var(--ctl-h);
+  padding: 0;
+  border: var(--bw) solid transparent;
+  border-radius: var(--r-1);
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.icon-btn:hover:not(:disabled) { background: var(--sunken); color: var(--text); }
+.icon-btn:active:not(:disabled) { background: var(--sunken); }
+.icon-btn--bordered { border-color: var(--border-strong); background: var(--surface); }
+.icon-btn[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg); }
+.icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.icon-btn svg { width: var(--icon); height: var(--icon); }
+
+/* --- Field shell, shared by all inputs ----------------------------------- */
+
+/* min-width:0 is load bearing. Grid and flex items default to min-width:auto,
+   so without it a field refuses to shrink below its content width and
+   overflows its track, putting its steppers on top of the next field. */
+.field { display: grid; gap: var(--sp-1); min-width: 0; }
+.field__label {
+  font-size: var(--fs-1); line-height: var(--lh-1);
+  text-transform: uppercase; letter-spacing: var(--track-label);
+  font-weight: var(--fw-medium); color: var(--text-2);
+}
+.field__hint { font-size: var(--fs-2); color: var(--text-2); }
+.field__error { font-size: var(--fs-2); color: var(--error); }
+
+.input-shell {
+  display: flex; align-items: center;
+  height: var(--ctl-h);
+  min-width: 0;
+  background: var(--surface);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  transition: border-color var(--dur-1) var(--ease);
+}
+.input-shell:hover { border-color: var(--text-2); }
+.input-shell:focus-within { border-color: var(--accent); outline: var(--focus-w) solid var(--accent); outline-offset: var(--focus-offset); }
+.input-shell--invalid { border-color: var(--error); }
+.input-shell--disabled { opacity: 0.45; pointer-events: none; }
+
+.input-shell input {
+  flex: 1; min-width: 0;
+  height: 100%; padding: 0 var(--field-pad-x);
+  border: 0; background: none; color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-3);
+}
+.input-shell input:focus { outline: none; }
+.input-shell input::placeholder { color: var(--text-disabled); }
+
+/* --- NumberInput --------------------------------------------------------- */
+/* Numbers right aligned against the unit. Unit sits inside the field, greyed.
+   Steppers are the last thing before the border so the eye lands on the
+   number, not the controls. */
+
+.num-input .num-input__input {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  text-align: right;
+  padding-right: var(--sp-1);
+}
+.num-input__unit {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2);
+  color: var(--text-disabled);
+  padding-right: var(--sp-2);
+  user-select: none;
+}
+.num-input__steps {
+  display: grid; grid-template-rows: 1fr 1fr;
+  height: 100%; border-left: var(--bw) solid var(--border);
+}
+.num-input__step {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; padding: 0;
+  border: 0; background: none; color: var(--text-2); cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.num-input__step:hover { background: var(--sunken); color: var(--text); }
+.num-input__step svg { width: 10px; height: 10px; }
+.num-input__step + .num-input__step { border-top: var(--bw) solid var(--border); }
+
+/* Steppers are a pointer convenience. Stacked, two of them share the field
+   height, so on touch neither can reach 44px. Lay them side by side instead,
+   decrease on the left, each a full height 44px target. */
+@media (pointer: coarse) {
+  .num-input__steps {
+    grid-template-rows: none;
+    grid-template-columns: 1fr 1fr;
+  }
+  .num-input__step { width: var(--touch-min); }
+  .num-input__step[data-dir='down'] { order: -1; }
+  .num-input__step + .num-input__step { border-top: 0; }
+  .num-input__step[data-dir='up'] { border-left: var(--bw) solid var(--border); }
+}
+
+/* --- Select -------------------------------------------------------------- */
+/* Native element kept, for keyboard and mobile pickers. Only the shell is ours. */
+
+.select-shell { position: relative; }
+.select-shell select {
+  appearance: none;
+  width: 100%; height: 100%;
+  padding: 0 calc(var(--field-pad-x) + var(--sp-5)) 0 var(--field-pad-x);
+  border: 0; background: none; color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-3);
+  cursor: pointer;
+}
+.select-shell select:focus { outline: none; }
+.select-shell__chev {
+  position: absolute; right: var(--sp-2); top: 50%; transform: translateY(-50%);
+  width: 12px; height: 12px; color: var(--text-2); pointer-events: none;
+}
+
+/* --- Toggle -------------------------------------------------------------- */
+
+.toggle { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle__track {
+  position: relative;
+  width: 34px; height: 18px; flex: none;
+  background: var(--border-strong);
+  border-radius: 9px;
+  transition: background var(--dur-1) var(--ease);
+}
+.toggle__knob {
+  position: absolute; top: 2px; left: 2px;
+  width: 14px; height: 14px;
+  background: var(--surface);
+  border-radius: 50%;
+  transition: transform var(--dur-1) var(--ease);
+}
+.toggle input:checked + .toggle__track { background: var(--accent); }
+.toggle input:checked + .toggle__track .toggle__knob { transform: translateX(16px); }
+.toggle input:focus-visible + .toggle__track { outline: var(--focus-w) solid var(--accent); outline-offset: var(--focus-offset); }
+.toggle__text { font-size: var(--fs-3); }
+.toggle input:disabled + .toggle__track { opacity: 0.45; }
+@media (pointer: coarse) { .toggle { min-height: var(--touch-min); } }
+
+/* --- SegmentedControl ---------------------------------------------------- */
+
+.seg {
+  display: inline-flex;
+  height: var(--ctl-h);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  overflow: hidden;
+}
+.seg__item {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  height: 100%; padding: 0 var(--btn-pad-x);
+  border: 0; background: var(--surface);
+  color: var(--text-2);
+  font-family: var(--font-sans); font-size: var(--fs-2); font-weight: var(--fw-medium);
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.seg__item + .seg__item { border-left: var(--bw) solid var(--border); }
+.seg__item:hover { background: var(--sunken); color: var(--text); }
+.seg__item[aria-pressed='true'] { background: var(--accent); color: var(--accent-fg); }
+.seg__item:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Short labels such as Top and Iso fall under the tap size on their own. */
+@media (pointer: coarse) { .seg__item { min-width: var(--touch-min); } }
+
+/* --- Checkbox ------------------------------------------------------------ */
+
+.check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; }
+.check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.check__box {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; flex: none;
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--accent-fg);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.check__box svg { width: 12px; height: 12px; opacity: 0; transition: opacity var(--dur-1) var(--ease); }
+.check input:checked + .check__box,
+.check input:indeterminate + .check__box { background: var(--accent); border-color: var(--accent); }
+.check input:checked + .check__box svg { opacity: 1; }
+.check input:indeterminate + .check__box::after {
+  content: ''; width: 8px; height: 2px; background: var(--accent-fg); position: absolute;
+}
+.check input:focus-visible + .check__box { outline: var(--focus-w) solid var(--accent); outline-offset: var(--focus-offset); }
+.check input:disabled + .check__box { opacity: 0.45; }
+.check__text { font-size: var(--fs-3); }
+
+/* Large tick target, cut list and workshop view. */
+.check--target {
+  min-width: var(--touch-min); min-height: var(--touch-min);
+  justify-content: center;
+}
+
+/* --- Slider -------------------------------------------------------------- */
+/* The exploded view control. Track fill is two solid stops, not a blend. */
+
+.slider { display: grid; gap: var(--sp-2); }
+.slider__head { display: flex; align-items: baseline; justify-content: space-between; }
+.slider__value {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-2); color: var(--text);
+}
+.slider input[type='range'] {
+  appearance: none; width: 100%; height: 18px; background: none; cursor: pointer; margin: 0;
+}
+.slider input[type='range']::-webkit-slider-runnable-track {
+  height: 4px; border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) 0 var(--pct, 0%), var(--border-strong) var(--pct, 0%) 100%);
+}
+.slider input[type='range']::-moz-range-track { height: 4px; border-radius: 2px; background: var(--border-strong); }
+.slider input[type='range']::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+.slider input[type='range']::-webkit-slider-thumb {
+  appearance: none; width: 14px; height: 14px; margin-top: -5px;
+  border-radius: 50%; background: var(--accent);
+  border: var(--bw) solid var(--surface);
+  transition: transform var(--dur-1) var(--ease);
+}
+.slider input[type='range']::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); border: var(--bw) solid var(--surface);
+}
+.slider input[type='range']:active::-webkit-slider-thumb { transform: scale(1.15); }
+.slider input[type='range']:focus-visible { outline: var(--focus-w) solid var(--accent); outline-offset: var(--focus-offset); border-radius: var(--r-1); }
+@media (pointer: coarse) {
+  .slider input[type='range'] { height: var(--touch-min); }
+  .slider input[type='range']::-webkit-slider-thumb { width: 20px; height: 20px; margin-top: -8px; }
+}
+
+/* --- Table --------------------------------------------------------------- */
+
+.table-wrap { overflow-x: auto; border: var(--bw) solid var(--border); border-radius: var(--r-2); background: var(--surface); }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td {
+  padding: 0 var(--pad-x);
+  height: var(--row-h);
+  font-size: var(--fs-2);
+  text-align: left;
+  white-space: nowrap;
+}
+.table thead th {
+  position: sticky; top: 0; z-index: 1;
+  height: var(--row-h);
+  background: var(--sunken);
+  border-bottom: var(--bw) solid var(--border);
+  font-size: var(--fs-1); font-weight: var(--fw-medium);
+  text-transform: uppercase; letter-spacing: var(--track-label);
+  color: var(--text-2);
+}
+.table tbody tr { border-top: var(--bw) solid var(--border); }
+.table tbody tr:first-child { border-top: 0; }
+.table tbody tr:hover { background: var(--sunken); }
+.table tbody tr[aria-selected='true'] { background: var(--accent-weak); }
+.table tbody tr[aria-selected='true'] td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.table .n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.table .code { font-family: var(--font-mono); }
+.table tfoot td {
+  border-top: var(--bw) solid var(--border-strong);
+  font-weight: var(--fw-medium);
+  background: var(--surface);
+}
+.table tr[data-done='true'] td { color: var(--text-2); }
+
+/* --- Badge --------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  height: 20px; padding: 0 var(--sp-2);
+  border-radius: var(--r-1);
+  border: var(--bw) solid transparent;
+  font-size: var(--fs-1); font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.badge--neutral { background: var(--sunken); color: var(--text-2); border-color: var(--border); }
+.badge--accent { background: var(--accent-weak); color: var(--accent); border-color: var(--accent); }
+.badge--warn { background: var(--warn-weak); color: var(--warn); border-color: var(--warn); }
+.badge--error { background: var(--error-weak); color: var(--error); border-color: var(--error); }
+.badge--ok { background: var(--ok-weak); color: var(--ok); border-color: var(--ok); }
+.badge--num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* --- Tooltip ------------------------------------------------------------- */
+
+.tip { position: relative; display: inline-flex; }
+.tip__body {
+  position: absolute; bottom: calc(100% + var(--sp-2)); left: 50%;
+  transform: translateX(-50%) translateY(var(--sp-1));
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  font-size: var(--fs-2); line-height: var(--lh-2);
+  white-space: nowrap; pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--dur-1) var(--ease), transform var(--dur-1) var(--ease), visibility var(--dur-1);
+  z-index: 40;
+}
+.tip:hover .tip__body,
+.tip:focus-within .tip__body { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+.tip__code { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text-2); display: block; }
+
+/* --- Card ---------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-2);
+  padding: var(--sp-4);
+}
+.card__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.card__title { font-size: var(--fs-3); font-weight: var(--fw-medium); }
+.card--flush { padding: 0; overflow: hidden; }
+
+/* --- StatTile ------------------------------------------------------------ */
+
+.stat { display: grid; gap: 2px; min-width: 92px; }
+.stat__label {
+  font-size: var(--fs-1); line-height: var(--lh-1);
+  text-transform: uppercase; letter-spacing: var(--track-label);
+  color: var(--text-2); font-weight: var(--fw-medium);
+}
+.stat__value {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-4); line-height: var(--lh-4); color: var(--text);
+}
+.stat__unit { font-size: var(--fs-2); color: var(--text-2); margin-left: 2px; }
+.stat-strip {
+  display: flex; align-items: center; gap: var(--sp-6);
+  overflow-x: auto;
+}
+
+/* --- WarningInline ------------------------------------------------------- */
+
+.warn-inline {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-1);
+  border-left: 2px solid var(--warn);
+  background: var(--warn-weak);
+  font-size: var(--fs-2); line-height: var(--lh-2);
+  color: var(--text);
+}
+.warn-inline svg { width: var(--icon); height: var(--icon); flex: none; color: var(--warn); margin-top: 1px; }
+.warn-inline--error { border-left-color: var(--error); background: var(--error-weak); }
+.warn-inline--error svg { color: var(--error); }
+.warn-inline--ok { border-left-color: var(--ok); background: var(--ok-weak); }
+.warn-inline--ok svg { color: var(--ok); }
+
+/* --- Tabs ---------------------------------------------------------------- */
+
+.tabs { display: flex; gap: 0; border-bottom: var(--bw) solid var(--border); overflow-x: auto; }
+.tab {
+  display: inline-flex; align-items: baseline; gap: var(--sp-2);
+  height: var(--ctl-h); padding: 0 var(--btn-pad-x);
+  border: 0; background: none; cursor: pointer;
+  color: var(--text-2);
+  font-family: var(--font-sans); font-size: var(--fs-3);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.tab:hover { color: var(--text); }
+.tab[aria-selected='true'] { color: var(--text); border-bottom-color: var(--accent); font-weight: var(--fw-medium); }
+.tab__len { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: var(--fs-2); color: var(--text-2); }
+
+/* --- EmptyState ---------------------------------------------------------- */
+
+.empty {
+  display: grid; justify-items: center; gap: var(--sp-3);
+  padding: var(--sp-12) var(--sp-6);
+  border: var(--bw) dashed var(--border-strong);
+  border-radius: var(--r-2);
+  text-align: center;
+}
+.empty__text { font-size: var(--fs-2); color: var(--text-2); max-width: 44ch; }
+
+/* --- SidePanel ----------------------------------------------------------- */
+
+.panel-side {
+  display: flex; flex-direction: column;
+  width: var(--panel-w); max-width: 100%;
+  background: var(--surface);
+  border-left: var(--bw) solid var(--border);
+}
+.panel-side__head {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  border-bottom: var(--bw) solid var(--border);
+}
+.panel-side__title { font-size: var(--fs-3); font-weight: var(--fw-medium); flex: 1; }
+.panel-side__body { padding: var(--sp-4); display: grid; gap: var(--sp-4); overflow-y: auto; }
+.panel-side__foot {
+  display: flex; gap: var(--sp-2); justify-content: flex-end;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: var(--bw) solid var(--border);
+  margin-top: auto;
+}
+
+/* --- Dialog. Destructive confirmations only. ----------------------------- */
+
+.dialog-scrim {
+  position: fixed; inset: 0; z-index: 50;
+  display: grid; place-items: center;
+  background: var(--scrim);
+  padding: var(--sp-4);
+}
+
+/* Required. A display value on the same element beats the [hidden] default of
+   display:none, which would leave a full screen layer swallowing every click
+   in the app while appearing to be closed. */
+.dialog-scrim[hidden] { display: none; }
+.dialog {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-2);
+  padding: var(--sp-5);
+  display: grid; gap: var(--sp-3);
+}
+.dialog__title { font-size: var(--fs-4); font-weight: var(--fw-semibold); }
+.dialog__body { font-size: var(--fs-3); color: var(--text-2); }
+.dialog__foot { display: flex; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-2); }
+
+/* --- ViewportToolbar. Floats over the 3D canvas. ------------------------- */
+
+.vp-toolbar {
+  display: inline-flex; align-items: center;
+  background: var(--surface);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  padding: 2px;
+  gap: 2px;
+  /* Never widens the page. On a phone the toolbar scrolls along itself
+     rather than pushing the canvas sideways. */
+  max-width: 100%;
+  overflow-x: auto;
+}
+/* Toolbar children never shrink. Inside a scrolling flex row they otherwise
+   compress below their tap size instead of scrolling. */
+.vp-toolbar > * { flex: none; }
+.vp-toolbar__sep { width: var(--bw); align-self: stretch; background: var(--border); margin: 0 2px; }
+.vp-toolbar .icon-btn { width: 30px; height: 30px; }
+.vp-toolbar .seg { height: 30px; border: 0; }
+.vp-toolbar .seg__item { font-size: var(--fs-1); padding: 0 var(--sp-2); }
+@media (pointer: coarse) {
+  .vp-toolbar .icon-btn { width: var(--touch-min); height: var(--touch-min); }
+  .vp-toolbar .seg { height: var(--touch-min); }
+}
+
+/* --- Utility ------------------------------------------------------------- */
+
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.stack { display: grid; gap: var(--sp-3); }
+.inline { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

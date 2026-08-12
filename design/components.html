@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Component Library</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--fs-3); line-height: var(--lh-3);
+  -webkit-font-smoothing: antialiased; }
+h1, h2 { margin: 0; }
+
+.topbar { position: sticky; top: 0; z-index: 30; min-height: var(--topbar-h);
+  display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-6);
+  flex-wrap: wrap;
+  background: var(--surface); border-bottom: var(--bw) solid var(--border); }
+.topbar h1 { font-size: var(--fs-3); font-weight: var(--fw-semibold); }
+.topbar .ctx { color: var(--text-2); font-size: var(--fs-2); }
+.topbar .right { margin-left: auto; display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+main { max-width: var(--max-content); margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-20); }
+section { margin-top: var(--sp-10); }
+section:first-of-type { margin-top: var(--sp-4); }
+.label { font-size: var(--fs-1); line-height: var(--lh-1); text-transform: uppercase;
+  letter-spacing: var(--track-label); color: var(--text-2); font-weight: var(--fw-medium); }
+section > h2 { font-size: var(--fs-4); line-height: var(--lh-4); font-weight: var(--fw-semibold); margin-top: var(--sp-1); }
+.note { color: var(--text-2); font-size: var(--fs-2); line-height: var(--lh-2); margin: var(--sp-1) 0 0; max-width: 72ch; }
+
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); margin-top: var(--sp-4); }
+@media (max-width: 980px) { .cols { grid-template-columns: 1fr; } }
+/* min-width:0 for the same reason the fields need it: a grid item will not
+   shrink below its content width without it, and the widest demo here is a
+   340px side panel. */
+.col { border: var(--bw) solid var(--border); border-radius: var(--r-2); padding: var(--sp-4); min-width: 0; }
+.col > .label { display: block; margin-bottom: var(--sp-4); }
+.demo { display: grid; gap: var(--sp-4); }
+.demo-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.demo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
+.caption { font-size: var(--fs-1); text-transform: uppercase; letter-spacing: var(--track-label); color: var(--text-2); }
+
+ul.flags { margin: var(--sp-3) 0 0; padding-left: var(--sp-5); }
+ul.flags li { font-size: var(--fs-2); line-height: var(--lh-3); color: var(--text-2); margin-bottom: var(--sp-2); }
+ul.flags b { color: var(--text); font-weight: var(--fw-medium); }
+.dialog--static { position: static; max-width: 100%; }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<g id="ico" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></g>
+<symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-minus" viewBox="0 0 16 16"><path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-chev-up" viewBox="0 0 16 16"><path d="M4 10l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-chev-down" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-check" viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.5l6 11H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 6.5v3.2M8 11.6v.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10.2 10.2L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></symbol>
+<symbol id="i-trash" viewBox="0 0 16 16"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+<symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10.5 5.5v-3h-8v8h3" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="1.8" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M2.5 8s2.5-4.5 5.5-4.5c1 0 1.9.25 2.7.66M13.5 8s-2.1 3.8-5.5 4.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 2.5l11 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="i-grid" viewBox="0 0 16 16"><path d="M2 6h12M2 10h12M6 2v12M10 2v12" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+<symbol id="i-reset" viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 2.5V5.5H10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-section" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 10.5h11" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1.5"/></symbol>
+<symbol id="i-ghost" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><rect x="5.5" y="5.5" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 1.5"/></symbol>
+<symbol id="i-print" viewBox="0 0 16 16"><path d="M4.5 6V2.5h7V6M4.5 12H3.5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><rect x="4.5" y="9.5" width="7" height="4" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+<symbol id="i-export" viewBox="0 0 16 16"><path d="M8 10.5V2.5M5 5.5L8 2.5l3 3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 10v2.5a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1V10" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></symbol>
+<symbol id="i-cube" viewBox="0 0 16 16"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M2.5 4.8L8 7.9l5.5-3.1M8 7.9v6.3" fill="none" stroke="currentColor" stroke-width="1.2"/></symbol>
+</defs></svg>
+
+<header class="topbar">
+  <h1>Component library</h1>
+  <span class="ctx">Step 2. Every primitive, every state, both themes, both densities.</span>
+  <div class="right">
+    <div class="seg" role="group" aria-label="Density">
+      <button type="button" class="seg__item" data-density-set="comfortable" aria-pressed="true">Comfortable</button>
+      <button type="button" class="seg__item" data-density-set="compact" aria-pressed="false">Compact</button>
+    </div>
+    <div class="seg" role="group" aria-label="Theme">
+      <button type="button" class="seg__item" data-theme-set="system" aria-pressed="true">System</button>
+      <button type="button" class="seg__item" data-theme-set="light" aria-pressed="false">Light</button>
+      <button type="button" class="seg__item" data-theme-set="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+</header>
+
+<main id="board"></main>
+
+<div class="dialog-scrim" hidden data-dialog="delete">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
+    <div class="dialog__title" id="dlg-t">Delete cabinet B03?</div>
+    <div class="dialog__body">Its parts leave the cut list and the sheet layout is recalculated. This cannot be undone.</div>
+    <div class="dialog__foot">
+      <button type="button" class="btn btn--secondary" data-dialog-close>Cancel</button>
+      <button type="button" class="btn btn--danger" data-dialog-close>Delete cabinet</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="components.js"></script>
+<script type="module">
+import { init } from './components.js';
+
+const ico = (n, cls = '') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${n}"></use></svg>`;
+
+/* NumberInput is built from a helper rather than written out each time.
+   Note the wrapper is a div, not a label. The control contains buttons, and
+   clicking any part of a label activates its control, so a label wrapper
+   makes the steppers focus the input instead of stepping it. The visible
+   text is tied to the field with aria-label instead. */
+const numField = (label, { value, unit = 'mm', step = 1, min, max, dp, state = '', hint = '' } = {}) => `
+  <div class="field">
+    <span class="field__label">${label}</span>
+    <div class="input-shell num-input ${state}">
+      <input class="num-input__input" type="text" inputmode="${dp ? 'decimal' : 'numeric'}"
+             value="${value}" aria-label="${label}"
+             data-step="${step}"${min !== undefined ? ` data-min="${min}"` : ''}${max !== undefined ? ` data-max="${max}"` : ''}${dp ? ` data-dp="${dp}"` : ''}
+             ${state.includes('disabled') ? 'disabled' : ''}>
+      <span class="num-input__unit">${unit}</span>
+      <span class="num-input__steps">
+        <button type="button" class="num-input__step" data-dir="up" aria-label="Increase ${label}">${ico('chev-up')}</button>
+        <button type="button" class="num-input__step" data-dir="down" aria-label="Decrease ${label}">${ico('chev-down')}</button>
+      </span>
+    </div>
+    ${hint}
+  </div>`;
+
+const DEMOS = [
+  {
+    t: 'Button',
+    n: 'Four variants. Hover and press are live, put the pointer on them. Height follows the density token, so every control on a row lines up without being told to.',
+    h: `<div class="demo-row">
+        <button class="btn btn--primary">Add cabinet</button>
+        <button class="btn btn--secondary">Duplicate</button>
+        <button class="btn btn--ghost">Cancel</button>
+        <button class="btn btn--danger">Delete</button>
+      </div>
+      <div class="demo-row">
+        <button class="btn btn--primary">${ico('plus','btn__icon')}Add cabinet</button>
+        <button class="btn btn--secondary">${ico('export','btn__icon')}Export</button>
+        <button class="btn btn--primary" disabled>Disabled</button>
+        <button class="btn btn--secondary" disabled>Disabled</button>
+      </div>`,
+  },
+  {
+    t: 'IconButton',
+    n: 'Square, same height as a button. Pressed state uses the accent, which is how every toggled control in the app reads.',
+    h: `<div class="demo-row">
+        <button class="icon-btn" aria-label="Search">${ico('search')}</button>
+        <button class="icon-btn" aria-label="Copy">${ico('copy')}</button>
+        <button class="icon-btn icon-btn--bordered" aria-label="Print">${ico('print')}</button>
+        <button class="icon-btn" aria-label="Show grid" aria-pressed="true">${ico('grid')}</button>
+        <button class="icon-btn" aria-label="Delete">${ico('trash')}</button>
+        <button class="icon-btn" aria-label="Reset" disabled>${ico('reset')}</button>
+      </div>`,
+  },
+  {
+    t: 'NumberInput',
+    n: 'Arrow keys step, shift and arrow steps by ten. Click the field and the value is selected, so you type over it. The unit sits inside the field, greyed. Scrolling the page over a focused field cannot change the value.',
+    h: `<div class="demo-grid">
+        ${numField('Cabinet width', { value: 600, step: 10, min: 150, max: 1200 })}
+        ${numField('Carcass thickness', { value: 16, step: 1, min: 12, max: 25 })}
+        ${numField('Sheet cost', { value: '0.00', unit: 'AUD', step: 1, dp: 2, min: 0,
+          state: 'input-shell--invalid', hint: '<span class="field__error">Enter a cost above zero.</span>' })}
+        ${numField('Wall length', { value: 3600, state: 'input-shell--disabled' })}
+      </div>`,
+  },
+  {
+    t: 'TextInput and Select',
+    n: 'Text stays in the interface face. The select is the native element, restyled only at the shell, so keyboard behaviour and the mobile picker are the ones people already know.',
+    h: `<div class="demo-grid">
+        <label class="field"><span class="field__label">Project name</span>
+          <div class="input-shell"><input type="text" value="Riverstone kitchen"></div></label>
+        <label class="field"><span class="field__label">Notes</span>
+          <div class="input-shell"><input type="text" placeholder="Optional"></div></label>
+        <label class="field"><span class="field__label">Carcass material</span>
+          <div class="input-shell select-shell">
+            <select><option>White melamine 16mm</option><option>Birch ply 18mm</option><option>HMR MDF 16mm</option></select>
+            ${ico('chev-down','select-shell__chev')}
+          </div></label>
+        <label class="field"><span class="field__label">Hinge</span>
+          <div class="input-shell select-shell input-shell--disabled">
+            <select disabled><option>Blum 110 degree</option></select>
+            ${ico('chev-down','select-shell__chev')}
+          </div></label>
+      </div>`,
+  },
+  {
+    t: 'Toggle, SegmentedControl, Checkbox',
+    n: 'Toggle for a setting that takes effect immediately. Segmented for a small set of exclusive states, which is what the doors control in the viewer is. Checkbox includes the indeterminate state, used when some parts of a cabinet are ticked off.',
+    h: `<div class="demo-row">
+        <label class="toggle"><input type="checkbox"><span class="toggle__track"><span class="toggle__knob"></span></span><span class="toggle__text">Show dimensions</span></label>
+        <label class="toggle"><input type="checkbox" checked><span class="toggle__track"><span class="toggle__knob"></span></span><span class="toggle__text">Show back panel</span></label>
+        <label class="toggle"><input type="checkbox" disabled><span class="toggle__track"><span class="toggle__knob"></span></span><span class="toggle__text">Section cut</span></label>
+      </div>
+      <div class="demo-row" data-group-scope>
+        <div class="seg" role="group" aria-label="Doors">
+          <button class="seg__item" data-group="doors" aria-pressed="true">Closed</button>
+          <button class="seg__item" data-group="doors" aria-pressed="false">Open</button>
+          <button class="seg__item" data-group="doors" aria-pressed="false">Hidden</button>
+        </div>
+        <div class="seg" role="group" aria-label="View">
+          <button class="seg__item" data-group="view" aria-pressed="true">Grouped</button>
+          <button class="seg__item" data-group="view" aria-pressed="false">Per cabinet</button>
+        </div>
+      </div>
+      <div class="demo-row">
+        <label class="check"><input type="checkbox"><span class="check__box">${ico('check')}</span><span class="check__text">Include kickboard</span></label>
+        <label class="check"><input type="checkbox" checked><span class="check__box">${ico('check')}</span><span class="check__text">Cut</span></label>
+        <label class="check"><input type="checkbox" data-indeterminate><span class="check__box">${ico('check')}</span><span class="check__text">Cabinet B03, some parts cut</span></label>
+        <label class="check"><input type="checkbox" disabled><span class="check__box">${ico('check')}</span><span class="check__text">Disabled</span></label>
+      </div>`,
+  },
+  {
+    t: 'Slider',
+    n: 'This is the exploded view control, so it matters more than a slider normally would. The readout is monospaced and sits above the track where the thumb cannot cover it.',
+    h: `<div class="slider">
+        <div class="slider__head"><span class="field__label">Exploded view</span><span class="slider__value">0%</span></div>
+        <input type="range" min="0" max="100" value="0" data-format="{v}%" aria-label="Exploded view">
+      </div>
+      <div class="slider">
+        <div class="slider__head"><span class="field__label">Section cut, X axis</span><span class="slider__value">280 mm</span></div>
+        <input type="range" min="0" max="600" value="280" data-format="{v} mm" aria-label="Section cut position">
+      </div>`,
+  },
+  {
+    t: 'Table',
+    n: 'Compact density is what the cut list uses. Numbers are monospaced and right aligned so a column reads as a column. Selected row carries the accent on its left edge, which is the same signal the 3D view uses.',
+    h: `<div class="table-wrap"><table class="table">
+        <thead><tr><th style="width:34px"></th><th>Part code</th><th>Name</th><th class="n">Length</th><th class="n">Width</th><th class="n">Thk</th><th>Material</th><th class="n">Cost</th></tr></thead>
+        <tbody>
+          <tr><td><label class="check"><input type="checkbox" checked><span class="check__box">${ico('check')}</span></label></td><td class="code">B03-SIDE-L</td><td>Left side</td><td class="n">720</td><td class="n">560</td><td class="n">16</td><td>White melamine</td><td class="n">11.40</td></tr>
+          <tr aria-selected="true"><td><label class="check"><input type="checkbox"><span class="check__box">${ico('check')}</span></label></td><td class="code">B03-SIDE-R</td><td>Right side</td><td class="n">720</td><td class="n">560</td><td class="n">16</td><td>White melamine</td><td class="n">11.40</td></tr>
+          <tr><td><label class="check"><input type="checkbox"><span class="check__box">${ico('check')}</span></label></td><td class="code">B03-BOT</td><td>Bottom</td><td class="n">568</td><td class="n">560</td><td class="n">16</td><td>White melamine</td><td class="n">9.08</td></tr>
+          <tr><td><label class="check"><input type="checkbox"><span class="check__box">${ico('check')}</span></label></td><td class="code">B03-BACK</td><td>Back</td><td class="n">1188</td><td class="n">704</td><td class="n">6</td><td>MDF</td><td class="n">7.15</td></tr>
+        </tbody>
+        <tfoot><tr><td></td><td class="code">4 parts</td><td></td><td class="n"></td><td class="n"></td><td class="n"></td><td></td><td class="n">39.03</td></tr></tfoot>
+      </table></div>`,
+  },
+  {
+    t: 'Badge and WarningInline',
+    n: 'Badges label a value, never an action. Warnings sit inline against the thing they describe. In the planner the same wording is drawn on the cabinet itself rather than collected in a list.',
+    h: `<div class="demo-row">
+        <span class="badge badge--neutral">Estimate</span>
+        <span class="badge badge--accent">Selected</span>
+        <span class="badge badge--warn">Check span</span>
+        <span class="badge badge--error">Too wide</span>
+        <span class="badge badge--ok">Cut</span>
+        <span class="badge badge--neutral badge--num">16mm</span>
+        <span class="badge badge--accent badge--num">B03</span>
+      </div>
+      <div class="stack">
+        <div class="warn-inline">${ico('warn')}<span>Shelf span is 900mm. Over 800mm an 18mm shelf will sag. Add a centre support or move to 18mm.</span></div>
+        <div class="warn-inline warn-inline--error">${ico('warn')}<span>Cabinet run is 3640mm against a 3600mm wall. Reduce a cabinet by 40mm.</span></div>
+        <div class="warn-inline warn-inline--ok">${ico('check')}<span>All 47 parts fit on 4 sheets with 11.2 percent waste.</span></div>
+      </div>`,
+  },
+  {
+    t: 'Tabs, Card, StatTile',
+    n: 'Wall tabs carry their length, because that is the number you check before placing anything. Stat tiles are the totals strip in the top bar.',
+    h: `<div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true">Wall A <span class="tab__len">3600</span></button>
+        <button class="tab" role="tab" aria-selected="false">Wall B <span class="tab__len">2400</span></button>
+        <button class="tab" role="tab" aria-selected="false">Wall C <span class="tab__len">1800</span></button>
+        <button class="tab" role="tab" aria-selected="false">Island <span class="tab__len">2100</span></button>
+      </div>
+      <div class="stat-strip">
+        <div class="stat"><span class="stat__label">Cabinets</span><span class="stat__value">14</span></div>
+        <div class="stat"><span class="stat__label">Doors</span><span class="stat__value">18</span></div>
+        <div class="stat"><span class="stat__label">Drawers</span><span class="stat__value">11</span></div>
+        <div class="stat"><span class="stat__label">Benchtop</span><span class="stat__value">7.8<span class="stat__unit">m</span></span></div>
+        <div class="stat"><span class="stat__label">Sheets</span><span class="stat__value">9</span></div>
+        <div class="stat"><span class="stat__label">Cost</span><span class="stat__value">4,182<span class="stat__unit">AUD</span></span></div>
+      </div>
+      <div class="card">
+        <div class="card__head"><span class="card__title">Sheet 3 of 9</span><span class="badge badge--neutral badge--num">2440 x 1220</span></div>
+        <div class="note">White melamine 16mm. 11 parts placed, 8.4 percent waste.</div>
+      </div>`,
+  },
+  {
+    t: 'Tooltip and EmptyState',
+    n: 'The tooltip carries the same three lines the 3D hover label does: part code, name, size. Empty states are one line and one button, with no illustration.',
+    h: `<div class="demo-row">
+        <span class="tip"><button class="btn btn--secondary">Hover for part</button>
+          <span class="tip__body">Left side<span class="tip__code">B03-SIDE-L</span><span class="tip__code">720 x 560 x 16</span></span></span>
+        <span class="tip"><button class="icon-btn icon-btn--bordered" aria-label="Section cut">${ico('section')}</button>
+          <span class="tip__body">Section cut</span></span>
+      </div>
+      <div class="empty">
+        <div class="empty__text">No cabinets on Wall B yet.</div>
+        <button class="btn btn--primary">${ico('plus','btn__icon')}Add cabinet</button>
+      </div>`,
+  },
+  {
+    t: 'ViewportToolbar',
+    n: 'Floats over the 3D canvas. Slim, grouped by what the control does, hairline dividers between groups. Camera presets are words, not icons, because Front and Left have no icon anyone reads correctly.',
+    h: `<div class="vp-toolbar" data-group-scope>
+        <div class="seg" role="group" aria-label="Camera">
+          <button class="seg__item" data-group="cam" aria-pressed="false">Front</button>
+          <button class="seg__item" data-group="cam" aria-pressed="false">Left</button>
+          <button class="seg__item" data-group="cam" aria-pressed="false">Right</button>
+          <button class="seg__item" data-group="cam" aria-pressed="false">Top</button>
+          <button class="seg__item" data-group="cam" aria-pressed="true">Iso</button>
+        </div>
+        <span class="vp-toolbar__sep"></span>
+        <button class="icon-btn" aria-label="Show dimensions" aria-pressed="true">${ico('cube')}</button>
+        <button class="icon-btn" aria-label="Ghost mode">${ico('ghost')}</button>
+        <button class="icon-btn" aria-label="Section cut">${ico('section')}</button>
+        <button class="icon-btn" aria-label="Floor grid">${ico('grid')}</button>
+        <span class="vp-toolbar__sep"></span>
+        <button class="icon-btn" aria-label="Hide walls">${ico('eye')}</button>
+        <button class="icon-btn" aria-label="Reset view">${ico('reset')}</button>
+      </div>`,
+  },
+  {
+    t: 'SidePanel and Dialog',
+    n: 'Cabinet editing happens in the right panel, never a modal. The modal is reserved for destructive confirmations, which is the only thing it is used for anywhere in the app.',
+    h: `<div class="demo-row" style="align-items:flex-start">
+        <div class="panel-side" style="height:340px">
+          <div class="panel-side__head">
+            <span class="badge badge--accent badge--num">B03</span>
+            <span class="panel-side__title">Three drawer base</span>
+            <button class="icon-btn" aria-label="Close">${ico('close')}</button>
+          </div>
+          <div class="panel-side__body">
+            ${numField('Width', { value: 600, step: 10, min: 150, max: 1200 })}
+            <label class="field"><span class="field__label">Drawer count</span>
+              <div class="input-shell select-shell">
+                <select><option>3</option><option>2</option><option>4</option></select>
+                ${ico('chev-down','select-shell__chev')}
+              </div></label>
+            <div class="warn-inline">${ico('warn')}<span>600mm runners need 560mm internal depth. You have 558mm.</span></div>
+          </div>
+          <div class="panel-side__foot">
+            <button class="btn btn--ghost">${ico('copy','btn__icon')}Duplicate</button>
+            <button class="btn btn--danger" data-dialog-open="[data-dialog='delete']">Delete</button>
+          </div>
+        </div>
+        <div class="dialog dialog--static" style="max-width:320px">
+          <div class="dialog__title">Delete cabinet B03?</div>
+          <div class="dialog__body">Its parts leave the cut list and the sheet layout is recalculated. This cannot be undone.</div>
+          <div class="dialog__foot">
+            <button class="btn btn--secondary">Cancel</button>
+            <button class="btn btn--danger">Delete cabinet</button>
+          </div>
+        </div>
+      </div>`,
+  },
+];
+
+const board = document.getElementById('board');
+board.innerHTML = DEMOS.map((d, i) => `
+  <section>
+    <span class="label">${String(i + 1).padStart(2, '0')}</span>
+    <h2>${d.t}</h2>
+    <p class="note">${d.n}</p>
+    <div class="cols">
+      <div class="col t-light" data-group-scope><span class="label">Light</span><div class="demo">${d.h}</div></div>
+      <div class="col t-dark" data-group-scope><span class="label">Dark</span><div class="demo">${d.h}</div></div>
+    </div>
+  </section>`).join('') + `
+  <section>
+    <span class="label">${String(DEMOS.length + 1).padStart(2, '0')}</span>
+    <h2>Density, side by side</h2>
+    <p class="note">Comfortable on the planner, compact on the cut list. Only the row and control heights and the horizontal padding change. No type size changes, so nothing gets harder to read.</p>
+    <div class="cols">
+      <div class="col" data-density="comfortable"><span class="label">Comfortable</span>
+        <div class="demo">
+          <div class="demo-row"><button class="btn btn--primary">Add cabinet</button><button class="btn btn--secondary">Duplicate</button></div>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Part code</th><th class="n">Length</th><th class="n">Width</th></tr></thead>
+            <tbody><tr><td class="code">B03-SIDE-L</td><td class="n">720</td><td class="n">560</td></tr>
+            <tr><td class="code">B03-SIDE-R</td><td class="n">720</td><td class="n">560</td></tr>
+            <tr><td class="code">B03-BOT</td><td class="n">568</td><td class="n">560</td></tr></tbody></table></div>
+        </div>
+      </div>
+      <div class="col" data-density="compact"><span class="label">Compact</span>
+        <div class="demo">
+          <div class="demo-row"><button class="btn btn--primary">Add cabinet</button><button class="btn btn--secondary">Duplicate</button></div>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Part code</th><th class="n">Length</th><th class="n">Width</th></tr></thead>
+            <tbody><tr><td class="code">B03-SIDE-L</td><td class="n">720</td><td class="n">560</td></tr>
+            <tr><td class="code">B03-SIDE-R</td><td class="n">720</td><td class="n">560</td></tr>
+            <tr><td class="code">B03-BOT</td><td class="n">568</td><td class="n">560</td></tr></tbody></table></div>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section>
+    <span class="label">${String(DEMOS.length + 2).padStart(2, '0')}</span>
+    <h2>Decisions and open questions</h2>
+    <ul class="flags">
+      <li><b>Number fields are text, not type=number.</b> The native spinner is what lets a value change when the pointer passes over it during a scroll. Removing the input type removes the problem at the source rather than patching it with a wheel handler. Arrow keys, shift and arrow for ten times the step, and the stepper buttons are all ours.</li>
+      <li><b>Select stays native.</b> A custom listbox would match the drawing better, but it would cost the mobile picker and the type ahead people already know. The shell is styled, the element is not replaced.</li>
+      <li><b>Camera presets are words.</b> Front, Left, Right, Top, Iso. No icon for Left reads as Left.</li>
+      <li><b>Touch bumps controls only, not table rows.</b> Every tap target clears 44px on a coarse pointer, but the cut list stays dense on a tablet. The tick column gets its own 44px target instead of inflating the whole row.</li>
+      <li><b>Two states are live only.</b> Hover and press cannot be shown statically. Put the pointer on the buttons and the toolbar to judge them.</li>
+      <li><b>Guessed: the indeterminate checkbox.</b> Not in your brief. Added because a cabinet with some parts ticked off needs a third state, and the alternative is a progress number with no control.</li>
+      <li><b>Not built yet: the cabinet family glyph set.</b> That belongs with the cabinet picker in Step 4, where the glyphs can be drawn against real cabinet types instead of invented in isolation.</li>
+    </ul>
+  </section>`;
+
+document.querySelectorAll('[data-theme-set]').forEach((b) => b.addEventListener('click', () => {
+  const v = b.dataset.themeSet;
+  if (v === 'system') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = v;
+  document.querySelectorAll('[data-theme-set]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+
+document.querySelectorAll('[data-density-set]').forEach((b) => b.addEventListener('click', () => {
+  document.documentElement.dataset.density = b.dataset.densitySet;
+  document.querySelectorAll('[data-density-set]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+
+init();
+</script>
+</body>
+</html>
