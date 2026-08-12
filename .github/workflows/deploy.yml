@@ -12,7 +12,6 @@ permissions:
   pages: write
   id-token: write
 
-# Let a running deploy finish rather than cancelling it mid-publish.
 concurrency:
   group: pages
   cancel-in-progress: false
@@ -26,15 +25,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # The viewer is a Vite app. Everything else on the site is static.
+      - name: Build the viewer
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+
       # Pages must already be switched on for the repo:
       # Settings -> Pages -> Source: "GitHub Actions".
-      # The workflow token is not permitted to enable it automatically.
       - uses: actions/configure-pages@v5
 
-      # The site is static with no build step — publish the repo as-is.
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -r index.html assets js design docs .nojekyll _site/
+          mkdir -p _site/app
+          cp -r app/dist/* _site/app/
+          ls -R _site | head -40
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4
