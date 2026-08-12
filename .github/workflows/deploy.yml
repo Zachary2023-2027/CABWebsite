@@ -26,11 +26,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # enablement: true turns Pages on for the repo if it isn't already,
-      # so no manual settings change is needed.
+      # Pages must already be switched on for the repo:
+      # Settings -> Pages -> Source: "GitHub Actions".
+      # The workflow token is not permitted to enable it automatically.
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       # The site is static with no build step — publish the repo as-is.
       - uses: actions/upload-pages-artifact@v3
