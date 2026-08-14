@@ -9,6 +9,7 @@ import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
 import Workshop from './Workshop.jsx';
+import Print from './Print.jsx';
 import { PRICES } from './catalog.js';
 import { allUnits, layoutWall, money, starterProject, totals } from './project.js';
 import { cutSize } from './cabinet.js';
@@ -29,6 +30,7 @@ const NAV = [
   ['costing', 'Costing', 'M4 20V10M10 20V4M16 20v-8M22 20H2'],
   ['reference', 'Reference', 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'],
   ['workshop', 'Workshop', 'M4 4h16v6H4zM4 14h16v6H4zM9 7h6M9 17h6'],
+  ['print', 'Print', 'M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z'],
   ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'],
 ];
 
@@ -328,6 +330,7 @@ export default function App() {
       case 'settings': return <Settings project={project} setProject={setProject}
                                         prices={prices} setPrices={setPrices} />;
       case 'reference': return <Reference />;
+      case 'print': return <Print project={project} cut={cut} />;
       default: return null;
     }
   };
