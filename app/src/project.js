@@ -4,6 +4,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICES, PROJECT, buildUnit, unitCost } from './catalog.js';
+import { nestProject } from './nesting.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -155,7 +156,6 @@ export function totals(project) {
   const cfg = project.cfg;
   let cabinets = 0, doors = 0, drawers = 0, cost = 0;
   let benchMm = 0, kickMm = 0;
-  const area = {};
 
   for (const wall of project.walls) {
     const lay = layoutWall(wall, cfg);
@@ -181,19 +181,16 @@ export function totals(project) {
       doors += unit.parts.filter((x) => x.group === 'front' && x.code.includes('DOOR')).length;
       drawers += unit.parts.filter((x) => x.group === 'front' && x.code.includes('DRWR-F')).length;
 
-      const c = unitCost(unit);
-      cost += c.total;
-      for (const [m, a] of Object.entries(c.areaByMaterial)) area[m] = (area[m] || 0) + a;
+      // Board cost comes from the real nest below. Only fittings are summed here.
+      cost += unitCost(unit).hardware;
     }
     benchMm += benchRun;
   }
 
-  let sheets = 0;
-  for (const [m, a] of Object.entries(area)) {
-    const sh = PRICES.sheets[m];
-    if (!sh) continue;
-    sheets += Math.ceil((a * 1.18) / ((sh.size[0] * sh.size[1]) / 1e6));
-  }
+  /* Sheets and board cost come from the same nesting run the Nesting screen
+     shows. An area estimate gave a different, lower number for the same
+     thing, which is worse than useless when you are buying sheets. */
+  const nest = nestProject(allParts(project));
 
   const bench = (benchMm / 1000) * PRICES.benchPerMetre;
   const kick = (kickMm / 1000) * PRICES.kickPerMetre;
@@ -202,11 +199,59 @@ export function totals(project) {
     cabinets, doors, drawers,
     benchMetres: benchMm / 1000,
     kickMetres: kickMm / 1000,
-    sheets,
-    cost: cost + bench + kick,
+    sheets: nest.sheets,
+    wastePct: nest.wastePct,
+    boardCost: nest.cost,
+    hardwareCost: cost,
+    cost: nest.cost + cost + bench + kick,
     estimate: true,
   };
 }
 
 export const money = (n) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n);
+
+/* --- project wide part and fitting lists ---------------------------------- */
+
+/** Every part in the project, tagged with the cabinet and wall it belongs to. */
+export function allParts(project) {
+  const out = [];
+  for (const wall of project.walls) {
+    for (const p of layoutWall(wall, project.cfg).placed) {
+      if (!p.unit.parts.length) continue;
+      for (const part of p.unit.parts) {
+        out.push({ ...part, unitId: p.item.uid, unitLabel: p.label, wallId: wall.id, wallName: wall.name });
+      }
+    }
+  }
+  return out;
+}
+
+/** Every fitting, rolled up by type. */
+export function allFittings(project) {
+  const rows = new Map();
+  for (const wall of project.walls) {
+    for (const p of layoutWall(wall, project.cfg).placed) {
+      for (const f of p.unit.fittings || []) {
+        const key = f.type === 'runnerPair' ? `runnerPair-${f.length}` : f.type;
+        const cur = rows.get(key) || { type: f.type, length: f.length, qty: 0, units: new Set() };
+        cur.qty += f.qty;
+        cur.units.add(p.label);
+        rows.set(key, cur);
+      }
+    }
+  }
+  return [...rows.entries()].map(([key, v]) => ({ key, ...v, units: [...v.units] }));
+}
+
+/** Cabinets across the whole project, for the cut list and costing screens. */
+export function allUnits(project) {
+  const out = [];
+  for (const wall of project.walls) {
+    for (const p of layoutWall(wall, project.cfg).placed) {
+      if (p.unit.kind === 'appliance') continue;
+      out.push({ ...p, wallId: wall.id, wallName: wall.name });
+    }
+  }
+  return out;
+}

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
-import { FAMILIES, FAMILY, GROUPS, PRICES, buildUnit, unitCost } from './catalog.js';
-import { layoutWall, money, totals, uid, unitWarnings, wallWarnings } from './project.js';
+import { FAMILIES, FAMILY, GROUPS, unitCost } from './catalog.js';
+import { layoutWall, money, uid, unitWarnings, wallWarnings } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -173,7 +173,6 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
   const wall = project.walls.find((w) => w.id === project.activeWall) || project.walls[0];
   const lay = useMemo(() => layoutWall(wall, project.cfg), [wall, project.cfg]);
-  const tot = useMemo(() => totals(project), [project]);
   const wallWarns = useMemo(() => wallWarnings(lay), [lay]);
   const placedSel = lay.placed.find((p) => p.item.uid === selected) || null;
 
@@ -249,36 +248,6 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
   return (
     <div className="planner">
-      <header className="topbar planner-top">
-        <span className="brand">{project.name}</span>
-        <div className="stat-strip">
-          {[
-            ['Cabinets', tot.cabinets, ''],
-            ['Doors', tot.doors, ''],
-            ['Drawers', tot.drawers, ''],
-            ['Benchtop', tot.benchMetres.toFixed(2), 'm'],
-            ['Kickboard', tot.kickMetres.toFixed(2), 'm'],
-            ['Sheets', tot.sheets, ''],
-          ].map(([k, v, u2]) => (
-            <div className="stat" key={k}>
-              <span className="stat__label">{k}</span>
-              <span className="stat__value">{v}{u2 && <span className="stat__unit">{u2}</span>}</span>
-            </div>
-          ))}
-          <div className="stat">
-            <span className="stat__label">Cost, estimate</span>
-            <span className="stat__value">{money(tot.cost)}</span>
-          </div>
-        </div>
-        <div className="right">
-          <div className="seg" role="group" aria-label="Arrangement">
-            {[['split', 'Split'], ['drawer', 'Drawer'], ['focus', 'Focus']].map(([k, label]) => (
-              <button key={k} className="seg__item" aria-pressed={arrangement === k}
-                      onClick={() => setArrangement(k)}>{label}</button>
-            ))}
-          </div>
-        </div>
-      </header>
 
       <div className="tabs wall-tabs" role="tablist">
         {project.walls.map((w) => (
@@ -288,6 +257,12 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
           </button>
         ))}
         <div className="wall-len">
+          <div className="seg" role="group" aria-label="Arrangement">
+            {[['split', 'Split'], ['drawer', 'Drawer'], ['focus', 'Focus']].map(([k, label]) => (
+              <button key={k} className="seg__item" aria-pressed={arrangement === k}
+                      onClick={() => setArrangement(k)}>{label}</button>
+            ))}
+          </div>
           <span className="field__label">Wall length</span>
           <div className="input-shell select-shell">
             <select value={wall.length} onChange={(e) => setWallLength(+e.target.value)}

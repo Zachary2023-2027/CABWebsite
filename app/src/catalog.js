@@ -49,21 +49,45 @@ export const PRICES = {
   edgeTapePerMetre: 0.6,
 };
 
-const MAT = {
-  carcass: 'White melamine 16mm',
-  front: 'White melamine 18mm',
-  back: 'MDF 6mm',
-  box: 'Birch ply 16mm',
-  boxBase: 'Birch ply 6mm',
+const matName = (base, thk) => `${base} ${thk}mm`;
+
+/* Material names follow the configured thickness. Without this, changing
+   carcass thickness renamed nothing, so an 18mm part was still costed and
+   nested against a 16mm sheet. */
+const materialsFor = (P) => ({
+  carcass: matName('White melamine', P.carcassThk),
+  front: matName('White melamine', P.frontThk),
+  back: matName('MDF', P.backThk),
+  box: matName('Birch ply', P.boxSideThk),
+  boxBase: matName('Birch ply', P.boxBaseThk),
+});
+
+const toneFor = (material) => {
+  if (material.startsWith('Birch ply')) return 'ply';
+  if (material.startsWith('MDF')) return 'mdf';
+  return 'melamine';
 };
 
-const TONE = {
-  'White melamine 16mm': 'melamine',
-  'White melamine 18mm': 'front',
-  'MDF 6mm': 'mdf',
-  'Birch ply 16mm': 'ply',
-  'Birch ply 6mm': 'ply',
-};
+/**
+ * Sheet stock for a material. If that exact thickness is not stocked, fall
+ * back to the nearest thickness of the same board and scale the cost, rather
+ * than silently dropping the part out of the nest and out of the cost.
+ */
+export function sheetFor(material) {
+  if (PRICES.sheets[material]) return PRICES.sheets[material];
+  const m = material.match(/([\d.]+)mm$/);
+  if (!m) return null;
+  const thk = parseFloat(m[1]);
+  const base = material.replace(/\s[\d.]+mm$/, '');
+  const cands = Object.entries(PRICES.sheets)
+    .filter(([k]) => k.startsWith(base) && /([\d.]+)mm$/.test(k));
+  if (!cands.length) return null;
+  const pick = cands
+    .map(([k, v]) => [k, v, Math.abs(parseFloat(k.match(/([\d.]+)mm$/)[1]) - thk)])
+    .sort((a, b) => a[2] - b[2])[0];
+  const baseThk = parseFloat(pick[0].match(/([\d.]+)mm$/)[1]);
+  return { ...pick[1], cost: pick[1].cost * (thk / baseThk), substituted: pick[0] };
+}
 
 /* --- families -------------------------------------------------------------
    kind drives placement and which run the unit occupies.
@@ -140,7 +164,7 @@ export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
 
 /* --- carcass builder ------------------------------------------------------ */
 
-const mkPart = (o) => ({ drawer: null, tone: TONE[o.material] || 'melamine', ...o });
+const mkPart = (o) => ({ drawer: null, tone: toneFor(o.material), ...o });
 
 function carcassHeightFor(kind, P) {
   if (kind === 'wall') return P.wallCabHeight;
@@ -168,6 +192,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   const D = s.depth ?? depthFor(kind, P);
   const mountY = kind === 'wall' ? P.wallMount : P.kick;
 
+  const MAT = materialsFor(P);
   const parts = [];
   const fittings = [];
   const code = (x) => `${id}-${x}`;
@@ -260,17 +285,19 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   const frontW = W - 2 * (R / 2);
   const sideGap = R / 2;
 
+  let doorNo = 0;
   const addDoors = (n, y, h) => {
     const each = (frontW - (n - 1) * R) / n;
     for (let i = 0; i < n; i++) {
+      const num = ++doorNo;
       parts.push(mkPart({
-        code: code(n === 1 ? 'DOOR' : `DOOR-${i + 1}`),
-        name: n === 1 ? 'Door' : `Door ${i + 1}`, group: 'front', material: MAT.front,
+        code: code(`DOOR-${num}`),
+        name: `Door ${num}`, group: 'front', material: MAT.front,
         L: Math.round(h), W: Math.round(each), T: FT,
         size: [each, h, FT], pos: [sideGap + i * (each + R), y, D], explode: [0, 0, 340],
         edging: 'All four edges', hinge: i < n / 2 ? 'left' : 'right',
       }));
-      fittings.push({ type: 'hinge', qty: h > 900 ? 3 : 2, code: code(`HINGE-${i + 1}`) });
+      fittings.push({ type: 'hinge', qty: h > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
     }
   };
 
@@ -316,7 +343,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     } else {
       addDoors(s.doors ?? 1, 0, H);
     }
-    for (let i = 0; i < (s.doors ?? 1); i++) fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
+    for (let i = 0; i < doorNo; i++) fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
   } else if (fam.fronts === 'drawers') {
     addDrawers(s.drawers ?? 3, 0, H);
   } else if (fam.fronts === 'sink') {
@@ -349,7 +376,7 @@ export function unitCost(unit) {
   let board = 0;
   const bySheet = {};
   for (const p of unit.parts) {
-    const sheet = PRICES.sheets[p.material];
+    const sheet = sheetFor(p.material);
     if (!sheet) continue;
     const area = (p.L * p.W) / 1e6;
     const sheetArea = (sheet.size[0] * sheet.size[1]) / 1e6;
