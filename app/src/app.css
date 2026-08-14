@@ -920,3 +920,12 @@ body {
   width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
   vertical-align: middle;
 }
+
+/* The blind corner sum, sitting under the field that drives it so the number
+   you did not type is next to the one you did. */
+.corner-sum {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--sunken);
+  border-radius: var(--r-1);
+}

@@ -22,7 +22,7 @@ const GROUPS = [
              ['ceiling', 'Ceiling']] },
   { name: 'Depths and gaps',
     fields: [['baseDepth', 'Base depth'], ['wallDepth', 'Wall depth'],
-             ['benchDepth', 'Benchtop depth'], ['blindClearance', 'Blind corner clearance'],
+             ['benchDepth', 'Benchtop depth'], ['blindClearance', 'Blind corner, past the benchtop'],
              ['reveal', 'Gap between fronts'],
              ['runnerClearance', 'Carcass to drawer box, each side'],
              ['boxSetback', 'Box behind the front'], ['runnerLength', 'Runner length'],

@@ -256,13 +256,16 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
      and the benchtop above them cross the front of this cabinet, so the dead
      part of the front has to be wider than they are. */
   if (unit.corner) {
-    const needed = cfg.benchDepth;
-    if (unit.blindWidth < needed) {
-      out.push(`Blind panel ${unit.blindWidth}mm against a ${needed}mm benchtop return. Widen it or the door will not clear`);
+    /* The blind is the benchtop depth plus the extra, so it can only fall
+       short of the return if the extra has been set negative. */
+    if (unit.blindExtra < 0) {
+      out.push(`Blind panel ${unit.blindWidth}mm against a ${cfg.benchDepth}mm benchtop return. It has to reach past the benchtop or the door will not clear`);
+    } else if (unit.blindExtra < 20) {
+      out.push(`Blind panel only ${unit.blindExtra}mm past the benchtop. The door will foul the return, allow 40 or more`);
     }
     const opening = unit.width - unit.blindWidth - 2 * cfg.reveal;
     if (opening < 300) {
-      out.push(`Door opening ${Math.round(opening)}mm. Under 300 there is no point in the door, widen the cabinet`);
+      out.push(`Door opening ${Math.round(opening)}mm. Under 300 there is no point in the door, widen the cabinet to ${Math.round(unit.blindWidth + 300 + 2 * cfg.reveal)} or more`);
     }
   }
 

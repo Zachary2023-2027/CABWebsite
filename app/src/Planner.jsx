@@ -156,9 +156,9 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                      onChange={(v) => set({ microH: v ?? 380 })} />
               )}
               {fam.corner && (
-                <Num label="Blind panel width" value={unit.blindWidth}
-                     min={100} max={1200}
-                     onChange={(v) => set({ blindWidth: v ?? unit.blindWidth })} />
+                <Num label="Blind past the benchtop" value={unit.blindExtra}
+                     min={0} max={600}
+                     onChange={(v) => set({ blindExtra: v ?? unit.blindExtra, blindWidth: undefined })} />
               )}
               {fam.corner && (
                 <Choice label="Corner is on the" value={unit.settings.blindSide || 'right'}
@@ -170,6 +170,14 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                      onChange={(v) => set({ ovenH: v ?? 600 })} />
               )}
             </div>
+
+            {unit.corner && (
+              <p className="note corner-sum">
+                Blind panel {eff('benchDepth')} benchtop + {unit.blindExtra} past it
+                = {unit.blindWidth}mm. Door {Math.round(unit.width - unit.blindWidth - 2 * eff('reveal'))}mm.
+                The return cabinets start {unit.cornerReturn}mm along the next wall.
+              </p>
+            )}
 
             {fronts.length > 0 && (
               <section className="sub">
@@ -333,6 +341,20 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     () => (project.room && project.room !== 'straight' ? roomWallIds(project) : []), [project]);
   const placedSel = lay.placed.find((p) => p.item.uid === selected) || null;
 
+  /* Hover holds a cabinet, not a snapshot of one. Resolving it against the
+     current layout on every render means the card shows what the cabinet is
+     now, rather than the sizes it had when the pointer went over it. */
+  const hov = useMemo(() => {
+    if (!hovered) return null;
+    const id = hovered.item.uid;
+    const lays = room ? room.map((r) => r.lay) : [lay];
+    for (const l of lays) {
+      const hit = l.placed.find((p) => p.item.uid === id);
+      if (hit) return hit;
+    }
+    return null;
+  }, [hovered, lay, room]);
+
   const mutate = (fn) => setProject((prev) => {
     const next = structuredClone(prev);
     const w = next.walls.find((x) => x.id === next.activeWall);
@@ -460,11 +482,11 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
         ))}
       </div>
       {eye && <div className="eye-hint">W A S D to walk. Drag to look.</div>}
-      {hovered && (
+      {hov && (
         <div className="part-card float-br">
-          <b>{hovered.label || hovered.unit.family.name}</b>
-          <span>{hovered.unit.family.name}</span>
-          <span>{hovered.unit.width} x {hovered.unit.height} x {hovered.unit.depth}</span>
+          <b>{hov.label || hov.unit.family.name}</b>
+          <span>{hov.unit.family.name}</span>
+          <span>{hov.unit.width} x {hov.unit.height} x {hov.unit.depth}</span>
         </div>
       )}
     </div>

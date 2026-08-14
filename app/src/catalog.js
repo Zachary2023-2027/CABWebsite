@@ -44,9 +44,10 @@ export const PROJECT = {
   backRailHeight: 120,
   boxBaseFix: 'dado',     // 'dado' or 'screwed' under the sides
 
-  /* Blind corner. The dead part of the front has to be wider than the
-     benchtop that returns across it, or the door cannot swing past the
-     cabinet butted up against the side. */
+  /* Blind corner. The dead part of the front is the benchtop depth plus
+     this, never a bare number on its own: the benchtop is the thing that
+     returns across the front, so if you change its depth the blind has to
+     follow or the door stops clearing. This is only the extra past it. */
   blindClearance: 50,
 };
 
@@ -367,10 +368,19 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   }
 
   /* The dead width of a blind corner, and the amount the next wall has to
-     start clear of. Both are read by the room layout and by the warnings. */
-  const blindWidth = fam.corner
-    ? Math.round(s.blindWidth ?? (P.benchDepth + (P.blindClearance ?? 50)))
+     start clear of. Both are read by the room layout and by the warnings.
+
+     The blind is derived, not typed: benchtop depth plus however much past
+     it you want. What you set is the extra, so widening the benchtop widens
+     the blind with it and the door keeps clearing. A project saved before
+     this held the finished width, so that is converted back to an extra
+     rather than being thrown away. */
+  const blindExtra = fam.corner
+    ? Math.round(s.blindExtra ?? (Number.isFinite(Number(s.blindWidth))
+      ? Number(s.blindWidth) - P.benchDepth
+      : (P.blindClearance ?? 50)))
     : 0;
+  const blindWidth = fam.corner ? Math.round(P.benchDepth + blindExtra) : 0;
 
   const shelves = s.shelves ?? 0;
   const shelfDepth = D - (railBack ? 0 : BT) - P.shelfSetback;
@@ -552,6 +562,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     parts, fittings, hardware: [], cfg: P, drawerOpening,
     corner: !!fam.corner,
     blindWidth,
+    blindExtra,
     /* How far along the next wall the corner is used up. The return cabinets
        start after this, which is what stops them being drawn inside the
        corner cabinet. */
