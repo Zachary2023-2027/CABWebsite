@@ -14,9 +14,10 @@ import { PRICES } from './catalog.js';
 import { allUnits, layoutWall, money, starterProject, totals } from './project.js';
 import { cutSize } from './cabinet.js';
 import { drillUnit } from './drilling.js';
+import {
+  exportFile, importFile, listSaved, loadSnapshot, removeSnapshot, saveSnapshot, snapshot,
+} from './storage.js';
 import { HOLE_STYLE } from './drilling.js';
-
-const STORE = 'kcb.project.v1';
 
 /* --- rail ----------------------------------------------------------------- */
 
@@ -190,11 +191,21 @@ function CabinetDetail({ unit, label, resolvedTheme }) {
 
 /* --- start ---------------------------------------------------------------- */
 
-function Start({ onExample, onEmpty, recents, onOpen }) {
+const when = (t) => {
+  const d = new Date(t);
+  const mins = Math.round((Date.now() - t) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 1440) return d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+function Start({ onExample, onEmpty, saved, onOpen, onDelete, onImport, error }) {
   return (
     <div className="start">
       <h1 className="start-title">Kitchen cabinet builder</h1>
       <p className="note">Frameless European carcasses, 32mm system. Millimetres and AUD.</p>
+
       <div className="start-options">
         <button className="card start-card" onClick={onExample}>
           <span className="card__title">Load the example kitchen</span>
@@ -205,15 +216,46 @@ function Start({ onExample, onEmpty, recents, onOpen }) {
           <span className="note">Four walls and an island, no cabinets.</span>
         </button>
       </div>
-      {recents.length > 0 && (
-        <div className="recents">
-          <span className="field__label">Recent</span>
-          {recents.map((r) => (
-            <button key={r.savedAt} className="recent" onClick={() => onOpen(r)}>
-              <span>{r.name}</span>
-              <span className="num">{new Date(r.savedAt).toLocaleDateString('en-AU')}</span>
-            </button>
+
+      {saved.length > 0 && (
+        <div className="saved-list">
+          <span className="field__label">Saved in this browser</span>
+          {saved.map((s) => (
+            <div key={s.id} className="saved-row">
+              <button className="saved-open" onClick={() => onOpen(s.id)}>
+                <span className="saved-name">{s.name}</span>
+                <span className="saved-meta num">
+                  {s.cabinets} cabinets · {s.walls} walls · {when(s.savedAt)}
+                </span>
+              </button>
+              <button className="icon-btn" aria-label={`Delete ${s.name}`}
+                      onClick={() => onDelete(s.id, s.name)}>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"
+                     strokeLinejoin="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 8.5h5.6l.7-8.5" /></svg>
+              </button>
+            </div>
           ))}
+        </div>
+      )}
+
+      <div className="start-file">
+        <label className="btn btn--secondary file-btn">
+          Open a project file
+          <input type="file" accept=".json,.kcb.json,application/json"
+                 onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = ''; }} />
+        </label>
+        <p className="note">
+          Saving happens automatically in this browser. Export a project file to keep a
+          backup or move a kitchen to another device.
+        </p>
+      </div>
+
+      {error && (
+        <div className="warn-inline warn-inline--error">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+            <path d="M8 2.5l6 11H2z" strokeLinejoin="round" /><path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
+          </svg>
+          <span>{error}</span>
         </div>
       )}
     </div>
@@ -238,7 +280,10 @@ export default function App() {
   const [cut, setCut] = useState(() => new Set());
   const [quoted, setQuoted] = useState('');
   const [prices, setPricesState] = useState(() => structuredClone(PRICES));
-  const [recents, setRecents] = useState([]);
+  const [projectId, setProjectId] = useState(null);
+  const [saved, setSaved] = useState([]);
+  const [saveState, setSaveState] = useState({ at: null, error: null });
+  const [startError, setStartError] = useState(null);
 
   /* Pricing functions read the shared PRICES object at call time, so an edit
      has to land there as well as in state for the totals to follow. */
@@ -248,23 +293,36 @@ export default function App() {
     return next;
   });
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORE);
-      if (raw) setRecents(JSON.parse(raw).recents || []);
-    } catch { /* private mode */ }
-  }, []);
+  const refreshSaved = () => setSaved(listSaved());
+  useEffect(refreshSaved, []);
 
+  /* Autosave. Debounced, because dragging a slider or typing a name would
+     otherwise write on every keystroke. */
   useEffect(() => {
-    if (!project) return;
-    try {
-      const entry = { name: project.name, savedAt: Date.now(), project };
-      const list = [entry, ...recents.filter((r) => r.name !== project.name)].slice(0, 4);
-      localStorage.setItem(STORE, JSON.stringify({ recents: list }));
-    } catch { /* quota */ }
-    // Recents are written, not read back, while a project is open.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project]);
+    if (!project || !projectId) return undefined;
+    const t = setTimeout(() => {
+      const res = saveSnapshot(snapshot({ id: projectId, name: project.name, project, cut, prices, quoted }));
+      setSaveState(res.ok
+        ? { at: res.savedAt, error: null }
+        : { at: null, error: res.reason === 'full'
+            ? 'Browser storage is full. Export a project file.'
+            : 'This browser is blocking storage. Export a project file.' });
+      refreshSaved();
+    }, 700);
+    return () => clearTimeout(t);
+  }, [project, cut, prices, quoted, projectId]);
+
+  const openSnapshot = (snap) => {
+    setProject(snap.project);
+    setProjectId(snap.id);
+    setCut(new Set(snap.cut));
+    setQuoted(snap.quoted);
+    setPrices(snap.prices);
+    setScreen('planner');
+    setStartError(null);
+  };
+
+  const startNew = (p) => openSnapshot(snapshot({ name: p.name, project: p, cut: new Set(), prices, quoted: '' }));
 
   const webgl = useMemo(() => hasWebGL(), []);
   const units = useMemo(() => (project ? allUnits(project) : []), [project]);
@@ -283,7 +341,7 @@ export default function App() {
       <div className="shell">
         <header className="topbar">
           <span className="brand">Kitchen cabinet builder</span>
-          <span className="ctx">Step 5. All screens.</span>
+          <span className="ctx">Plan it, price it, cut it.</span>
           <div className="right">
             <div className="seg" role="group" aria-label="Theme">
               {['system', 'light', 'dark'].map((t) => (
@@ -294,13 +352,29 @@ export default function App() {
           </div>
         </header>
         <Start
-          recents={recents}
-          onOpen={(r) => { setProject(r.project); setScreen('planner'); }}
-          onExample={() => setProject(starterProject())}
+          saved={saved}
+          error={startError}
+          onOpen={(id) => {
+            const snap = loadSnapshot(id);
+            if (snap) openSnapshot(snap);
+            else { setStartError('That project could not be opened.'); refreshSaved(); }
+          }}
+          onDelete={(id, name) => {
+            if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+            removeSnapshot(id);
+            refreshSaved();
+          }}
+          onImport={(file) => {
+            importFile(file)
+              .then((snap) => { saveSnapshot(snap); openSnapshot(snap); })
+              .catch((e) => setStartError(e.message));
+          }}
+          onExample={() => startNew(starterProject())}
           onEmpty={() => {
             const p = starterProject();
+            p.name = 'New kitchen';
             p.walls = p.walls.map((w) => ({ ...w, units: [], obstacles: [] }));
-            setProject(p);
+            startNew(p);
           }}
         />
       </div>
@@ -338,7 +412,13 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar app-top">
-        <span className="brand">{project.name}</span>
+        <input className="brand brand-input" value={project.name} aria-label="Project name"
+               onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))} />
+        <span className={`save-state ${saveState.error ? 'is-error' : ''}`}>
+          {saveState.error
+            ? saveState.error
+            : saveState.at ? `Saved ${when(saveState.at)}` : 'Saving'}
+        </span>
         {tot && (
           <div className="stat-strip app-totals">
             {[['Cabinets', tot.cabinets], ['Doors', tot.doors], ['Drawers', tot.drawers],
@@ -368,6 +448,14 @@ export default function App() {
               </div>
             </label>
           )}
+          <button className="btn btn--ghost" title="Download a project file you can keep or move"
+                  onClick={() => exportFile(snapshot({ id: projectId, name: project.name, project, cut, prices, quoted }))}>
+            Export file
+          </button>
+          <button className="btn btn--ghost" title="Close this kitchen and go back to the start screen"
+                  onClick={() => { refreshSaved(); setProject(null); setProjectId(null); }}>
+            Projects
+          </button>
           <div className="seg" role="group" aria-label="Theme">
             {['system', 'light', 'dark'].map((t) => (
               <button key={t} className="seg__item" aria-pressed={theme === t}

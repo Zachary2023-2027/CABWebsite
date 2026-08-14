@@ -727,3 +727,44 @@ body {
 @media screen {
   .page { box-shadow: 0 1px 3px rgb(0 0 0 / .18); }
 }
+
+/* --- saving --------------------------------------------------------------- */
+
+.brand-input {
+  border: var(--bw) solid transparent; border-radius: var(--r-1);
+  background: none; padding: 2px var(--sp-2); min-width: 0; width: 22ch; max-width: 30vw;
+  font: inherit; font-weight: var(--fw-semibold); color: var(--text);
+}
+.brand-input:hover { border-color: var(--border); }
+.brand-input:focus { border-color: var(--accent); background: var(--sunken); outline: none; }
+
+.save-state { font-size: var(--fs-1); color: var(--text-2); white-space: nowrap; }
+.save-state.is-error { color: var(--error); white-space: normal; }
+
+.saved-list { display: grid; gap: var(--sp-1); margin-top: var(--sp-4); }
+.saved-row { display: flex; align-items: stretch; gap: var(--sp-1); }
+.saved-open {
+  flex: 1; min-width: 0; display: grid; gap: 1px; text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border: var(--bw) solid var(--border); border-radius: var(--r-1);
+  background: var(--surface); color: var(--text); cursor: pointer;
+  font-family: var(--font-sans);
+}
+.saved-open:hover { border-color: var(--accent); }
+.saved-name { font-size: var(--fs-3); }
+.saved-meta { font-family: var(--font-mono); font-size: var(--fs-1); color: var(--text-2); }
+
+.start-file { display: grid; gap: var(--sp-2); margin-top: var(--sp-4); justify-items: start; }
+.file-btn { position: relative; overflow: hidden; }
+.file-btn input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0;
+}
+.start .warn-inline { margin-top: var(--sp-3); }
+
+/* The topbar action group wraps internally, but as a flex item it still
+   claims its max-content width unless it is allowed to shrink. */
+.topbar .right { min-width: 0; max-width: 100%; }
+@media (max-width: 640px) {
+  .app-top .save-state { order: 99; width: 100%; }
+  .brand-input { max-width: 55vw; }
+}

@@ -178,8 +178,13 @@ export function totals(project) {
         else { benchMm += benchRun; benchRun = 0; }
         continue;
       }
-      if (unit.kind === 'tall') { benchMm += benchRun; benchRun = 0; kickMm += unit.width; continue; }
-      if (unit.kind === 'base' || unit.kind === 'filler') {
+      /* A tall unit ends the benchtop run and carries kick, but it is still a
+         cabinet. This used to continue here, so pantries and oven towers were
+         left out of the cabinet count, the door and drawer counts, and the
+         hardware cost. */
+      if (unit.kind === 'tall') {
+        benchMm += benchRun; benchRun = 0; kickMm += unit.width;
+      } else if (unit.kind === 'base' || unit.kind === 'filler') {
         benchRun += unit.width;
         kickMm += unit.width;
       }
