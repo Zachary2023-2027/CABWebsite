@@ -8,6 +8,7 @@ import Drilling from './Drilling.jsx';
 import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
+import Workshop from './Workshop.jsx';
 import { PRICES } from './catalog.js';
 import { allUnits, layoutWall, money, starterProject, totals } from './project.js';
 import { cutSize } from './cabinet.js';
@@ -27,6 +28,7 @@ const NAV = [
   ['hardware', 'Hardware', 'M4 9h10a3 3 0 1 1 0 6H4zM4 6v12'],
   ['costing', 'Costing', 'M4 20V10M10 20V4M16 20v-8M22 20H2'],
   ['reference', 'Reference', 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'],
+  ['workshop', 'Workshop', 'M4 4h16v6H4zM4 14h16v6H4zM9 7h6M9 17h6'],
   ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'],
 ];
 
@@ -303,6 +305,11 @@ export default function App() {
     );
   }
 
+  if (screen === 'workshop') {
+    return <Workshop project={project} cut={cut} setCut={setCut}
+                     onExit={() => setScreen('cutlist')} />;
+  }
+
   const body = () => {
     switch (screen) {
       case 'planner':
@@ -312,7 +319,8 @@ export default function App() {
         return detail
           ? <CabinetDetail unit={detail.unit} label={detail.label} resolvedTheme={resolvedTheme} />
           : <div className="empty"><div className="empty__text">No cabinets yet. Add one in the planner.</div></div>;
-      case 'cutlist': return <CutList project={project} cut={cut} setCut={setCut} />;
+      case 'cutlist': return <CutList project={project} cut={cut} setCut={setCut}
+                                      onWorkshop={() => setScreen('workshop')} />;
       case 'nesting': return <Nesting project={project} />;
       case 'hardware': return <Hardware project={project} prices={prices} setPrices={setPrices} />;
       case 'drilling': return <Drilling project={project} />;

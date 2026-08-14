@@ -78,12 +78,22 @@ export function layoutWall(wall, cfg = PROJECT) {
   let baseX = 0;
   let wallX = 0;
   let n = 0;
+  let f = 0;
   const placed = [];
 
   for (const item of wall.units) {
     const fam = FAMILY[item.familyId];
     if (!fam) continue;
-    const unit = buildUnit(item.uid.toUpperCase().slice(0, 4), item.familyId, item.settings, cfg);
+
+    /* Number the cabinet before building it, so every part code carries the
+       cabinet number you see on the drawing. A part called A1-SIDE-L tells
+       you where it goes. One called U0NP-SIDE-L tells you nothing. */
+    const isFiller = fam.kind === 'filler';
+    if (isFiller) f += 1; else n += 1;
+    const label = isFiller ? null : `${wall.id}${n}`;
+    const codeId = label || `${wall.id}F${f}`;
+
+    const unit = buildUnit(codeId, item.familyId, item.settings, cfg);
     const where = occupies(unit.kind, unit.fullHeight);
 
     let x;
@@ -91,8 +101,6 @@ export function layoutWall(wall, cfg = PROJECT) {
     else if (where === 'wall') { x = wallX; wallX += unit.width; }
     else { x = baseX; baseX += unit.width; }
 
-    if (unit.kind !== 'filler') n += 1;
-    const label = unit.kind === 'filler' ? null : `${wall.id}${n}`;
     placed.push({ item, unit, x, where, label });
   }
 

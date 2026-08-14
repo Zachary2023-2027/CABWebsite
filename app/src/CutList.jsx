@@ -14,7 +14,7 @@ function csv(rows) {
     .join('\n');
 }
 
-export default function CutList({ project, cut, setCut }) {
+export default function CutList({ project, cut, setCut, onWorkshop }) {
   const parts = useMemo(() => allParts(project), [project]);
   const [group, setGroup] = useState('cabinet');   // cabinet | material | flat
   const [fCab, setFCab] = useState('all');
@@ -80,6 +80,7 @@ export default function CutList({ project, cut, setCut }) {
         <span className="num">{done}</span> of <span className="num">{rows.length}</span> cut
       </span>
       <button className="btn btn--secondary" onClick={download} disabled={!rows.length}>Export CSV</button>
+      <button className="btn btn--primary" onClick={onWorkshop} disabled={!parts.length}>Workshop view</button>
     </div>
   );
 

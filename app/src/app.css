@@ -471,3 +471,126 @@ body {
   .detail-main { flex-direction: column; }
   .detail-main .canvas-wrap { min-height: 46vh; }
 }
+
+/* ===========================================================================
+   Workshop view. Phone, in the shed. Nothing here is shared with the rest of
+   the app on purpose: no rail, no top bar, no hairlines, no density modes.
+   The three numbers are the interface.
+   =========================================================================== */
+
+.ws {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--bg); color: var(--text);
+  padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overscroll-behavior: contain; touch-action: pan-y;
+  user-select: none;
+}
+
+.ws-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex: none; margin-bottom: 8px;
+}
+.ws-close, .ws-filter {
+  min-height: 44px; padding: 0 14px;
+  background: none; border: 2px solid var(--border-strong); border-radius: 6px;
+  color: var(--text-2); font-family: var(--font-sans); font-size: 15px; cursor: pointer;
+}
+.ws-filter[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.ws-progress {
+  display: grid; justify-items: center; gap: 1px;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: 20px; color: var(--text);
+}
+.ws-progress-sub { font-size: 12px; color: var(--text-2); }
+
+.ws-card {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  transition: transform 60ms linear;
+}
+
+.ws-code {
+  font-family: var(--font-mono); font-weight: 500;
+  font-size: clamp(26px, 8.5vw, 40px); line-height: 1.05;
+  letter-spacing: -0.01em; word-break: break-all;
+}
+.ws-name {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 18px; color: var(--text-2); margin-top: 2px;
+}
+.ws-cab {
+  font-family: var(--font-mono); font-size: 14px;
+  border: 2px solid var(--border-strong); border-radius: 4px; padding: 0 6px;
+  color: var(--text);
+}
+
+.ws-dims { margin: clamp(12px, 4vh, 28px) 0 0; display: grid; gap: clamp(4px, 1.4vh, 12px); }
+.ws-dims > div {
+  display: grid; grid-template-columns: 4.6ch 1fr; align-items: center; gap: 10px;
+}
+.ws-dims dt {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-2); font-weight: 500;
+}
+.ws-dims dd {
+  margin: 0; text-align: right;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: clamp(56px, 21vw, 104px); line-height: 0.95;
+  letter-spacing: -0.03em; font-weight: 500;
+}
+
+.ws-meta { margin-top: clamp(10px, 3vh, 22px); display: grid; gap: 6px; }
+.ws-meta > div { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; }
+.ws-meta span { color: var(--text-2); }
+.ws-meta b { font-weight: 500; text-align: right; }
+
+.ws-actions { flex: none; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; margin-top: 12px; }
+.ws-btn {
+  min-height: 68px; padding: 0 18px; border-radius: 8px; border: 0;
+  font-family: var(--font-sans); font-size: 20px; font-weight: 500; cursor: pointer;
+  background: var(--accent); color: var(--accent-fg);
+}
+.ws-btn--undo { background: var(--ok); color: var(--n-00); }
+.ws-btn--ghost {
+  background: none; border: 2px solid var(--border-strong); color: var(--text);
+  min-height: 56px; font-size: 17px;
+}
+.ws-nav {
+  min-width: 76px; min-height: 68px; border-radius: 8px;
+  background: none; border: 2px solid var(--border-strong); color: var(--text);
+  font-family: var(--font-sans); font-size: 17px; cursor: pointer;
+}
+.ws-nav:disabled { opacity: 0.35; }
+
+.ws-hint { flex: none; margin: 8px 0 0; text-align: center; font-size: 12px; color: var(--text-2); }
+
+.ws-empty { flex: 1; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center; }
+.ws-done-big { font-family: var(--font-mono); font-size: 48px; margin: 0; }
+.ws-done-sub { color: var(--text-2); margin: 0; }
+
+/* Wide screens: the same screen, just centred. It is a phone view either way. */
+@media (min-width: 620px) {
+  .ws { padding-left: max(16px, calc(50vw - 280px)); padding-right: max(16px, calc(50vw - 280px)); }
+}
+
+/* ---------------------------------------------------------------------------
+   Touch sizing corrections.
+
+   Two separate faults, both found by measuring at 375px on a coarse pointer:
+   a bare .seg__item that is a direct child of the toolbar has no .seg to give
+   height:100% something to resolve against, so it collapsed to 14px; and four
+   places hardcoded a compact height, which quietly overrode the 44px rule.
+   --------------------------------------------------------------------------- */
+
+.vp-toolbar > .seg__item { height: 30px; }
+
+@media (pointer: coarse) {
+  .vp-toolbar > .seg__item { height: var(--touch-min); }
+  .wall-len .input-shell,
+  .picker-search,
+  .filter .input-shell,
+  .inline-num { height: var(--touch-min); }
+  .drawer-handle { height: var(--touch-min); font-size: var(--fs-2); }
+  .wall-len .input-shell select { font-size: var(--fs-3); }
+}
