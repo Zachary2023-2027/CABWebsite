@@ -133,3 +133,157 @@ body {
   .list { max-height: 40vh; }
   .controls .slider { width: 100%; }
 }
+
+/* ===========================================================================
+   Planner
+   =========================================================================== */
+
+.planner { display: flex; flex-direction: column; height: 100%; }
+
+.planner-top { gap: var(--sp-5); }
+.planner-top .stat-strip { flex: 1; min-width: 0; }
+.planner-top .stat { min-width: 74px; }
+.planner-top .stat__value { font-size: var(--fs-3); line-height: var(--lh-3); }
+
+.wall-tabs {
+  display: flex; align-items: center; gap: 0; flex: none;
+  padding: 0 var(--sp-4); background: var(--surface);
+  border-bottom: var(--bw) solid var(--border);
+}
+.wall-len { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; }
+.wall-len .input-shell { height: 28px; }
+
+.planner-body { display: flex; flex: 1; min-height: 0; }
+
+.rail {
+  width: 250px; flex: none; display: flex; flex-direction: column; min-height: 0;
+  background: var(--surface); border-right: var(--bw) solid var(--border);
+}
+.picker { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.picker-search { margin: var(--sp-3); height: 30px; flex: none; }
+.picker-list { overflow-y: auto; padding: 0 var(--sp-2) var(--sp-4); }
+.picker-group { display: block; padding: var(--sp-3) var(--sp-2) var(--sp-1); }
+
+.pick {
+  display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: var(--sp-2);
+  width: 100%; text-align: left; padding: var(--sp-2);
+  background: none; border: var(--bw) solid transparent; border-radius: var(--r-1);
+  cursor: pointer; color: var(--text);
+  transition: background var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.pick:hover { background: var(--sunken); border-color: var(--border); }
+.glyph { width: 26px; height: 26px; color: var(--text-2); }
+.pick:hover .glyph { color: var(--accent); }
+.pick-text { display: grid; min-width: 0; }
+.pick-name { font-size: var(--fs-2); }
+.pick-desc {
+  font-size: var(--fs-1); color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pick-w { font-family: var(--font-mono); font-size: var(--fs-1); color: var(--text-2); }
+
+.canvas-area { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+
+.elev-wrap {
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; place-items: center; padding: var(--sp-4);
+  background: var(--bg);
+}
+.elevation { width: 100%; height: 100%; max-height: 100%; }
+
+.three-wrap { position: relative; flex: 1; min-height: 0; min-width: 0; }
+/* In a split pane the toolbar is wider than the canvas. Wrap it rather than
+   clipping a control in half. */
+.three-wrap .vp-toolbar { flex-wrap: wrap; max-width: calc(100% - var(--sp-6)); overflow: visible; }
+.three-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; flex: 1; min-height: 0; }
+.split > * { min-width: 0; }
+.split .three-wrap { border-left: var(--bw) solid var(--border); }
+
+.drawer-arr { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.bottom-drawer {
+  flex: none; border-top: var(--bw) solid var(--border); background: var(--surface);
+  display: flex; flex-direction: column;
+}
+.bottom-drawer.is-open { height: 44%; }
+.drawer-handle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; height: 30px; padding: 0 var(--sp-3);
+  background: var(--surface); border: 0; cursor: pointer;
+  font-family: var(--font-sans); font-size: var(--fs-1);
+  text-transform: uppercase; letter-spacing: var(--track-label); color: var(--text-2);
+}
+.drawer-handle:hover { background: var(--sunken); color: var(--text); }
+.drawer-caret { text-transform: none; letter-spacing: 0; }
+
+.focus-arr { position: relative; flex: 1; min-height: 0; }
+.focus-arr .three-wrap { position: absolute; inset: 0; }
+.focus-arr .inset {
+  position: absolute; right: var(--sp-3); bottom: var(--sp-3); z-index: 6;
+  width: 300px; height: 190px; padding: var(--sp-2);
+  background: var(--surface); border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  display: flex;
+}
+/* The inset is a fixed box. Without an explicit height the wrapper collapses
+   to auto and the drawing spills out of the card. */
+.focus-arr .inset .elev-wrap { padding: 0; background: none; width: 100%; height: 100%; }
+
+.float-tr { position: absolute; top: var(--sp-3); right: var(--sp-3); z-index: 6; }
+.eye-btn { border-radius: var(--r-1); }
+.eye-hint {
+  position: absolute; bottom: var(--sp-3); left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: var(--fs-1); color: var(--text-2);
+  background: var(--surface); border: var(--bw) solid var(--border);
+  border-radius: var(--r-1); padding: var(--sp-1) var(--sp-2); z-index: 6;
+}
+
+.wall-warnings {
+  flex: none; display: grid; gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-4); border-top: var(--bw) solid var(--border);
+  background: var(--surface);
+}
+
+.inspector-side { width: var(--panel-w); }
+.inspector { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.inspector-body { padding: var(--sp-4); display: grid; gap: var(--sp-3); overflow-y: auto; }
+.inspector-foot {
+  margin-top: auto; display: flex; gap: var(--sp-2); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4); border-top: var(--bw) solid var(--border);
+}
+.inspector-empty { margin: var(--sp-4); }
+
+.spec { margin: 0; display: grid; gap: 0; }
+.spec > div {
+  display: flex; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-1) 0; border-top: var(--bw) solid var(--border);
+  font-size: var(--fs-2);
+}
+.spec > div:first-child { border-top: 0; }
+.spec dt { color: var(--text-2); }
+.spec dd {
+  margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+}
+.spec-total dd { font-weight: var(--fw-medium); }
+.est { font-size: var(--fs-1); }
+.pad { padding: var(--sp-3); }
+
+/* start screen */
+.start { flex: 1; display: grid; place-content: center; gap: var(--sp-4); padding: var(--sp-6); }
+.start-title { font-size: var(--fs-5); line-height: var(--lh-5); font-weight: var(--fw-semibold); margin: 0; }
+.start-options { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.start-card { display: grid; gap: var(--sp-1); text-align: left; cursor: pointer; }
+.start-card:hover { border-color: var(--accent); }
+
+@media (max-width: 1100px) {
+  .split { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .split .three-wrap { border-left: 0; border-top: var(--bw) solid var(--border); }
+}
+@media (max-width: 900px) {
+  .planner-body { flex-direction: column; }
+  .rail { width: 100%; border-right: 0; border-bottom: var(--bw) solid var(--border); max-height: 34vh; }
+  .inspector-side { width: 100%; border-left: 0; border-top: var(--bw) solid var(--border); }
+  .canvas-area { min-height: 52vh; }
+  .focus-arr .inset { width: 180px; height: 120px; }
+}

@@ -1,22 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Viewer, { hasWebGL } from './Viewer.jsx';
-import { buildCabinet, cutSize } from './cabinet.js';
-
-const ICONS = {
-  ghost: 'M2.5 2.5h8v8h-8z M5.5 5.5h8v8h-8z',
-  grid: 'M2 6h12M2 10h12M6 2v12M10 2v12',
-  reset: 'M13 8a5 5 0 1 1-1.6-3.7 M13 2.5V5.5H10',
-  section: 'M2.5 2.5h11v11h-11z M2.5 10.5h11',
-  cube: 'M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z M2.5 4.8L8 7.9l5.5-3.1 M8 7.9v6.3',
-  tag: 'M2.5 2.5h6l5 5-6 6-5-5z M5.5 5.5v.01',
-};
-
-const Icon = ({ d }) => (
-  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"
-       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d={ICONS[d]} />
-  </svg>
-);
+import Planner from './Planner.jsx';
+import { buildUnit } from './catalog.js';
+import { layoutWall, starterProject } from './project.js';
+import { cutSize } from './cabinet.js';
 
 function useTheme() {
   const [theme, setTheme] = useState('system');
@@ -30,30 +17,9 @@ function useTheme() {
   return [theme, setTheme, resolved];
 }
 
-/* 2D front elevation. Also the fallback when WebGL will not start. */
-function Elevation({ cabinet }) {
-  const [W, H] = cabinet.size;
-  const fronts = cabinet.parts.filter((p) => p.group === 'front');
-  return (
-    <svg className="elev" viewBox={`-40 -40 ${W + 80} ${H + 80}`} role="img"
-         aria-label="Front elevation of the cabinet">
-      <rect x="0" y="0" width={W} height={H}
-            fill="var(--dw-carcass)" stroke="var(--dw-line)" strokeWidth="3" />
-      {fronts.map((p) => (
-        <rect key={p.code} x={p.pos[0]} y={H - p.pos[1] - p.size[1]}
-              width={p.size[0]} height={p.size[1]}
-              fill="var(--dw-drawer)" stroke="var(--dw-line)" strokeWidth="3" />
-      ))}
-      <text x={W / 2} y={H + 28} textAnchor="middle" fill="var(--dw-dim)"
-            fontFamily="var(--font-mono)" fontSize="26">{W} x {H}</text>
-    </svg>
-  );
-}
+/* --- cabinet detail. The Step 3 viewer, opened on a unit from the plan. --- */
 
-export default function App() {
-  const cabinet = useMemo(() => buildCabinet('B03'), []);
-  const [theme, setTheme, resolvedTheme] = useTheme();
-
+function CabinetDetail({ unit, label, onBack, resolvedTheme }) {
   const [explode, setExplode] = useState(0);
   const [doors, setDoors] = useState('closed');
   const [selected, setSelected] = useState(null);
@@ -62,71 +28,26 @@ export default function App() {
   const [preset, setPreset] = useState('Iso');
   const [nonce, setNonce] = useState(0);
   const [section, setSection] = useState({ on: false, axis: 'z', pos: 50 });
-  const [show, setShow] = useState({
-    back: true, hardware: true, dims: false, labels: false, grid: false,
-  });
-
+  const [show, setShow] = useState({ back: true, hardware: true, dims: false, labels: false, grid: false });
   const reduced = useMemo(
-    () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 760, [],
-  );
-  const webgl = useMemo(() => hasWebGL(), []);
-
-  const rows = useMemo(
-    () => [...cabinet.parts, ...cabinet.hardware], [cabinet],
-  );
-  const listRef = useRef(null);
-
-  useEffect(() => {
-    if (!selected || !listRef.current) return;
-    listRef.current.querySelector(`[data-code="${CSS.escape(selected)}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
-
-  const toggle = (k) => setShow((s) => ({ ...s, [k]: !s[k] }));
-  const resetView = () => {
-    setPreset('Iso'); setNonce((n) => n + 1);
-    setExplode(0); setDoors('closed'); setSelected(null); setGhostMode(false);
-    setSection((s) => ({ ...s, on: false }));
-  };
-
-  const cutParts = cabinet.parts;
-  const totalArea = cutParts.reduce((a, p) => a + (p.L * p.W) / 1e6, 0);
+    () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 760, []);
 
   return (
     <div className="shell">
       <header className="topbar">
-        <span className="brand">Cabinet viewer</span>
-        <span className="ctx">Step 3. One three drawer base, built from its part list.</span>
-        <div className="right">
-          <div className="seg" role="group" aria-label="Theme">
-            {['system', 'light', 'dark'].map((t) => (
-              <button key={t} className="seg__item" aria-pressed={theme === t}
-                      onClick={() => setTheme(t)}>
-                {t[0].toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
+        <button className="btn btn--ghost" onClick={onBack}>Back to planner</button>
+        <span className="badge badge--accent badge--num">{label}</span>
+        <span className="brand">{unit.family.name}</span>
+        <span className="ctx">{unit.width} x {unit.height} x {unit.depth}</span>
       </header>
-
       <main className="body">
         <section className="stage">
           <div className="canvas-wrap">
-            {webgl ? (
-              <Viewer
-                cabinet={cabinet} explode={explode} doors={doors}
-                selected={selected} setSelected={setSelected}
-                hovered={hovered} setHovered={setHovered}
-                show={show} ghostMode={ghostMode} section={section}
-                preset={preset} nonce={nonce} reduced={reduced} theme={resolvedTheme}
-              />
-            ) : (
-              <div className="fallback">
-                <Elevation cabinet={cabinet} />
-                <p className="note">3D is not available in this browser. The elevation is shown instead.</p>
-              </div>
-            )}
-
+            <Viewer cabinet={unit} explode={explode} doors={doors}
+                    selected={selected} setSelected={setSelected}
+                    hovered={hovered} setHovered={setHovered}
+                    show={show} ghostMode={ghostMode} section={section}
+                    preset={preset} nonce={nonce} reduced={reduced} theme={resolvedTheme} />
             <div className="vp-toolbar float-tl">
               <div className="seg" role="group" aria-label="Camera">
                 {['Front', 'Left', 'Right', 'Top', 'Iso'].map((v) => (
@@ -135,23 +56,16 @@ export default function App() {
                 ))}
               </div>
               <span className="vp-toolbar__sep" />
-              <button className="icon-btn" aria-pressed={show.dims} aria-label="Dimensions"
-                      title="Dimensions" onClick={() => toggle('dims')}><Icon d="cube" /></button>
-              <button className="icon-btn" aria-pressed={show.labels} aria-label="Part labels"
-                      title="Part labels" onClick={() => toggle('labels')}><Icon d="tag" /></button>
-              <button className="icon-btn" aria-pressed={ghostMode} aria-label="Ghost mode"
-                      title="Ghost mode" onClick={() => setGhostMode((g) => !g)}><Icon d="ghost" /></button>
-              <button className="icon-btn" aria-pressed={section.on} aria-label="Section cut"
-                      title={reduced ? 'Section cut is off in reduced quality mode' : 'Section cut'}
-                      disabled={reduced}
-                      onClick={() => setSection((s) => ({ ...s, on: !s.on }))}><Icon d="section" /></button>
-              <button className="icon-btn" aria-pressed={show.grid} aria-label="Floor grid"
-                      title="Floor grid, 100mm" onClick={() => toggle('grid')}><Icon d="grid" /></button>
+              {[['dims', 'Dims'], ['labels', 'Labels'], ['grid', 'Grid'], ['back', 'Back'], ['hardware', 'Hardware']].map(([k, l]) => (
+                <button key={k} className="seg__item" aria-pressed={show[k]}
+                        onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}>{l}</button>
+              ))}
               <span className="vp-toolbar__sep" />
-              <button className="icon-btn" aria-label="Reset view" title="Reset view"
-                      onClick={resetView}><Icon d="reset" /></button>
+              <button className="seg__item" aria-pressed={ghostMode}
+                      onClick={() => setGhostMode((g) => !g)}>Ghost</button>
+              <button className="seg__item" aria-pressed={section.on} disabled={reduced}
+                      onClick={() => setSection((s) => ({ ...s, on: !s.on }))}>Section</button>
             </div>
-
             <div className="float-bl controls">
               <div className="slider">
                 <div className="slider__head">
@@ -159,11 +73,9 @@ export default function App() {
                   <span className="slider__value">{explode}%</span>
                 </div>
                 <input type="range" min="0" max="100" value={explode}
-                       style={{ '--pct': `${explode}%` }}
-                       onChange={(e) => setExplode(+e.target.value)}
-                       aria-label="Exploded view" />
+                       style={{ '--pct': `${explode}%` }} aria-label="Exploded view"
+                       onChange={(e) => setExplode(+e.target.value)} />
               </div>
-
               <div className="ctl-row">
                 <span className="field__label">Drawers</span>
                 <div className="seg" role="group" aria-label="Drawers">
@@ -173,7 +85,6 @@ export default function App() {
                   ))}
                 </div>
               </div>
-
               {section.on && !reduced && (
                 <div className="ctl-row">
                   <div className="seg" role="group" aria-label="Section axis">
@@ -182,54 +93,26 @@ export default function App() {
                               onClick={() => setSection((s) => ({ ...s, axis: a }))}>{a.toUpperCase()}</button>
                     ))}
                   </div>
-                  <input type="range" min="0" max="100" value={section.pos}
-                         className="section-range"
-                         style={{ '--pct': `${section.pos}%` }}
-                         onChange={(e) => setSection((s) => ({ ...s, pos: +e.target.value }))}
-                         aria-label="Section position" />
+                  <input type="range" min="0" max="100" value={section.pos} className="section-range"
+                         style={{ '--pct': `${section.pos}%` }} aria-label="Section position"
+                         onChange={(e) => setSection((s) => ({ ...s, pos: +e.target.value }))} />
                 </div>
               )}
             </div>
           </div>
         </section>
-
         <aside className="side">
-          <div className="side-head">
-            <span className="badge badge--accent badge--num">{cabinet.id}</span>
-            <span className="side-title">{cabinet.name}</span>
-          </div>
-
-          <div className="toggles">
-            {[['back', 'Back panel'], ['hardware', 'Hardware']].map(([k, label]) => (
-              <label className="toggle" key={k}>
-                <input type="checkbox" checked={show[k]} onChange={() => toggle(k)} />
-                <span className="toggle__track"><span className="toggle__knob" /></span>
-                <span className="toggle__text">{label}</span>
-              </label>
-            ))}
-            <label className="toggle" title="This cabinet has no shelves">
-              <input type="checkbox" disabled />
-              <span className="toggle__track"><span className="toggle__knob" /></span>
-              <span className="toggle__text">Shelves</span>
-            </label>
-          </div>
-
           <div className="list-head">
             <span className="field__label">Cut list</span>
-            <span className="list-meta">{cutParts.length} parts, {totalArea.toFixed(2)} m2</span>
+            <span className="list-meta">{unit.parts.length} parts</span>
           </div>
-
-          <div className="table-wrap list" ref={listRef} data-density="compact">
+          <div className="table-wrap list" data-density="compact">
             <table className="table">
-              <thead>
-                <tr><th>Part code</th><th>Name</th><th className="n">L x W x T</th></tr>
-              </thead>
+              <thead><tr><th>Part code</th><th>Name</th><th className="n">L x W x T</th></tr></thead>
               <tbody>
-                {rows.map((p) => (
-                  <tr key={p.code} data-code={p.code}
-                      aria-selected={selected === p.code}
-                      onMouseEnter={() => setHovered(p)}
-                      onMouseLeave={() => setHovered(null)}
+                {unit.parts.map((p) => (
+                  <tr key={p.code} aria-selected={selected === p.code}
+                      onMouseEnter={() => setHovered(p)} onMouseLeave={() => setHovered(null)}
                       onClick={() => setSelected(selected === p.code ? null : p.code)}>
                     <td className="code">{p.code}</td>
                     <td>{p.name}</td>
@@ -239,13 +122,92 @@ export default function App() {
               </tbody>
             </table>
           </div>
-
-          <p className="note foot-note">
-            Hardware is listed for the viewer but is not part of the cut list.
-            Prices and the shopping list come later.
-          </p>
         </aside>
       </main>
     </div>
+  );
+}
+
+/* --- start screen --------------------------------------------------------- */
+
+function Start({ onExample, onEmpty }) {
+  return (
+    <div className="start">
+      <h1 className="start-title">Kitchen cabinet builder</h1>
+      <p className="note">Frameless European carcasses, 32mm system. Millimetres and AUD.</p>
+      <div className="start-options">
+        <button className="card start-card" onClick={onExample}>
+          <span className="card__title">Load the example kitchen</span>
+          <span className="note">Five walls, twenty cabinets, ready to change.</span>
+        </button>
+        <button className="card start-card" onClick={onEmpty}>
+          <span className="card__title">Start empty</span>
+          <span className="note">Four walls and an island, no cabinets.</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* --- root ----------------------------------------------------------------- */
+
+export default function App() {
+  const [theme, setTheme, resolvedTheme] = useTheme();
+  const [project, setProject] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [arrangement, setArrangement] = useState('split');
+
+  const webgl = useMemo(() => hasWebGL(), []);
+
+  const openDetail = (uidToOpen) => {
+    const wall = project.walls.find((w) => w.id === project.activeWall);
+    const lay = layoutWall(wall, project.cfg);
+    const p = lay.placed.find((q) => q.item.uid === uidToOpen);
+    if (p) setDetail({ unit: p.unit, label: p.label });
+  };
+
+  if (!project) {
+    return (
+      <div className="shell">
+        <header className="topbar">
+          <span className="brand">Kitchen cabinet builder</span>
+          <span className="ctx">Step 4. Planner, elevation and 3D.</span>
+          <div className="right">
+            <div className="seg" role="group" aria-label="Theme">
+              {['system', 'light', 'dark'].map((t) => (
+                <button key={t} className="seg__item" aria-pressed={theme === t}
+                        onClick={() => setTheme(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
+              ))}
+            </div>
+          </div>
+        </header>
+        <Start
+          onExample={() => setProject(starterProject())}
+          onEmpty={() => {
+            const p = starterProject();
+            p.walls = p.walls.map((w) => ({ ...w, units: [], obstacles: [] }));
+            setProject(p);
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (detail) {
+    return <CabinetDetail unit={detail.unit} label={detail.label}
+                          onBack={() => setDetail(null)} resolvedTheme={resolvedTheme} />;
+  }
+
+  if (!webgl) {
+    // The planner still works, the 3D panel does not. Elevation only.
+    return (
+      <Planner project={project} setProject={setProject} onOpen3D={openDetail}
+               arrangement="drawer" setArrangement={() => {}} />
+    );
+  }
+
+  return (
+    <Planner project={project} setProject={setProject} onOpen3D={openDetail}
+             arrangement={arrangement} setArrangement={setArrangement} />
   );
 }

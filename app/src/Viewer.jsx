@@ -20,7 +20,22 @@ const EDGE = '#2A2722';
 const smoothstep = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
-function cssVar(name, fallback) {
+/* Geometry cache. A kitchen repeats the same panel size many times over, so
+   identical boxes share one BoxGeometry and one EdgesGeometry rather than
+   allocating a pair per part. */
+const geoCache = new Map();
+export function boxGeo(w, h, d) {
+  const k = `${w}|${h}|${d}`;
+  let g = geoCache.get(k);
+  if (!g) {
+    const box = new THREE.BoxGeometry(w, h, d);
+    g = { box, edges: new THREE.EdgesGeometry(box) };
+    geoCache.set(k, g);
+  }
+  return g;
+}
+
+export function cssVar(name, fallback) {
   if (typeof window === 'undefined') return fallback;
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
@@ -28,12 +43,10 @@ function cssVar(name, fallback) {
 
 /* --- one part ------------------------------------------------------------ */
 
-function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, showLabel }) {
-  const geo = useMemo(() => new THREE.BoxGeometry(p.size[0], p.size[1], p.size[2]), [p.size]);
-  const edges = useMemo(() => new THREE.EdgesGeometry(geo), [geo]);
-  useEffect(() => () => { geo.dispose(); edges.dispose(); }, [geo, edges]);
+export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, showLabel, warn }) {
+  const { box: geo, edges } = boxGeo(p.size[0], p.size[1], p.size[2]);
 
-  const tone = TONES[p.material.tone] || TONES.melamine;
+  const tone = TONES[p.tone] || TONES[p.material?.tone] || TONES.melamine;
   const centre = [
     p.pos[0] + p.size[0] / 2 + offset[0],
     p.pos[1] + p.size[1] / 2 + offset[1],
@@ -64,9 +77,9 @@ function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, s
       </mesh>
       <lineSegments geometry={edges} renderOrder={1}>
         <lineBasicMaterial
-          color={selected ? '#1D5E8C' : EDGE}
+          color={selected ? '#1D5E8C' : warn ? '#B4791E' : EDGE}
           transparent
-          opacity={ghosted ? 0.12 : selected ? 1 : 0.55}
+          opacity={ghosted ? 0.12 : selected || warn ? 1 : 0.55}
           clippingPlanes={clip}
         />
       </lineSegments>
