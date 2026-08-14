@@ -29,6 +29,17 @@ export const PROJECT = {
   baseGroove: 10,
   shelfSetback: 20,
   runnerLength: 500,
+
+  /* Board species. Thickness comes from the fields above, so the material
+     name is always species + thickness and follows whatever you type. */
+  carcassBoard: 'White melamine',
+  frontBoard: 'White melamine',
+  backBoard: 'MDF',
+  boxBoard: 'Birch ply',
+
+  backType: 'full',       // 'full' or 'rail', a rail saves a sheet of back
+  backRailHeight: 120,
+  boxBaseFix: 'dado',     // 'dado' or 'screwed' under the sides
 };
 
 /* Seeded prices. Estimates, shown as such everywhere they appear. */
@@ -44,10 +55,16 @@ export const PRICES = {
   hinge: 6.5,
   runnerPair: 28,
   handle: 9,
+  binRunner: 64,
   benchPerMetre: 320,
   kickPerMetre: 26,
   edgeTapePerMetre: 0.6,
 };
+
+/* The seeded numbers, kept aside. PRICES itself is edited in place so the
+   costing functions see your numbers, which means it cannot also be the
+   thing Reset goes back to. */
+export const PRICE_SEED = structuredClone(PRICES);
 
 const matName = (base, thk) => `${base} ${thk}mm`;
 
@@ -55,18 +72,22 @@ const matName = (base, thk) => `${base} ${thk}mm`;
    carcass thickness renamed nothing, so an 18mm part was still costed and
    nested against a 16mm sheet. */
 const materialsFor = (P) => ({
-  carcass: matName('White melamine', P.carcassThk),
-  front: matName('White melamine', P.frontThk),
-  back: matName('MDF', P.backThk),
-  box: matName('Birch ply', P.boxSideThk),
-  boxBase: matName('Birch ply', P.boxBaseThk),
+  carcass: matName(P.carcassBoard || 'White melamine', P.carcassThk),
+  front: matName(P.frontBoard || 'White melamine', P.frontThk),
+  back: matName(P.backBoard || 'MDF', P.backThk),
+  box: matName(P.boxBoard || 'Birch ply', P.boxSideThk),
+  boxBase: matName(P.boxBoard || 'Birch ply', P.boxBaseThk),
 });
 
 const toneFor = (material) => {
-  if (material.startsWith('Birch ply')) return 'ply';
-  if (material.startsWith('MDF')) return 'mdf';
+  if (/ply/i.test(material)) return 'ply';
+  if (/^MDF|hardboard/i.test(material)) return 'mdf';
+  if (/oak|birch|pine|walnut/i.test(material)) return 'ply';
   return 'melamine';
 };
+
+/** Board species offered in the pickers. Thickness is typed, not chosen. */
+export const BOARDS = ['White melamine', 'Birch ply', 'Hoop pine ply', 'MDF', 'HMR MDF', 'Structural ply'];
 
 /**
  * Sheet stock for a material. If that exact thickness is not stocked, fall
@@ -142,19 +163,40 @@ export const FAMILIES = [
     desc: 'Oven cavity at 600, door above, drawer below.',
     widths: [600], def: { width: 600, doors: 1, drawers: 1, shelves: 1 }, glyph: 'oven' },
 
-  { id: 'app-fridge', group: 'Appliance', name: 'Fridge space', kind: 'appliance', fronts: 'none',
+  { id: 'base-micro', group: 'Base', name: 'Microwave and drawer', kind: 'base', fronts: 'microwave',
+    desc: 'Open bay for the microwave over one drawer.',
+    widths: [500, 600, 700, 800], def: { width: 600, drawers: 1, microH: 380 }, glyph: 'micro' },
+
+  { id: 'base-bin', group: 'Base', name: 'Pull-out bin', kind: 'base', fronts: 'bin',
+    desc: 'One door on a bin runner. No shelf.',
+    widths: [300, 400, 450, 500, 600], def: { width: 450, doors: 1, shelves: 0 }, glyph: 'bin' },
+
+  { id: 'app-fridge', group: 'Appliance', name: 'Fridge space', kind: 'tall', fronts: 'none',
+    cavity: true, appliance: 'fridge',
     desc: 'Blocked out cavity. No parts, no cost.',
     widths: [900, 1000, 1100, 1200], def: { width: 1000, height: 2250 }, glyph: 'fridge' },
 
-  { id: 'app-dishwasher', group: 'Appliance', name: 'Dishwasher space', kind: 'appliance', fronts: 'none',
+  { id: 'app-dishwasher', group: 'Appliance', name: 'Dishwasher space', kind: 'base', fronts: 'none',
+    cavity: true, appliance: 'dw',
     desc: 'Under bench cavity, 600 standard.',
     widths: [600, 450], def: { width: 600 }, glyph: 'dw' },
 
-  { id: 'app-cooktop', group: 'Appliance', name: 'Cooktop space', kind: 'appliance', fronts: 'none',
+  { id: 'app-cooktop', group: 'Appliance', name: 'Cooktop space', kind: 'base', fronts: 'none',
+    cavity: true, appliance: 'cooktop', breaksBench: true,
     desc: 'Freestanding cooker cavity, benchtop broken.',
     widths: [600, 700, 900], def: { width: 900 }, glyph: 'cooktop' },
 
-  { id: 'filler', group: 'Filler', name: 'Filler', kind: 'filler', fronts: 'none',
+  { id: 'app-cooktop-oven', group: 'Appliance', name: 'Cooktop with oven below', kind: 'base', fronts: 'none',
+    cavity: true, appliance: 'cooktopOven', breaksBench: true,
+    desc: 'Cooktop cut into the bench with the oven in the cavity under it.',
+    widths: [600, 700, 900], def: { width: 600 }, glyph: 'cooktopOven' },
+
+  { id: 'app-rangehood', group: 'Appliance', name: 'Range hood', kind: 'wall', fronts: 'none',
+    cavity: true, appliance: 'hood',
+    desc: 'Hangs over the cooktop. Drawn as a hood, not a box.',
+    widths: [600, 700, 900], def: { width: 900, height: 600, mountY: 1500 }, glyph: 'hood' },
+
+  { id: 'filler', group: 'Filler', name: 'Filler', kind: 'filler', fronts: 'none', cavity: false,
     desc: 'Scribe strip against a wall or appliance.',
     widths: [20, 30, 40, 50, 75, 100], def: { width: 40 }, glyph: 'filler' },
 ];
@@ -181,11 +223,16 @@ function depthFor(kind, P) {
  * @returns {{id,familyId,name,kind,width,height,depth,mountY,parts,hardware,size}}
  */
 export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
-  const P = { ...PROJECT, ...cfg };
   const fam = FAMILY[familyId];
   if (!fam) throw new Error(`Unknown family ${familyId}`);
 
   const s = { ...fam.def, ...inst };
+
+  /* A cabinet may carry its own overrides, which win over the project
+     defaults. That is what lets one cabinet be 18mm while the rest stay 16,
+     or one drawer bank run a wider runner gap. Everything downstream reads
+     the part list, so the cut list, nest, drilling and costing all follow. */
+  const P = { ...PROJECT, ...cfg, ...(s.cfg && typeof s.cfg === 'object' ? s.cfg : {}) };
   const W = s.width;
   const kind = fam.kind;
   const H = s.height ?? carcassHeightFor(kind, P);
@@ -194,18 +241,27 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
 
   const MAT = materialsFor(P);
   const parts = [];
+  let drawerOpening = 0;
   const fittings = [];
   const code = (x) => `${id}-${x}`;
 
-  /* Appliance cavities and fillers are volumes, not cabinets. */
-  if (kind === 'appliance') {
+  /* Cavities are blocked out volumes, not cabinets: no parts, no cost.
+     kind still says which run they occupy, so a range hood sits in the wall
+     run and a fridge takes both. */
+  if (fam.cavity) {
+    const ch = s.height ?? (kind === 'tall' ? P.tallHeight + P.kick
+      : kind === 'wall' ? (s.height ?? 600)
+      : P.benchHeight - P.benchThk - P.kick);
     return {
-      id, familyId, family: fam, name: fam.name, kind, settings: s,
-      width: W, height: s.height ?? (P.benchHeight - P.benchThk - P.kick), depth: D,
-      mountY: kind === 'appliance' && s.height >= 2000 ? 0 : P.kick,
-      size: [W, s.height ?? (P.benchHeight - P.benchThk - P.kick), D],
-      parts: [], hardware: [], fittings: [], cfg: P, breaksBench: familyId === 'app-cooktop',
-      fullHeight: (s.height ?? 0) >= 2000,
+      id, familyId, family: fam, name: fam.name, kind, settings: s, cavity: true,
+      appliance: fam.appliance || 'box',
+      width: W, height: ch, depth: D,
+      mountY: kind === 'wall' ? (s.mountY ?? P.wallMount)
+        : kind === 'tall' ? 0 : P.kick,
+      size: [W, ch, D],
+      parts: [], hardware: [], fittings: [], cfg: P,
+      breaksBench: !!fam.breaksBench,
+      fullHeight: kind === 'tall',
     };
   }
 
@@ -224,7 +280,8 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   const T = P.carcassThk;
   const BT = P.backThk;
   const internalW = W - 2 * T;
-  const bottomDepth = D - BT;
+  const railBack = (P.backType || 'full') === 'rail';
+  const bottomDepth = railBack ? D : D - BT;
   const isBase = kind === 'base';
 
   parts.push(mkPart({
@@ -238,14 +295,14 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   parts.push(mkPart({
     code: code('BOT'), name: 'Bottom', group: 'carcass', material: MAT.carcass,
     L: internalW, W: bottomDepth, T,
-    size: [internalW, T, bottomDepth], pos: [T, 0, BT], explode: [0, -200, 0], edging: 'Front edge',
+    size: [internalW, T, bottomDepth], pos: [T, 0, railBack ? 0 : BT], explode: [0, -200, 0], edging: 'Front edge',
   }));
 
   if (isBase) {
     const RW = 100;
     parts.push(mkPart({
       code: code('RAIL-TB'), name: 'Top rail, back', group: 'carcass', material: MAT.carcass,
-      L: internalW, W: RW, T, size: [internalW, T, RW], pos: [T, H - T, BT], explode: [0, 210, -70],
+      L: internalW, W: RW, T, size: [internalW, T, RW], pos: [T, H - T, railBack ? 0 : BT], explode: [0, 210, -70],
     }));
     parts.push(mkPart({
       code: code('RAIL-TF'), name: 'Top rail, front', group: 'carcass', material: MAT.carcass,
@@ -256,24 +313,35 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     parts.push(mkPart({
       code: code('TOP'), name: 'Top', group: 'carcass', material: MAT.carcass,
       L: internalW, W: bottomDepth, T,
-      size: [internalW, T, bottomDepth], pos: [T, H - T, BT], explode: [0, 220, 0], edging: 'Front edge',
+      size: [internalW, T, bottomDepth], pos: [T, H - T, railBack ? 0 : BT], explode: [0, 220, 0], edging: 'Front edge',
     }));
   }
 
-  parts.push(mkPart({
-    code: code('BACK'), name: 'Back', group: 'back', material: MAT.back,
-    L: internalW, W: H - T, T: BT,
-    size: [internalW, H - T, BT], pos: [T, T, 0], explode: [0, 0, -280],
-  }));
+  if (railBack) {
+    /* A back rail braces the carcass at the top and takes far less board.
+       It carries no dust seal, so it suits a base cabinet more than a wall. */
+    const RH = P.backRailHeight;
+    parts.push(mkPart({
+      code: code('BACK-RAIL'), name: 'Back rail', group: 'back', material: MAT.carcass,
+      L: internalW, W: RH, T,
+      size: [internalW, RH, T], pos: [T, H - T - RH, 0], explode: [0, 0, -280],
+    }));
+  } else {
+    parts.push(mkPart({
+      code: code('BACK'), name: 'Back', group: 'back', material: MAT.back,
+      L: internalW, W: H - T, T: BT,
+      size: [internalW, H - T, BT], pos: [T, T, 0], explode: [0, 0, -280],
+    }));
+  }
 
   const shelves = s.shelves ?? 0;
-  const shelfDepth = D - BT - P.shelfSetback;
+  const shelfDepth = D - (railBack ? 0 : BT) - P.shelfSetback;
   for (let i = 0; i < shelves; i++) {
     const y = T + ((H - 2 * T) * (i + 1)) / (shelves + 1);
     parts.push(mkPart({
       code: code(`SHELF-${i + 1}`), name: `Shelf ${i + 1}`, group: 'shelf', material: MAT.carcass,
       L: internalW - 2, W: shelfDepth, T,
-      size: [internalW - 2, T, shelfDepth], pos: [T + 1, y, BT], explode: [0, 120 + i * 60, 90],
+      size: [internalW - 2, T, shelfDepth], pos: [T + 1, y, railBack ? 0 : BT], explode: [0, 120 + i * 60, 90],
       edging: 'Front edge',
     }));
   }
@@ -301,34 +369,70 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
   };
 
-  const addDrawers = (n, y, h) => {
-    const each = (h - (n - 1) * R) / n;
+  const addDrawers = (n, y, h, heights) => {
+    /* Remember the opening these drawers have to fill. The inspector checks
+       typed heights against this, not against the whole carcass, so a
+       microwave unit with a bay above the drawer is judged correctly. */
+    drawerOpening = h;
+    /* Heights are per drawer if you set them, otherwise equal. They are used
+       as typed: no silent rescaling, so an overrun shows up in the elevation
+       and in the warning rather than being hidden. */
+    const gaps = (n - 1) * R;
+    const even = (h - gaps) / n;
+    const hs = (Array.isArray(heights) && heights.length === n
+      && heights.every((v) => Number(v) > 0))
+      ? heights.map(Number)
+      : Array.from({ length: n }, () => even);
+
     const boxW = internalW - 2 * P.runnerClearance;
     const boxInnerW = boxW - 2 * P.boxSideThk;
-    const RL = D >= 560 ? 500 : 400;
+    const RL = P.runnerLength && P.runnerLength <= D - P.boxSetback
+      ? P.runnerLength : (D >= 560 ? 500 : 400);
     const boxZ = D - P.boxSetback - RL;
+    const dado = (P.boxBaseFix || 'dado') === 'dado';
+
+    let top = y + h;
     for (let i = 0; i < n; i++) {
-      const fy = y + h - each - i * (each + R);
+      const each = hs[i];
+      const fy = top - each;
+      top = fy - R;
       const num = i + 1;
+
       parts.push(mkPart({
         code: code(`DRWR-F${num}`), name: `Drawer front ${num}`, group: 'front', material: MAT.front,
         L: Math.round(frontW), W: Math.round(each), T: FT, drawer: num,
         size: [frontW, each, FT], pos: [sideGap, fy, D], explode: [0, 0, 340],
         edging: 'All four edges',
       }));
+
+      // The box never stands taller than its own front.
+      const BH = Math.max(60, Math.min(P.boxHeight, each - 40));
       const by = fy + 20;
       const sh = [0, 0, 170];
+      const BST = P.boxSideThk;
       const push = (sfx, nm, L, Wd, Th, size, pos, ex, mat) => parts.push(mkPart({
         code: code(`DRWR${num}-${sfx}`), name: `Drawer ${num} ${nm}`, group: 'box',
         material: mat, L, W: Wd, T: Th, drawer: num, size, pos,
         explode: [ex[0] + sh[0], ex[1] + sh[1], ex[2] + sh[2]],
       }));
-      const BST = P.boxSideThk;
-      push('SIDE-L', 'box, left side', RL, P.boxHeight, BST, [BST, P.boxHeight, RL], [T + P.runnerClearance, by, boxZ], [-170, 0, 0], MAT.box);
-      push('SIDE-R', 'box, right side', RL, P.boxHeight, BST, [BST, P.boxHeight, RL], [T + P.runnerClearance + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
-      push('FRONT', 'box, front', boxInnerW, P.boxHeight, BST, [boxInnerW, P.boxHeight, BST], [T + P.runnerClearance + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
-      push('BACK', 'box, back', boxInnerW, P.boxHeight, BST, [boxInnerW, P.boxHeight, BST], [T + P.runnerClearance + BST, by, boxZ], [0, 0, -150], MAT.box);
-      push('BASE', 'base', boxInnerW, RL - 2 * BST, P.boxBaseThk, [boxInnerW, P.boxBaseThk, RL - 2 * BST], [T + P.runnerClearance + BST, by + P.baseGroove, boxZ + BST], [0, -150, 0], MAT.boxBase);
+
+      push('SIDE-L', 'box, left side', RL, BH, BST, [BST, BH, RL], [T + P.runnerClearance, by, boxZ], [-170, 0, 0], MAT.box);
+      push('SIDE-R', 'box, right side', RL, BH, BST, [BST, BH, RL], [T + P.runnerClearance + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
+      push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + P.runnerClearance + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
+      push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + P.runnerClearance + BST, by, boxZ], [0, 0, -150], MAT.box);
+
+      if (dado) {
+        // Base captured in a groove, so it is the inside size and sits up a little.
+        push('BASE', 'base', boxInnerW, RL - 2 * BST, P.boxBaseThk,
+          [boxInnerW, P.boxBaseThk, RL - 2 * BST],
+          [T + P.runnerClearance + BST, by + P.baseGroove, boxZ + BST], [0, -150, 0], MAT.boxBase);
+      } else {
+        // Screwed on underneath, so it is the full box footprint.
+        push('BASE', 'base, screwed under', boxW, RL, P.boxBaseThk,
+          [boxW, P.boxBaseThk, RL],
+          [T + P.runnerClearance, by - P.boxBaseThk, boxZ], [0, -150, 0], MAT.boxBase);
+      }
+
       fittings.push({ type: 'runnerPair', qty: 1, code: code(`RUNNER-${num}`), length: RL });
       fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-D${num}`) });
     }
@@ -345,7 +449,15 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
     for (let i = 0; i < doorNo; i++) fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
   } else if (fam.fronts === 'drawers') {
-    addDrawers(s.drawers ?? 3, 0, H);
+    addDrawers(s.drawers ?? 3, 0, H, s.drawerHeights);
+  } else if (fam.fronts === 'microwave') {
+    /* Open bay for the microwave over a drawer. The bay is a hole, not a part. */
+    const bay = s.microH ?? 380;
+    const drawerH = Math.max(120, H - bay - R);
+    addDrawers(s.drawers ?? 1, 0, drawerH, s.drawerHeights);
+  } else if (fam.fronts === 'bin') {
+    addDoors(1, 0, H);
+    fittings.push({ type: 'binRunner', qty: 1, code: code('BIN-RUNNER') });
   } else if (fam.fronts === 'sink') {
     const fh = 150;
     parts.push(mkPart({
@@ -355,18 +467,20 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }));
     addDoors(2, 0, H - fh - R);
   } else if (fam.fronts === 'oven') {
-    const cavity = 600;
+    const cavity = s.ovenH ?? 600;
     const drawerH = 300;
     const doorH = H - cavity - drawerH - 2 * R;
     addDoors(1, H - doorH, doorH);
-    addDrawers(1, 0, drawerH);
+    addDrawers(1, 0, drawerH, s.drawerHeights);
   }
 
   return {
     id, familyId, family: fam, name: fam.name, kind, settings: s,
     width: W, height: H, depth: D, mountY, size: [W, H, D],
-    parts, fittings, hardware: [], cfg: P,
-    ovenCavity: fam.fronts === 'oven' ? { y: 300 + P.reveal, h: 600 } : null,
+    parts, fittings, hardware: [], cfg: P, drawerOpening,
+    ovenCavity: fam.fronts === 'oven' ? { y: 300 + P.reveal, h: s.ovenH ?? 600 } : null,
+    microBay: fam.fronts === 'microwave'
+      ? { y: H - (s.microH ?? 380), h: s.microH ?? 380 } : null,
   };
 }
 
@@ -388,6 +502,8 @@ export function unitCost(unit) {
     if (h.type === 'hinge') hw += PRICES.hinge * h.qty;
     if (h.type === 'runnerPair') hw += PRICES.runnerPair * h.qty;
     if (h.type === 'handle') hw += PRICES.handle * h.qty;
+    if (h.type === 'binRunner') hw += (PRICES.binRunner ?? 0) * h.qty;
+    if (h.type === 'custom') hw += (h.cost ?? 0) * h.qty;
   }
   return { board, hardware: hw, total: board + hw, areaByMaterial: bySheet };
 }

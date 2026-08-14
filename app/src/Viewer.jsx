@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { bounds, cutSize } from './cabinet.js';
+import { bounds } from './cabinet.js';
 
 /* Materials. Matte, close to the real board. Doors sit one value off the
    carcass so the eye separates them without needing the outline to do it.
@@ -324,20 +324,9 @@ function Scene({
 
       {show.dims && <Dimensions size={cabinet.size} dimColor={dimColor} />}
 
-      {hovered && (
-        <Html
-          position={[0, H + 120, 0]}
-          center
-          zIndexRange={[30, 20]}
-          style={{ pointerEvents: 'none' }}
-        >
-          <span className="hover-card">
-            <b>{hovered.code}</b>
-            <span>{hovered.name}</span>
-            <span>{cutSize(hovered)}</span>
-          </span>
-        </Html>
-      )}
+      {/* The part name and size used to hang over the model on a leader, which
+          covered the very thing you were pointing at. It is a fixed panel in
+          the bottom right corner of the viewer now, drawn by the screen. */}
     </>
   );
 }

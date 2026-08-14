@@ -22,15 +22,28 @@ export const DRILL = {
   cupFromEnd: 100,    // top and bottom hinge centres from the door ends
   handleDia: 5,
   constructionDia: 8,
+  adjustSteps: 2,   // shelf pin holes either side of the shelf, for adjustment
 };
 
 const hole = (x, y, dia, depth, kind, label) => ({ x, y, dia, depth, kind, label });
 
-/** System hole column positions up a side panel. */
-function systemRun(height, d = DRILL) {
-  const out = [];
-  for (let y = d.firstHole; y <= height - d.firstHole; y += d.pitch) out.push(y);
-  return out;
+/**
+ * Shelf pin positions. The template is for shelves, so instead of a full
+ * length system run we drill a short ladder around each shelf height. That
+ * keeps the shelf adjustable a couple of positions either way without
+ * drilling the whole panel.
+ */
+function shelfHoles(shelfYs, height, d = DRILL) {
+  const out = new Set();
+  for (const y of shelfYs) {
+    // snap to the 32mm grid measured from the first hole
+    const k = Math.round((y - d.firstHole) / d.pitch);
+    for (let n = k - d.adjustSteps; n <= k + d.adjustSteps; n++) {
+      const pos = d.firstHole + n * d.pitch;
+      if (pos >= d.firstHole && pos <= height - d.firstHole) out.add(pos);
+    }
+  }
+  return [...out].sort((a, b) => a - b);
 }
 
 /** Hinge centres up a door, from the bottom. */
@@ -57,9 +70,17 @@ export function drillPanel(unit, part, d = DRILL) {
     const backX = d.backSetback;
     const frontX = depth - d.frontSetback;
 
-    for (const y of systemRun(height, d)) {
-      holes.push(hole(backX, y, d.systemDia, d.systemDepth, 'system', ''));
-      holes.push(hole(frontX, y, d.systemDia, d.systemDepth, 'system', ''));
+    /* Shelves only. A drawer bank has nothing to set out here, so it drops
+       out of the drilling schedule entirely rather than showing a panel
+       covered in holes you do not need. */
+    const shelfYs = unit.parts
+      .filter((q) => q.group === 'shelf')
+      .map((q) => q.pos[1] + q.size[1] / 2);
+    if (!shelfYs.length) return null;
+
+    for (const y of shelfHoles(shelfYs, height, d)) {
+      holes.push(hole(backX, Math.round(y), d.systemDia, d.systemDepth, 'system', ''));
+      holes.push(hole(frontX, Math.round(y), d.systemDia, d.systemDepth, 'system', ''));
     }
 
     // Construction holes into the bottom and the top rails or top.
@@ -72,19 +93,11 @@ export function drillPanel(unit, part, d = DRILL) {
     }
 
     const notes = [
-      `System holes ${d.systemDia}mm at ${d.pitch}mm pitch, ${d.systemDepth}mm deep.`,
+      `Shelf pin holes ${d.systemDia}mm at ${d.pitch}mm pitch, ${d.systemDepth}mm deep.`,
       `Front line ${d.frontSetback}mm from the front edge, back line ${d.backSetback}mm from the back edge.`,
+      `${d.adjustSteps} holes either side of each shelf, so it moves ${d.adjustSteps * d.pitch}mm up or down.`,
       'Front edge is to the right as drawn.',
     ];
-
-    const hasDrawers = unit.parts.some((p) => p.code.includes('DRWR-F'));
-    if (hasDrawers) {
-      notes.push('Runners land on the front and back system lines. No extra holes.');
-    }
-    const hasDoors = unit.parts.some((p) => p.code.includes('DOOR'));
-    if (hasDoors) {
-      notes.push('Hinge plates use the front system line. No extra holes.');
-    }
 
     return {
       code: part.code, name: part.name, w: depth, h: height,
@@ -115,22 +128,9 @@ export function drillPanel(unit, part, d = DRILL) {
     };
   }
 
-  if (isDrawerFront) {
-    const w = part.W;
-    const h = part.L;
-    const holes = [
-      hole(Math.round(w / 2 - 64), Math.round(h / 2), d.handleDia, 0, 'handle', 'through'),
-      hole(Math.round(w / 2 + 64), Math.round(h / 2), d.handleDia, 0, 'handle', 'through'),
-    ];
-    return {
-      code: part.code, name: part.name, w, h,
-      xLabel: 'Width', yLabel: 'Height', holes,
-      notes: [
-        'Handle at 128mm centres, through drilled 5mm.',
-        'Front fixes to the box with adjusters, no holes in the front.',
-      ],
-    };
-  }
+  /* Drawer fronts are not part of the shelf template. The front fixes to the
+     box with adjusters and the handle is marked off the fitted drawer. */
+  if (isDrawerFront) return null;
 
   return null;
 }
@@ -141,7 +141,7 @@ export function drillUnit(unit, d = DRILL) {
 }
 
 export const HOLE_STYLE = {
-  system: { fill: 'var(--dw-line)', label: '5mm system' },
+  system: { fill: 'var(--dw-line)', label: '5mm shelf pin' },
   construction: { fill: 'var(--accent)', label: '8mm construction' },
   cup: { fill: 'var(--warn)', label: '35mm hinge cup' },
   handle: { fill: 'var(--dw-dim)', label: '5mm handle, through' },

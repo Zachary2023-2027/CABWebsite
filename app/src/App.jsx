@@ -52,16 +52,21 @@ function Rail({ screen, setScreen }) {
 
 /* --- cabinet detail ------------------------------------------------------- */
 
+/* The strip is useful at the bench and in the way when you are looking at the
+   model, so it folds down to its own heading. */
 function DrillStrip({ unit }) {
   const panels = useMemo(() => drillUnit(unit), [unit]);
+  const [open, setOpen] = useState(true);
   if (!panels.length) return null;
   return (
-    <div className="drill-strip">
+    <div className={`drill-strip ${open ? 'is-open' : ''}`}>
       <div className="drill-strip-head">
         <span className="field__label">Drilling</span>
         <span className="list-meta">{panels.length} drilled panels, 32mm system</span>
+        <button className="btn btn--ghost" onClick={() => setOpen((o) => !o)}
+                aria-expanded={open}>{open ? 'Hide' : 'Show'}</button>
       </div>
-      <div className="drill-strip-row">
+      <div className="drill-strip-row" hidden={!open}>
         {panels.map((p) => (
           <figure className="drill-mini" key={p.code}>
             <svg viewBox={`-30 -30 ${p.w + 60} ${p.h + 60}`} preserveAspectRatio="xMidYMid meet"
@@ -77,6 +82,26 @@ function DrillStrip({ unit }) {
           </figure>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* Fixed in the corner rather than following the pointer, so it never sits on
+   top of the part you are trying to look at. */
+function PartCard({ part }) {
+  if (!part) {
+    return (
+      <div className="part-card float-br part-card--empty">
+        <span>Point at a part to see its size.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="part-card float-br">
+      <b className="code">{part.code}</b>
+      <span>{part.name}</span>
+      <span className="n">{cutSize(part)}</span>
+      <span className="note">{part.material}</span>
     </div>
   );
 }
@@ -103,6 +128,7 @@ function CabinetDetail({ unit, label, resolvedTheme }) {
                   hovered={hovered} setHovered={setHovered}
                   show={show} ghostMode={ghostMode} section={section}
                   preset={preset} nonce={nonce} reduced={reduced} theme={resolvedTheme} />
+          <PartCard part={hovered || unit.parts.find((p) => p.code === selected) || null} />
           <div className="vp-toolbar float-tl">
             <div className="seg" role="group" aria-label="Camera">
               {['Front', 'Left', 'Right', 'Top', 'Iso'].map((v) => (
@@ -398,7 +424,7 @@ export default function App() {
       case 'cutlist': return <CutList project={project} cut={cut} setCut={setCut}
                                       onWorkshop={() => setScreen('workshop')} />;
       case 'nesting': return <Nesting project={project} />;
-      case 'hardware': return <Hardware project={project} prices={prices} setPrices={setPrices} />;
+      case 'hardware': return <Hardware project={project} setProject={setProject} prices={prices} setPrices={setPrices} />;
       case 'drilling': return <Drilling project={project} />;
       case 'costing': return <Costing project={project} quoted={quoted} setQuoted={setQuoted} />;
       case 'settings': return <Settings project={project} setProject={setProject}

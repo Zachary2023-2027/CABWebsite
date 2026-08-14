@@ -1,151 +1,165 @@
-import { useState } from 'react';
-import Screen from './Screen.jsx';
-import { PRICES, PROJECT } from './catalog.js';
+/* ===========================================================================
+   Settings. Money and stock only.
 
-const GROUPS = [
-  {
-    id: 'carcass', name: 'Carcass',
-    note: 'Change a thickness and every dependent part in every cabinet follows.',
-    fields: [
-      ['carcassThk', 'Carcass thickness', 'mm'],
-      ['backThk', 'Back thickness', 'mm'],
-      ['frontThk', 'Front thickness', 'mm'],
-      ['reveal', 'Reveal between fronts', 'mm'],
-      ['baseDepth', 'Base cabinet depth', 'mm'],
-      ['wallDepth', 'Wall cabinet depth', 'mm'],
-    ],
-  },
-  {
-    id: 'heights', name: 'Heights',
-    note: 'Australian standard is a 900 benchtop over a 150 kick.',
-    fields: [
-      ['benchHeight', 'Benchtop height', 'mm'],
-      ['benchThk', 'Benchtop thickness', 'mm'],
-      ['benchDepth', 'Benchtop depth', 'mm'],
-      ['kick', 'Kickboard height', 'mm'],
-      ['wallMount', 'Wall cabinet underside', 'mm'],
-      ['wallCabHeight', 'Wall cabinet height', 'mm'],
-      ['tallHeight', 'Tall carcass height', 'mm'],
-      ['ceiling', 'Ceiling height', 'mm'],
-    ],
-  },
-  {
-    id: 'drawers', name: 'Drawers',
-    note: 'Runner clearance is each side. Blum Tandem style takes 21.',
-    fields: [
-      ['runnerLength', 'Runner length', 'mm'],
-      ['runnerClearance', 'Runner clearance each side', 'mm'],
-      ['boxSideThk', 'Box side thickness', 'mm'],
-      ['boxBaseThk', 'Box base thickness', 'mm'],
-      ['boxHeight', 'Box side height', 'mm'],
-      ['boxSetback', 'Box behind the front face', 'mm'],
-    ],
-  },
-];
+   The carcass, height and drawer numbers used to live here, a screen away
+   from the drawing they change. They are on the planner now, under Advanced
+   design, so the elevation moves as you edit them.
+
+   Nothing on this screen is a drop-down. Every value is typed, including
+   sheet sizes and sheet names, because your supplier's stock list is not
+   going to match a list I picked.
+   =========================================================================== */
+
+import { useEffect, useState } from 'react';
+import Screen from './Screen.jsx';
+import { PRICE_SEED } from './catalog.js';
 
 const PRICE_FIELDS = [
   ['hinge', 'Hinge', 'each'],
   ['runnerPair', 'Runner pair', 'pair'],
   ['handle', 'Handle', 'each'],
+  ['binRunner', 'Bin runner', 'each'],
   ['benchPerMetre', 'Benchtop', 'per m'],
   ['kickPerMetre', 'Kickboard', 'per m'],
   ['edgeTapePerMetre', 'Edge tape', 'per m'],
 ];
 
-function Num({ value, onChange, unit, label }) {
+const num = (v) => {
+  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+};
+
+function Num({ value, onChange, unit, label, hideLabel }) {
   return (
     <div className="field">
-      <span className="field__label">{label}</span>
+      <span className={`field__label ${hideLabel ? 'is-hidden' : ''}`}>{label}</span>
       <div className="input-shell num-input">
         <input className="num-input__input" type="text" inputMode="decimal"
                value={value} aria-label={label}
-               onChange={(e) => {
-                 const v = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                 onChange(Number.isFinite(v) ? v : 0);
-               }} />
+               onChange={(e) => onChange(num(e.target.value))} />
         <span className="num-input__unit">{unit}</span>
       </div>
     </div>
   );
 }
 
-export default function Settings({ project, setProject, prices, setPrices }) {
-  const [open, setOpen] = useState({ carcass: true, heights: false, drawers: false, prices: false, sheets: false });
-  const cfg = project.cfg;
+/* Renaming a sheet rekeys it, which remounts the row, which would take the
+   keyboard away mid-word. So the name is held locally and committed when you
+   leave the field or press Enter. */
+function Name({ value, onCommit, label, hideLabel }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const commit = () => {
+    const v = draft.trim();
+    if (!v || v === value) { setDraft(value); return; }
+    onCommit(v);
+  };
+  return (
+    <div className="field">
+      <span className={`field__label ${hideLabel ? 'is-hidden' : ''}`}>{label}</span>
+      <div className="input-shell">
+        <input type="text" value={draft} aria-label={label} placeholder="Birch ply 16mm"
+               onChange={(e) => setDraft(e.target.value)}
+               onBlur={commit}
+               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
+      </div>
+    </div>
+  );
+}
 
-  const setCfg = (k, v) => setProject((p) => ({ ...p, cfg: { ...p.cfg, [k]: v } }));
-  const resetGroup = (g) => setProject((p) => {
-    const next = { ...p.cfg };
-    for (const [k] of g.fields) next[k] = PROJECT[k];
-    return { ...p, cfg: next };
+/* ---------------------------------------------------------------------------
+   Sheet stock.
+
+   A sheet is keyed by its material name, and that name is how a part finds
+   its sheet: a part made of "Birch ply 16mm" nests and costs against the
+   sheet of the same name. So renaming a sheet is a real operation, not a
+   label change, and the row says so.
+   --------------------------------------------------------------------------- */
+
+function Sheets({ prices, setPrices }) {
+  const rows = Object.entries(prices.sheets);
+
+  const edit = (name, patch) => setPrices((p) => ({
+    ...p, sheets: { ...p.sheets, [name]: { ...p.sheets[name], ...patch } },
+  }));
+
+  const rename = (name, next) => setPrices((p) => {
+    const sheets = {};
+    // Rebuild in order, so a rename does not jump the row to the bottom.
+    for (const [k, v] of Object.entries(p.sheets)) sheets[k === name ? next : k] = v;
+    return { ...p, sheets };
   });
-  const resetPrices = () => setPrices({ ...PRICES });
 
-  const toggle = (id) => setOpen((o) => ({ ...o, [id]: !o[id] }));
+  const remove = (name) => setPrices((p) => {
+    const sheets = { ...p.sheets };
+    delete sheets[name];
+    return { ...p, sheets };
+  });
+
+  const add = () => setPrices((p) => {
+    let name = 'New sheet';
+    let n = 2;
+    while (p.sheets[name]) { name = `New sheet ${n}`; n += 1; }
+    return { ...p, sheets: { ...p.sheets, [name]: { size: [2400, 1200], cost: 0 } } };
+  });
 
   return (
-    <Screen title="Settings" context="Australian defaults are already in place. You should not need to open this to start.">
-      {GROUPS.map((g) => (
-        <section className="card group-card" key={g.id}>
-          <button className="group-head" onClick={() => toggle(g.id)} aria-expanded={open[g.id]}>
-            <span className="card__title">{g.name}</span>
-            <span className="group-note">{g.note}</span>
-            <span className="group-caret">{open[g.id] ? 'Hide' : 'Show'}</span>
-          </button>
-          {open[g.id] && (
-            <>
-              <div className="settings-grid">
-                {g.fields.map(([k, label, unit]) => (
-                  <Num key={k} label={label} unit={unit} value={cfg[k]}
-                       onChange={(v) => setCfg(k, v)} />
-                ))}
-              </div>
-              <div className="group-foot">
-                <button className="btn btn--ghost" onClick={() => resetGroup(g)}>Reset {g.name.toLowerCase()}</button>
-              </div>
-            </>
-          )}
-        </section>
+    <section className="card settings-card">
+      <div className="card__head">
+        <span className="card__title">Sheet stock</span>
+        <span className="group-note">Used by nesting and by costing.</span>
+      </div>
+      <p className="note">
+        The name has to match the board and thickness on the part, like Birch ply 16mm.
+        If a thickness you have typed is not stocked, the nearest sheet of the same board
+        is used and the cost is scaled.
+      </p>
+
+      {rows.map(([name, s], i) => (
+        <div className="sheet-row" key={name}>
+          <Name label="Material" hideLabel={i > 0} value={name} onCommit={(v) => rename(name, v)} />
+          <Num label="Width" unit="mm" hideLabel={i > 0} value={s.size[0]}
+               onChange={(v) => edit(name, { size: [v, s.size[1]] })} />
+          <Num label="Length" unit="mm" hideLabel={i > 0} value={s.size[1]}
+               onChange={(v) => edit(name, { size: [s.size[0], v] })} />
+          <Num label="Cost" unit="AUD" hideLabel={i > 0} value={s.cost}
+               onChange={(v) => edit(name, { cost: v })} />
+          <button className="btn btn--ghost sheet-del" onClick={() => remove(name)}
+                  aria-label={`Remove ${name}`}>Remove</button>
+        </div>
       ))}
 
-      <section className="card group-card">
-        <button className="group-head" onClick={() => toggle('prices')} aria-expanded={open.prices}>
+      {!rows.length && <p className="note">No sheets. Nothing can be nested or costed until you add one.</p>}
+
+      <div className="group-foot">
+        <button className="btn btn--secondary" onClick={add}>Add a sheet</button>
+      </div>
+    </section>
+  );
+}
+
+export default function Settings({ prices, setPrices }) {
+  const resetPrices = () => setPrices(structuredClone(PRICE_SEED));
+
+  return (
+    <Screen title="Settings" context="Prices and sheet stock. Cabinet sizes are on the planner, under Advanced design.">
+      <section className="card settings-card">
+        <div className="card__head">
           <span className="card__title">Prices</span>
-          <span className="group-note">All seeded estimates. Replace them with your supplier numbers.</span>
-          <span className="group-caret">{open.prices ? 'Hide' : 'Show'}</span>
-        </button>
-        {open.prices && (
-          <>
-            <div className="settings-grid">
-              {PRICE_FIELDS.map(([k, label, unit]) => (
-                <Num key={k} label={`${label}, ${unit}`} unit="AUD" value={prices[k]}
-                     onChange={(v) => setPrices((p) => ({ ...p, [k]: v }))} />
-              ))}
-            </div>
-            <div className="group-foot">
-              <button className="btn btn--ghost" onClick={resetPrices}>Reset prices</button>
-            </div>
-          </>
-        )}
+          <span className="group-note">Seeded estimates. Replace them with your supplier numbers.</span>
+        </div>
+        <div className="settings-grid">
+          {PRICE_FIELDS.map(([k, label, unit]) => (
+            <Num key={k} label={`${label}, ${unit}`} unit="AUD" value={prices[k] ?? 0}
+                 onChange={(v) => setPrices((p) => ({ ...p, [k]: v }))} />
+          ))}
+        </div>
+        <div className="group-foot">
+          <button className="btn btn--ghost" onClick={resetPrices}>Reset prices</button>
+        </div>
       </section>
 
-      <section className="card group-card">
-        <button className="group-head" onClick={() => toggle('sheets')} aria-expanded={open.sheets}>
-          <span className="card__title">Sheet stock</span>
-          <span className="group-note">Sheet cost per full sheet, used by nesting and costing.</span>
-          <span className="group-caret">{open.sheets ? 'Hide' : 'Show'}</span>
-        </button>
-        {open.sheets && (
-          <div className="settings-grid">
-            {Object.entries(prices.sheets).map(([name, s]) => (
-              <Num key={name} label={`${name}, ${s.size[0]} x ${s.size[1]}`} unit="AUD" value={s.cost}
-                   onChange={(v) => setPrices((p) => ({
-                     ...p, sheets: { ...p.sheets, [name]: { ...p.sheets[name], cost: v } },
-                   }))} />
-            ))}
-          </div>
-        )}
-      </section>
+      <Sheets prices={prices} setPrices={setPrices} />
     </Screen>
   );
 }

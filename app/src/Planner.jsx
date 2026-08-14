@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
-import { FAMILIES, FAMILY, GROUPS, unitCost } from './catalog.js';
+import { BOARDS, FAMILIES, FAMILY, GROUPS, PROJECT, unitCost } from './catalog.js';
+import { optimiseWall } from './optimise.js';
+import { Advanced, OptimiseResult } from './Advanced.jsx';
+import { Choice, Close, Num, Pick, Warn } from './Fields.jsx';
 import { layoutWall, money, uid, unitWarnings, wallWarnings } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
@@ -22,6 +25,10 @@ const G = {
   fridge: <><rect x="5" y="2" width="14" height="20" strokeDasharray="2 2" /><path d="M5 9h14" /><path d="M11 4v3M11 11v3" /></>,
   dw: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><path d="M3 7h18" /><rect x="7" y="10" width="10" height="8" /></>,
   cooktop: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><circle cx="8.5" cy="8.5" r="2" /><circle cx="15.5" cy="8.5" r="2" /><circle cx="8.5" cy="15.5" r="2" /><circle cx="15.5" cy="15.5" r="2" /></>,
+  micro: <><rect x="3" y="3" width="18" height="18" /><rect x="5" y="5" width="10" height="7" /><circle cx="18" cy="8.5" r="0.9" /><path d="M3 14h18" /><path d="M10 17.5h4" /></>,
+  bin: <><rect x="4" y="3" width="16" height="18" /><path d="M8 7h8l-1 11H9z" /><path d="M9.5 5h5" /></>,
+  cooktopOven: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><circle cx="8" cy="6.5" r="1.6" /><circle cx="16" cy="6.5" r="1.6" /><path d="M3 10h18" /><rect x="6" y="13" width="12" height="5" /></>,
+  hood: <><path d="M3 20h18l-4-7H7z" /><path d="M9.5 13V4h5v9" /><path d="M6 20v1M18 20v1" /></>,
   filler: <><rect x="10" y="3" width="4" height="18" /></>,
 };
 
@@ -72,7 +79,8 @@ function Picker({ onAdd }) {
 
 /* --- inspector ------------------------------------------------------------ */
 
-function Inspector({ placed, lay, cfg, onChange, onRemove, onMove, onOpen3D, onClose }) {
+function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
+                    onChange, onOverride, onRemove, onMove, onOpen3D, onClose }) {
   if (!placed) {
     return (
       <div className="empty inspector-empty">
@@ -83,47 +91,137 @@ function Inspector({ placed, lay, cfg, onChange, onRemove, onMove, onOpen3D, onC
   const { unit, item } = placed;
   const fam = FAMILY[item.familyId];
   const warns = unitWarnings(placed, lay, cfg);
-  const cost = unit.kind === 'appliance' ? null : unitCost(unit);
-  const set = (k, v) => onChange(item.uid, { [k]: v });
+  const cost = unit.cavity ? null : unitCost(unit);
+  const set = (patch) => onChange(item.uid, patch);
+  const over = item.settings?.cfg || {};
+  const eff = (k) => over[k] ?? cfg[k];
+  const editable = !unit.cavity && unit.kind !== 'filler';
 
-  const counts = [];
-  if (fam.fronts === 'doors' && unit.kind !== 'tall') counts.push(['doors', 'Doors', [1, 2]]);
-  if (fam.fronts === 'drawers') counts.push(['drawers', 'Drawers', [1, 2, 3, 4, 5]]);
-  if (fam.fronts !== 'drawers' && unit.kind !== 'appliance' && unit.kind !== 'filler') {
-    counts.push(['shelves', 'Shelves', [0, 1, 2, 3, 4, 5]]);
-  }
+  const fronts = unit.parts.filter((q) => q.code.includes('DRWR-F'));
+  const heights = item.settings?.drawerHeights;
+
+  /* Heights are used as typed. If they do not add up, say so rather than
+     quietly rescaling them behind your back. */
+  const used = fronts.length
+    ? fronts.reduce((acc, q) => acc + q.W, 0) + (fronts.length - 1) * eff('reveal')
+    : 0;
+  const overrun = fronts.length ? Math.round(used - (unit.drawerOpening || unit.height)) : 0;
+
+  const setDrawerH = (i, v) => {
+    const base = (heights && heights.length === fronts.length)
+      ? [...heights] : fronts.map((q) => Math.round(q.W));
+    base[i] = v ?? base[i];
+    set({ drawerHeights: base });
+  };
 
   return (
     <div className="inspector">
       <div className="side-head">
         {placed.label && <span className="badge badge--accent badge--num">{placed.label}</span>}
         <span className="side-title">{fam.name}</span>
-        <button className="icon-btn" aria-label="Close" onClick={onClose}>
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
-               strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8" /></svg>
-        </button>
+        <Close onClick={onClose} />
       </div>
 
       <div className="inspector-body">
-        <div className="field">
-          <span className="field__label">Width</span>
-          <div className="input-shell select-shell">
-            <select value={unit.width} onChange={(e) => set('width', +e.target.value)}>
-              {fam.widths.map((w) => <option key={w} value={w}>{w} mm</option>)}
-            </select>
-          </div>
+        <div className="settings-grid">
+          <Num label="Width" value={unit.width} min={50} max={1400}
+               onChange={(v) => set({ width: v ?? unit.width })} />
+          <Num label="Height" value={unit.height} min={100} max={2400}
+               onChange={(v) => set({ height: v })} />
+          <Num label="Depth" value={unit.depth} min={100} max={900}
+               onChange={(v) => set({ depth: v })} />
         </div>
 
-        {counts.map(([k, label, opts]) => (
-          <div className="field" key={k}>
-            <span className="field__label">{label}</span>
-            <div className="input-shell select-shell">
-              <select value={unit.settings[k] ?? opts[0]} onChange={(e) => set(k, +e.target.value)}>
-                {opts.map((n) => <option key={n} value={n}>{n}</option>)}
-              </select>
+        {editable && (
+          <>
+            <div className="settings-grid">
+              {fam.fronts === 'doors' && unit.kind !== 'tall' && (
+                <Pick label="Doors" value={String(unit.settings.doors ?? 1)} options={['1', '2']}
+                      onChange={(v) => set({ doors: +v })} />
+              )}
+              {(fam.fronts === 'drawers' || fam.fronts === 'microwave') && (
+                <Pick label="Drawers" value={String(unit.settings.drawers ?? 3)}
+                      options={['1', '2', '3', '4', '5']}
+                      onChange={(v) => set({ drawers: +v, drawerHeights: undefined })} />
+              )}
+              {fam.fronts !== 'drawers' && fam.fronts !== 'bin' && (
+                <Pick label="Shelves" value={String(unit.settings.shelves ?? 0)}
+                      options={['0', '1', '2', '3', '4', '5']}
+                      onChange={(v) => set({ shelves: +v })} />
+              )}
+              {fam.fronts === 'microwave' && (
+                <Num label="Microwave bay" value={unit.settings.microH ?? 380}
+                     onChange={(v) => set({ microH: v ?? 380 })} />
+              )}
+              {fam.fronts === 'oven' && (
+                <Num label="Oven cavity" value={unit.settings.ovenH ?? 600}
+                     onChange={(v) => set({ ovenH: v ?? 600 })} />
+              )}
             </div>
-          </div>
-        ))}
+
+            {fronts.length > 0 && (
+              <section className="sub">
+                <div className="sub-head">
+                  <span className="field__label">Drawer heights</span>
+                  {heights && (
+                    <button className="btn btn--ghost"
+                            onClick={() => set({ drawerHeights: undefined })}>Make equal</button>
+                  )}
+                </div>
+                <div className="settings-grid">
+                  {fronts.map((q, i) => (
+                    <div key={q.code} className={`drawer-field ${selDrawer === i + 1 ? 'is-sel' : ''}`}
+                         onFocusCapture={() => setSelDrawer(i + 1)}>
+                      <Num label={`Drawer ${i + 1}`} value={Math.round(q.W)} min={60} max={900}
+                           onChange={(v) => setDrawerH(i, v)} />
+                    </div>
+                  ))}
+                </div>
+                {overrun !== 0 && (
+                  <Warn level={overrun > 0 ? 'error' : 'warn'}>
+                    {overrun > 0
+                      ? `Drawers are ${overrun}mm taller than the opening.`
+                      : `${-overrun}mm of the opening is unused.`}
+                  </Warn>
+                )}
+              </section>
+            )}
+
+            <section className="sub">
+              <div className="sub-head">
+                <span className="field__label">This cabinet only</span>
+                {Object.keys(over).length > 0 && (
+                  <button className="btn btn--ghost"
+                          onClick={() => onOverride(item.uid, null)}>Match project</button>
+                )}
+              </div>
+              <div className="settings-grid">
+                <Choice label="Back" value={eff('backType') || 'full'}
+                        options={[{ value: 'full', label: 'Full panel' }, { value: 'rail', label: 'Rail only' }]}
+                        onChange={(v) => onOverride(item.uid, { backType: v })} />
+                {fronts.length > 0 && (
+                  <Choice label="Drawer base" value={eff('boxBaseFix') || 'dado'}
+                          options={[{ value: 'dado', label: 'Dado' }, { value: 'screwed', label: 'Screwed' }]}
+                          onChange={(v) => onOverride(item.uid, { boxBaseFix: v })} />
+                )}
+              </div>
+              <div className="settings-grid">
+                <Pick label="Carcass board" value={eff('carcassBoard')} options={BOARDS}
+                      onChange={(v) => onOverride(item.uid, { carcassBoard: v })} />
+                <Pick label="Front board" value={eff('frontBoard')} options={BOARDS}
+                      onChange={(v) => onOverride(item.uid, { frontBoard: v })} />
+                <Num label="Carcass thickness" value={eff('carcassThk')}
+                     onChange={(v) => onOverride(item.uid, { carcassThk: v ?? cfg.carcassThk })} />
+                <Num label="Front thickness" value={eff('frontThk')}
+                     onChange={(v) => onOverride(item.uid, { frontThk: v ?? cfg.frontThk })} />
+                {fronts.length > 0 && (
+                  <Num label="Carcass to box, each side" value={eff('runnerClearance')}
+                       onChange={(v) => onOverride(item.uid, { runnerClearance: v ?? cfg.runnerClearance })} />
+                )}
+              </div>
+            </section>
+          </>
+        )}
 
         <dl className="spec">
           <div><dt>Carcass</dt><dd>{unit.width} x {unit.height} x {unit.depth}</dd></div>
@@ -135,20 +233,21 @@ function Inspector({ placed, lay, cfg, onChange, onRemove, onMove, onOpen3D, onC
         </dl>
         {cost && <p className="note est">Estimate. Prices are seeded, not quoted.</p>}
 
-        {warns.map((w, i) => (
-          <div className="warn-inline" key={i}>
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <path d="M8 2.5l6 11H2z" strokeLinejoin="round" /><path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
-            </svg>
-            <span>{w}</span>
-          </div>
-        ))}
+        {warns.map((w, i) => <Warn key={i}>{w}</Warn>)}
       </div>
 
       <div className="inspector-foot">
-        <button className="btn btn--ghost" onClick={() => onMove(item.uid, -1)} title="Move left">Left</button>
-        <button className="btn btn--ghost" onClick={() => onMove(item.uid, 1)} title="Move right">Right</button>
-        {unit.kind !== 'appliance' && unit.kind !== 'filler' && (
+        <label className="check lock-check">
+          <input type="checkbox" checked={!!locked} onChange={() => onLock(item.uid)} />
+          <span className="check__box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+          </span>
+          <span className="check__text">Lock width</span>
+        </label>
+        <button className="btn btn--ghost" onClick={() => onMove(item.uid, -1)}>Left</button>
+        <button className="btn btn--ghost" onClick={() => onMove(item.uid, 1)}>Right</button>
+        {editable && (
           <button className="btn btn--secondary" onClick={() => onOpen3D(item.uid)}>Open in 3D</button>
         )}
         <button className="btn btn--danger" onClick={() => onRemove(item.uid)}>Delete</button>
@@ -167,6 +266,10 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [nonce, setNonce] = useState(0);
   const [eye, setEye] = useState(false);
   const [show, setShow] = useState({ walls: true, bench: true, wallCabs: true, appliances: true });
+  const [advOpen, setAdvOpen] = useState(false);
+  const [selDrawer, setSelDrawer] = useState(null);
+  const [opt, setOpt] = useState(null);
+  const [optBusy, setOptBusy] = useState(false);
 
   const reduced = useMemo(
     () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 900, []);
@@ -206,9 +309,48 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   });
   const setWallLength = (v) => mutate((w) => { w.length = v; });
 
+  /* Per cabinet overrides live on the unit as settings.cfg. buildUnit layers
+     them over the project config, so the cut list, drilling, nest, costing
+     and print all follow without any of them knowing this screen exists.
+     A null patch clears the lot and puts the cabinet back on the defaults. */
+  const setOverride = (u, patch) => mutate((w) => {
+    const it = w.units.find((x) => x.uid === u);
+    if (!it) return;
+    if (patch === null) { const s = { ...it.settings }; delete s.cfg; it.settings = s; return; }
+    it.settings = { ...it.settings, cfg: { ...(it.settings.cfg || {}), ...patch } };
+  });
+
+  const setCfg = (patch) => setProject((prev) => ({ ...prev, cfg: { ...prev.cfg, ...patch } }));
+  const resetCfg = () => setProject((prev) => ({ ...prev, cfg: { ...PROJECT } }));
+
+  /* Locks are a property of the kitchen, not of this session, so a cabinet
+     you have already built stays locked after a reload. */
+  const locked = project.locked || [];
+  const toggleLock = (u) => setProject((prev) => {
+    const cur = prev.locked || [];
+    return { ...prev, locked: cur.includes(u) ? cur.filter((x) => x !== u) : [...cur, u] };
+  });
+
+  /* The search takes about a second on a full wall. Yield the frame first so
+     the button can show it is working instead of freezing the tablet. */
+  const runOptimise = () => {
+    setOptBusy(true);
+    setTimeout(() => {
+      try { setOpt(optimiseWall(wall, project.cfg, new Set(locked))); }
+      finally { setOptBusy(false); }
+    }, 30);
+  };
+
+  const applyOptimise = (widths) => {
+    mutate((w) => { w.units.forEach((it, i) => { it.settings = { ...it.settings, width: widths[i] }; }); });
+    setOpt(null);
+  };
+
+  const pickUnit = (u, drawer = null) => { setSelected(u); setSelDrawer(drawer); };
+
   const view3d = (
     <div className="three-wrap">
-      <Kitchen3D lay={lay} cfg={project.cfg} selected={selected} setSelected={setSelected}
+      <Kitchen3D lay={lay} cfg={project.cfg} selected={selected} setSelected={(u) => pickUnit(u)}
                  setHovered={setHovered} show={show} preset={preset} nonce={nonce}
                  eye={eye} reduced={reduced} />
       <div className="vp-toolbar float-tl">
@@ -230,7 +372,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       </div>
       {eye && <div className="eye-hint">W A S D to walk. Drag to look.</div>}
       {hovered && (
-        <div className="hover-card float-tr">
+        <div className="part-card float-br">
           <b>{hovered.label || hovered.unit.family.name}</b>
           <span>{hovered.unit.family.name}</span>
           <span>{hovered.unit.width} x {hovered.unit.height} x {hovered.unit.depth}</span>
@@ -240,9 +382,9 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   );
 
   const elevation = (
-    <div className="elev-wrap" onClick={() => setSelected(null)}>
-      <Elevation lay={lay} cfg={project.cfg} selected={selected}
-                 onSelect={setSelected} onHover={setHovered} />
+    <div className="elev-wrap" onClick={() => pickUnit(null)}>
+      <Elevation lay={lay} cfg={project.cfg} selected={selected} selDrawer={selDrawer}
+                 onSelect={pickUnit} onHover={setHovered} />
     </div>
   );
 
@@ -263,15 +405,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                       onClick={() => setArrangement(k)}>{label}</button>
             ))}
           </div>
-          <span className="field__label">Wall length</span>
-          <div className="input-shell select-shell">
-            <select value={wall.length} onChange={(e) => setWallLength(+e.target.value)}
-                    aria-label="Wall length">
-              {[1200, 1800, 2100, 2400, 3000, 3600, 4200, 4800].map((v) => (
-                <option key={v} value={v}>{v} mm</option>
-              ))}
-            </select>
-          </div>
+          <button className="btn btn--ghost" onClick={() => setAdvOpen(true)}>Advanced design</button>
+          <button className="btn btn--ghost" onClick={runOptimise} disabled={optBusy}>
+            {optBusy ? 'Working' : 'Optimise'}
+          </button>
+          {/* Typed, not picked. Real walls are 3742, not a round number off
+              a list. */}
+          <Num label="Wall length" value={wall.length} min={300} max={12000}
+               onChange={(v) => setWallLength(v ?? wall.length)} />
         </div>
       </div>
 
@@ -325,10 +466,22 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
         <aside className="side inspector-side">
           <Inspector placed={placedSel} lay={lay} cfg={project.cfg}
+                     selDrawer={selDrawer} setSelDrawer={setSelDrawer}
+                     locked={placedSel ? locked.includes(placedSel.item.uid) : false}
+                     onLock={toggleLock} onOverride={setOverride}
                      onChange={changeUnit} onRemove={removeUnit} onMove={moveUnit}
-                     onOpen3D={onOpen3D} onClose={() => setSelected(null)} />
+                     onOpen3D={onOpen3D} onClose={() => pickUnit(null)} />
         </aside>
       </div>
+
+      {advOpen && (
+        <Advanced cfg={project.cfg} onChange={setCfg} onReset={resetCfg}
+                  onClose={() => setAdvOpen(false)} />
+      )}
+      {opt && (
+        <OptimiseResult result={opt} wall={wall} locked={locked}
+                        onApply={applyOptimise} onClose={() => setOpt(null)} />
+      )}
     </div>
   );
 }

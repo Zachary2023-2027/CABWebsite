@@ -146,11 +146,22 @@ body {
 .planner-top .stat__value { font-size: var(--fs-3); line-height: var(--lh-3); }
 
 .wall-tabs {
-  display: flex; align-items: center; gap: 0; flex: none;
+  display: flex; align-items: center; gap: 0; flex: none; flex-wrap: wrap;
   padding: 0 var(--sp-4); background: var(--surface);
   border-bottom: var(--bw) solid var(--border);
 }
-.wall-len { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) 0; }
+/* This row carries the walls, the arrangement, two buttons and the wall
+   length. On a narrow screen it wraps to a second line rather than clipping
+   the arrangement buttons off the end. */
+.wall-len {
+  margin-left: auto; display: flex; align-items: center; flex-wrap: wrap;
+  gap: var(--sp-2); padding: var(--sp-2) 0;
+}
+.wall-len > .seg { flex: none; }
+/* The wall length is a typed field now. Without a width it takes the whole
+   rest of the row. */
+.wall-len > .field { width: 150px; flex: none; }
+.wall-len > .field .field__label { white-space: nowrap; }
 .wall-len .input-shell { height: 28px; }
 
 .planner-body { display: flex; flex: 1; min-height: 0; }
@@ -768,3 +779,128 @@ body {
   .app-top .save-state { order: 99; width: 100%; }
   .brand-input { max-width: 55vw; }
 }
+
+/* ---------------------------------------------------------------------------
+   Iteration: per cabinet editing, advanced design, optimiser, own hardware.
+   --------------------------------------------------------------------------- */
+
+/* Part info, parked in the corner of the viewer rather than following the
+   pointer across the thing you are trying to look at. */
+.float-br { position: absolute; right: var(--sp-3); bottom: var(--sp-3); z-index: 6; }
+.part-card {
+  display: grid; gap: 1px;
+  max-width: 42ch;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--surface);
+  border: var(--bw) solid var(--border-strong);
+  border-radius: var(--r-1);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-2); line-height: var(--lh-2);
+  color: var(--text-2);
+  pointer-events: none;
+}
+.part-card b { color: var(--text); font-weight: var(--fw-medium); }
+.part-card--empty { color: var(--text-3); font-family: var(--font-sans); }
+
+/* A titled block inside the inspector. Same idea as a card, but flush with
+   the panel it sits in so the inspector does not turn into a stack of boxes. */
+.sub {
+  display: grid; gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: var(--bw) solid var(--border);
+}
+.sub-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.sub .settings-grid { padding: 0; }
+.drawer-field { border-radius: var(--r-1); }
+/* The drawer you picked in the elevation, so the drawing and the panel agree
+   on which one you are editing. */
+.drawer-field.is-sel {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.lock-check { margin-right: auto; }
+
+/* Advanced design and the optimiser result. Both are tall, so the head and
+   the foot stay put and only the middle scrolls. */
+.adv-dialog, .opt-dialog {
+  width: min(760px, 100%);
+  max-height: min(86vh, 900px);
+  display: grid; grid-template-rows: auto 1fr auto;
+  gap: var(--sp-3);
+  padding: 0;
+  overflow: hidden;
+}
+.adv-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) 0;
+}
+.adv-head .note { margin: var(--sp-1) 0 0; }
+.adv-body { overflow-y: auto; display: grid; gap: var(--sp-4); padding: 0 0 var(--sp-2); }
+.adv-group { display: grid; gap: var(--sp-2); }
+.adv-group > .field__label, .adv-group > .note { padding: 0 var(--sp-4); }
+.adv-group > .note { margin: 0; }
+.adv-dialog .dialog__foot, .opt-dialog .dialog__foot {
+  padding: 0 var(--sp-4) var(--sp-4); margin: 0;
+}
+.adv-dialog .dialog__foot { justify-content: space-between; }
+
+.opt-dialog .adv-body { gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-2); }
+.opt-row {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-2);
+}
+.opt-row > div { flex: 1; min-width: 200px; display: grid; gap: 2px; }
+.opt-row .note { margin: 0; }
+.opt-row .num {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: var(--fs-2); color: var(--text-2); white-space: nowrap;
+}
+.opt-row.is-now { background: var(--sunken); border-color: var(--border-strong); }
+
+/* Your own hardware, and the sheet stock list. Both are rows of fields with a
+   Remove on the end, and both wrap to a stack on a narrow screen. */
+/* .card already carries the padding, so the rows inside these cards drop the
+   inset the old accordion layout needed. */
+.extras, .extra-row, .sheet-row { display: grid; gap: var(--sp-3); }
+.extras .note { margin: 0; }
+.settings-card .settings-grid, .settings-card .group-foot, .settings-card .sheet-row,
+.extras .settings-grid { padding-left: 0; padding-right: 0; }
+.settings-card .settings-grid { padding-bottom: 0; }
+.settings-card .group-foot { padding-bottom: 0; }
+.settings-card .note { margin: 0 0 var(--sp-3); }
+.settings-card { display: grid; gap: var(--sp-3); }
+.extra-row {
+  grid-template-columns: minmax(160px, 2fr) 90px 130px auto auto;
+  align-items: center;
+}
+.extra-row .input-shell { min-width: 0; }
+.extra-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.sheet-row {
+  grid-template-columns: minmax(180px, 2fr) 1fr 1fr 1fr auto;
+  align-items: end;
+}
+.sheet-del { align-self: end; }
+/* Column headings are stated once. The rows keep the label for a screen
+   reader, they just do not repeat it on screen. */
+.field__label.is-hidden {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.extra-head { padding-bottom: 0; }
+.extra-head + .extra-row { margin-top: calc(var(--sp-2) * -1); }
+
+@media (max-width: 720px) {
+  .extra-row { grid-template-columns: 1fr 1fr; }
+  .sheet-row { grid-template-columns: 1fr 1fr; }
+  .extra-row .input-shell:first-child, .sheet-row .field:first-child { grid-column: 1 / -1; }
+}
+
+/* The drilling strip folds away, because at the bench you want it and while
+   you are turning the model over you do not. */
+.drill-strip-head .btn { margin-left: auto; }
+.drill-strip:not(.is-open) { padding-bottom: var(--sp-2); }
+/* display: flex on the row beats the hidden attribute, the same way it did on
+   the dialog scrim. State it explicitly. */
+.drill-strip-row[hidden] { display: none; }

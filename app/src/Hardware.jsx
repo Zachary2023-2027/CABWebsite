@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Screen, { Empty, Est } from './Screen.jsx';
-import { allFittings, money } from './project.js';
+import { allFittings, money, projectExtras } from './project.js';
+import { newId } from './storage.js';
 
 const LABEL = {
   hinge: 'Hinge, 110 degree, full overlay',
@@ -8,7 +9,74 @@ const LABEL = {
   handle: 'Handle',
 };
 
-export default function Hardware({ project, prices, setPrices }) {
+/* Anything the derived list cannot know about: the handles you actually
+   bought, a soft close kit, legs, screws. Typed in, priced by you, and
+   carried through to costing and the print pack. */
+function Extras({ project, setProject }) {
+  const rows = project.extras || [];
+  const edit = (id, patch) => setProject((p) => ({
+    ...p, extras: (p.extras || []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+  }));
+  const add = () => setProject((p) => ({
+    ...p, extras: [...(p.extras || []), { id: newId(), name: '', qty: 1, cost: 0 }],
+  }));
+  const remove = (id) => setProject((p) => ({
+    ...p, extras: (p.extras || []).filter((e) => e.id !== id),
+  }));
+  const total = rows.reduce((a, e) => a + (Number(e.qty) || 0) * (Number(e.cost) || 0), 0);
+  const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };
+
+  return (
+    <section className="card settings-card extras">
+      <div className="card__head">
+        <span className="card__title">Your own hardware</span>
+        <span className="progress-count num">{money(total)}</span>
+      </div>
+      <p className="note">
+        Not worked out from the cabinets. Type what you are buying, how many, and what it costs.
+        It goes into the project total and the print pack.
+      </p>
+
+      {rows.length > 0 && (
+        <div className="extra-row extra-head">
+          <span className="field__label">Item</span>
+          <span className="field__label">Qty</span>
+          <span className="field__label">Unit cost</span>
+          <span className="field__label">Total</span>
+          <span />
+        </div>
+      )}
+
+      {rows.map((e) => (
+        <div className="extra-row" key={e.id}>
+          <div className="input-shell">
+            <input type="text" value={e.name} placeholder="Item"
+                   aria-label="Item name"
+                   onChange={(ev) => edit(e.id, { name: ev.target.value })} />
+          </div>
+          <div className="input-shell num-input inline-num">
+            <input className="num-input__input" type="text" inputMode="numeric" value={e.qty}
+                   aria-label={`Quantity of ${e.name || 'item'}`}
+                   onChange={(ev) => edit(e.id, { qty: num(ev.target.value) })} />
+          </div>
+          <div className="input-shell num-input inline-num">
+            <input className="num-input__input" type="text" inputMode="decimal" value={e.cost}
+                   aria-label={`Unit cost of ${e.name || 'item'}`}
+                   onChange={(ev) => edit(e.id, { cost: num(ev.target.value) })} />
+            <span className="num-input__unit">AUD</span>
+          </div>
+          <span className="n extra-total">{money((Number(e.qty) || 0) * (Number(e.cost) || 0))}</span>
+          <button className="btn btn--ghost" onClick={() => remove(e.id)}
+                  aria-label={`Remove ${e.name || 'item'}`}>Remove</button>
+        </div>
+      ))}
+
+      <button className="btn btn--secondary" onClick={add}>Add an item</button>
+    </section>
+  );
+}
+
+export default function Hardware({ project, setProject, prices, setPrices }) {
   const fittings = useMemo(() => allFittings(project), [project]);
   const [copied, setCopied] = useState(false);
 
@@ -16,6 +84,7 @@ export default function Hardware({ project, prices, setPrices }) {
     return (
       <Screen title="Hardware" context="Everything that is not board.">
         <Empty text="No hardware yet. Add cabinets in the planner." />
+        <Extras project={project} setProject={setProject} />
       </Screen>
     );
   }
@@ -30,9 +99,14 @@ export default function Hardware({ project, prices, setPrices }) {
     };
   }).sort((a, b) => b.total - a.total);
 
-  const total = rows.reduce((a, r) => a + r.total, 0);
+  const extras = projectExtras(project);
+  /* The table foots to what the table shows. The figure in the heading is the
+     whole hardware bill, derived plus your own, which is the number that
+     matches costing. */
+  const derived = rows.reduce((a, r) => a + r.total, 0);
+  const total = derived + extras.reduce((a, e) => a + (Number(e.qty) || 0) * (Number(e.cost) || 0), 0);
 
-  const shoppingList = rows
+  const shoppingList = [...rows, ...extras.map((e) => ({ qty: e.qty, label: e.name }))]
     .map((r) => `${String(r.qty).padStart(4)} x  ${r.label}`)
     .join('\n');
 
@@ -83,12 +157,14 @@ export default function Hardware({ project, prices, setPrices }) {
             <tr>
               <td>{rows.reduce((a, r) => a + r.qty, 0)} items</td>
               <td className="n" /><td className="n" />
-              <td className="n">{money(total)}</td>
+              <td className="n">{money(derived)}</td>
               <td />
             </tr>
           </tfoot>
         </table>
       </div>
+
+      <Extras project={project} setProject={setProject} />
 
       <section className="card shopping">
         <div className="card__head">

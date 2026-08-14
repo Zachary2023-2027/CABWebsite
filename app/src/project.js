@@ -63,6 +63,8 @@ export function starterProject() {
       },
     ],
     activeWall: 'A',
+    locked: [],
+    extras: [],
   };
 }
 
@@ -171,7 +173,7 @@ export function totals(project) {
     for (const p of lay.placed) {
       const { unit } = p;
 
-      if (unit.kind === 'appliance') {
+      if (unit.cavity) {
         // A cooktop breaks the benchtop. A dishwasher sits under it.
         if (unit.breaksBench) { benchMm += benchRun; benchRun = 0; }
         else if (!unit.fullHeight) benchRun += unit.width;
@@ -205,6 +207,10 @@ export function totals(project) {
      thing, which is worse than useless when you are buying sheets. */
   const nest = nestProject(allParts(project));
 
+  /* Hardware you added yourself. It is not derived from any cabinet, so it
+     is counted here once and shows up in costing and in the print pack. */
+  const extras = extrasCost(project);
+
   const bench = (benchMm / 1000) * PRICES.benchPerMetre;
   const kick = (kickMm / 1000) * PRICES.kickPerMetre;
 
@@ -215,11 +221,19 @@ export function totals(project) {
     sheets: nest.sheets,
     wastePct: nest.wastePct,
     boardCost: nest.cost,
-    hardwareCost: cost,
-    cost: nest.cost + cost + bench + kick,
+    hardwareCost: cost + extras,
+    extrasCost: extras,
+    cost: nest.cost + cost + extras + bench + kick,
     estimate: true,
   };
 }
+
+/** Hardware the user typed in themselves, rather than anything derived. */
+export const projectExtras = (project) =>
+  (project.extras || []).filter((e) => e && e.name);
+
+export const extrasCost = (project) =>
+  projectExtras(project).reduce((a, e) => a + (Number(e.qty) || 0) * (Number(e.cost) || 0), 0);
 
 export const money = (n) =>
   new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 }).format(n);
@@ -262,7 +276,7 @@ export function allUnits(project) {
   const out = [];
   for (const wall of project.walls) {
     for (const p of layoutWall(wall, project.cfg).placed) {
-      if (p.unit.kind === 'appliance') continue;
+      if (p.unit.cavity) continue;
       out.push({ ...p, wallId: wall.id, wallName: wall.name });
     }
   }

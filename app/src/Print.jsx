@@ -10,7 +10,7 @@
    =========================================================================== */
 
 import { useMemo, useState } from 'react';
-import { allFittings, allParts, allUnits, money, totals } from './project.js';
+import { allFittings, allParts, allUnits, money, projectExtras, totals } from './project.js';
 import { NEST, cutSequence, nestProject } from './nesting.js';
 import { HOLE_STYLE, drillUnit } from './drilling.js';
 import { PRICES, sheetFor } from './catalog.js';
@@ -282,6 +282,14 @@ function PageBody({ page, project, cut }) {
                 </tr>
               );
             })}
+            {projectExtras(project).map((e) => (
+              <tr key={e.id}>
+                <td>{e.name}</td>
+                <td className="p-n">{e.qty}</td>
+                <td className="p-n">{money(e.cost)}</td>
+                <td className="p-n">{money(e.qty * e.cost)}</td>
+              </tr>
+            ))}
             <tr>
               <td>Edge tape, 21mm</td>
               <td className="p-n">{Math.ceil(edgeM * 1.1)} m</td>

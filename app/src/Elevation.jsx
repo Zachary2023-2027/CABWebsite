@@ -12,7 +12,7 @@ const S = 4;        // hairline, mm at drawing scale
 const FS = 40;      // label text
 const FS_DIM = 46;  // dimension text
 
-export default function Elevation({ lay, cfg, selected, onSelect, onHover }) {
+export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover }) {
   const wall = lay.wall;
   const CEIL = cfg.ceiling;
   const L = wall.length;
@@ -41,7 +41,7 @@ export default function Elevation({ lay, cfg, selected, onSelect, onHover }) {
     for (const p of floor) {
       const carries =
         p.unit.kind === 'base' || p.unit.kind === 'filler' ||
-        (p.unit.kind === 'appliance' && !p.unit.breaksBench && !p.unit.fullHeight);
+        (p.unit.cavity && !p.unit.breaksBench && !p.unit.fullHeight);
       if (!carries) { cur = null; continue; }
       if (cur && Math.abs(cur.x + cur.w - p.x) < 0.5) cur.w += p.unit.width;
       else { cur = { x: p.x, w: p.unit.width }; segs.push(cur); }
@@ -91,7 +91,7 @@ export default function Elevation({ lay, cfg, selected, onSelect, onHover }) {
       ))}
 
       {/* kickboard, one strip under each floor standing unit */}
-      {lay.placed.filter((p) => p.where !== 'wall' && p.unit.kind !== 'appliance').map((p) => (
+      {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
         <rect key={`k${p.item.uid}`} x={p.x + 20} y={Y(cfg.kick)} width={p.unit.width - 40} height={cfg.kick}
               fill="var(--dw-kick)" stroke="var(--dw-line)" strokeWidth={S} />
       ))}
@@ -110,7 +110,7 @@ export default function Elevation({ lay, cfg, selected, onSelect, onHover }) {
           style: { cursor: 'pointer' },
         };
 
-        if (unit.kind === 'appliance') {
+        if (unit.cavity) {
           return (
             <g key={p.item.uid} {...common}>
               <rect x={x} y={y} width={unit.width} height={unit.height}
@@ -160,14 +160,27 @@ export default function Elevation({ lay, cfg, selected, onSelect, onHover }) {
                     fill="var(--dw-appliance)" stroke="var(--dw-line)" strokeWidth={S} />
             )}
 
-            {/* doors and drawer fronts, straight off the part list */}
-            {fronts.map((q) => (
-              <rect key={q.code}
-                    x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
-                    width={q.size[0]} height={q.size[1]}
-                    fill={q.code.includes('DRWR') ? 'var(--dw-drawer)' : 'var(--dw-door)'}
-                    stroke="var(--dw-line)" strokeWidth={S} />
-            ))}
+            {/* Doors and drawer fronts, straight off the part list. Drawers are
+                numbered top down, the way you count them standing at the
+                cabinet, and clicking one selects that drawer for editing. */}
+            {fronts.map((q) => {
+              const drawerNo = q.drawer ?? null;
+              const picked = isSel && drawerNo !== null && selDrawer === drawerNo;
+              return (
+                <g key={q.code}
+                   onClick={(e) => { e.stopPropagation(); onSelect(p.item.uid, drawerNo); }}>
+                  <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
+                        width={q.size[0]} height={q.size[1]}
+                        fill={drawerNo !== null ? 'var(--dw-drawer)' : 'var(--dw-door)'}
+                        stroke="var(--dw-line)" strokeWidth={S} />
+                  {picked && (
+                    <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
+                          width={q.size[0]} height={q.size[1]} fill="none"
+                          stroke="var(--dw-selected)" strokeWidth={S * 3} />
+                  )}
+                </g>
+              );
+            })}
 
             {warned && (
               <rect x={x} y={y} width={unit.width} height={unit.height} fill="none"

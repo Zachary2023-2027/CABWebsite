@@ -95,6 +95,79 @@ function Rig({ preset, nonce, target, distance, eye, run }) {
   return null;
 }
 
+/* --- appliances ----------------------------------------------------------
+   Most cavities are honestly just a blocked out volume, and drawing them as
+   a plain box is the truthful thing to do. Two are not: a range hood you
+   recognise by its shape, and a cooktop with an oven under it, where the
+   oven door is what tells you which way round the unit goes. Those two get
+   built out of a few boxes so the 3D reads at a glance. */
+
+function Hood({ unit, colour, ghost, ...evt }) {
+  const w = unit.width;
+  const h = unit.height;
+  const d = unit.depth;
+  const canopy = Math.min(200, h * 0.4);        // the flared shroud at the bottom
+  const flueW = Math.max(200, w * 0.34);
+  const mat = (
+    <meshStandardMaterial color={colour} roughness={0.35} metalness={0.35}
+                          transparent={ghost} opacity={ghost ? 0.18 : 1} />
+  );
+  return (
+    <group {...evt}>
+      {/* canopy, the wide part you stand under */}
+      <mesh position={[w / 2, canopy / 2, d / 2]}>
+        <boxGeometry args={[w, canopy, d]} />{mat}
+      </mesh>
+      {/* filter face, set just under the canopy so it catches the light */}
+      <mesh position={[w / 2, 12, d / 2]}>
+        <boxGeometry args={[w - 80, 24, d - 80]} />
+        <meshStandardMaterial color="#8C9095" roughness={0.8}
+                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
+      </mesh>
+      {/* flue, running up the wall */}
+      <mesh position={[w / 2, canopy + (h - canopy) / 2, Math.min(d, 300) / 2]}>
+        <boxGeometry args={[flueW, h - canopy, Math.min(d, 300)]} />{mat}
+      </mesh>
+    </group>
+  );
+}
+
+function CooktopOven({ unit, colour, ghost, benchHeight, ...evt }) {
+  const w = unit.width;
+  const h = unit.height;
+  const d = unit.depth;
+  const ovenH = Math.min(600, h - 100);
+  const mat = (
+    <meshStandardMaterial color={colour} roughness={0.5}
+                          transparent={ghost} opacity={ghost ? 0.18 : 1} />
+  );
+  return (
+    <group {...evt}>
+      {/* the cavity itself */}
+      <mesh position={[w / 2, h / 2, d / 2]}>
+        <boxGeometry args={[w, h, d]} />{mat}
+      </mesh>
+      {/* oven door and handle, proud of the front face */}
+      <mesh position={[w / 2, h - ovenH / 2 - 60, d + 10]}>
+        <boxGeometry args={[w - 20, ovenH, 20]} />
+        <meshStandardMaterial color="#3A3B3D" roughness={0.35} metalness={0.3}
+                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
+      </mesh>
+      <mesh position={[w / 2, h - 90, d + 40]}>
+        <boxGeometry args={[w - 100, 26, 26]} />
+        <meshStandardMaterial color="#B6BABE" roughness={0.3} metalness={0.6}
+                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
+      </mesh>
+      {/* cooktop, sitting in the benchtop cut out */}
+      <mesh position={[w / 2, benchHeight + 6, d / 2 - 20]}>
+        <boxGeometry args={[w - 40, 12, d - 120]} />
+        <meshStandardMaterial color="#2B2C2E" roughness={0.2}
+                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
+      </mesh>
+    </group>
+  );
+}
+
 /* --- scene --------------------------------------------------------------- */
 
 function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce, eye, reduced, warnMap }) {
@@ -115,7 +188,7 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
     let cur = null;
     for (const p of lay.placed.filter((q) => q.where !== 'wall').sort((a, b) => a.x - b.x)) {
       const carries = p.unit.kind === 'base' || p.unit.kind === 'filler' ||
-        (p.unit.kind === 'appliance' && !p.unit.breaksBench && !p.unit.fullHeight);
+        (p.unit.cavity && !p.unit.breaksBench && !p.unit.fullHeight);
       if (!carries) { cur = null; continue; }
       if (cur && Math.abs(cur.x + cur.w - p.x) < 0.5) cur.w += p.unit.width;
       else { cur = { x: p.x, w: p.unit.width }; segs.push(cur); }
@@ -162,14 +235,35 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
       {lay.placed.map((p) => {
         const { unit, x } = p;
         if (unit.kind === 'wall' && !show.wallCabs) return null;
-        if (unit.kind === 'appliance' && !show.appliances) return null;
+        if (unit.cavity && !show.appliances) return null;
 
         const sel = selected === p.item.uid;
         const ghost = selected ? !sel : false;
         const warn = warnMap.has(p.item.uid);
         const pick = (e) => { e.stopPropagation(); setSelected(sel ? null : p.item.uid); };
 
-        if (unit.kind === 'appliance') {
+        if (unit.cavity) {
+          const colour = sel ? '#BBD3E6' : '#B9BDC0';
+          const evt = {
+            onClick: pick,
+            onPointerOver: (e) => { e.stopPropagation(); setHovered(p); },
+            onPointerOut: () => setHovered(null),
+          };
+          if (unit.family.appliance === 'hood') {
+            return (
+              <group key={p.item.uid} position={[x, unit.mountY, 0]}>
+                <Hood unit={unit} colour={colour} ghost={ghost} {...evt} />
+              </group>
+            );
+          }
+          if (unit.family.appliance === 'cooktopOven') {
+            return (
+              <group key={p.item.uid} position={[x, unit.mountY, 0]}>
+                <CooktopOven unit={unit} colour={colour} ghost={ghost}
+                             benchHeight={cfg.benchHeight - unit.mountY} {...evt} />
+              </group>
+            );
+          }
           return (
             <mesh key={p.item.uid}
                   position={[x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}
@@ -197,7 +291,7 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
       })}
 
       {/* kickboard, set back from the front face */}
-      {lay.placed.filter((p) => p.where !== 'wall' && p.unit.kind !== 'appliance').map((p) => (
+      {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
         <mesh key={`k${p.item.uid}`}
               position={[p.x + p.unit.width / 2, cfg.kick / 2, p.unit.depth - 60]}
               onClick={noop}>

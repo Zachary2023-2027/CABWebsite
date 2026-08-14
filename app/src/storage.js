@@ -14,7 +14,7 @@
    The app autosaves to (1) and nags you toward (2).
    =========================================================================== */
 
-import { FAMILY, PRICES, PROJECT } from './catalog.js';
+import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
 
 const KEY = 'kcb.store.v2';
 const SCHEMA = 2;
@@ -53,7 +53,7 @@ export const snapshot = ({ id, name, project, cut, prices, quoted }) => ({
   savedAt: Date.now(),
   project,
   cut: [...(cut || [])],
-  prices: prices || PRICES,
+  prices: prices || PRICE_SEED,
   quoted: quoted || '',
 });
 
@@ -72,7 +72,7 @@ export function listSaved() {
       walls: s.project?.walls?.length ?? 0,
       cabinets: (s.project?.walls || [])
         .reduce((a, w) => a + (w.units || []).filter((u) => FAMILY[u.familyId]?.kind !== 'filler'
-          && FAMILY[u.familyId]?.kind !== 'appliance').length, 0),
+          && !FAMILY[u.familyId]?.cavity).length, 0),
     }))
     .sort((a, b) => b.savedAt - a.savedAt);
 }
@@ -122,11 +122,25 @@ export function hydrate(raw) {
     units: Array.isArray(w.units) ? w.units.filter((u) => u && FAMILY[u.familyId]).map((u) => ({
       uid: String(u.uid || newId()),
       familyId: u.familyId,
-      settings: (u.settings && typeof u.settings === 'object') ? u.settings : {},
+      settings: cleanSettings(u.settings),
     })) : [],
   }));
 
   if (!walls.length) return null;
+
+  /* Locks and your own hardware are project wide. A file written before
+     these existed simply has neither, which is why both default rather than
+     failing the load. */
+  const uids = new Set(walls.flatMap((w) => w.units.map((u) => u.uid)));
+  const locked = Array.isArray(p.locked)
+    ? [...new Set(p.locked.map(String).filter((id) => uids.has(id)))] : [];
+  const extras = Array.isArray(p.extras)
+    ? p.extras.filter((e) => e && typeof e === 'object').map((e) => ({
+      id: String(e.id || newId()),
+      name: String(e.name ?? ''),
+      qty: Number.isFinite(Number(e.qty)) ? Number(e.qty) : 0,
+      cost: Number.isFinite(Number(e.cost)) ? Number(e.cost) : 0,
+    })) : [];
 
   return {
     id: raw.id || newId(),
@@ -136,6 +150,8 @@ export function hydrate(raw) {
       name: String(p.name || raw.name || 'Untitled kitchen'),
       cfg: { ...PROJECT, ...(p.cfg && typeof p.cfg === 'object' ? p.cfg : {}) },
       walls,
+      locked,
+      extras,
       activeWall: walls.some((w) => w.id === p.activeWall) ? p.activeWall : walls[0].id,
     },
     cut: Array.isArray(raw.cut) ? raw.cut.filter((c) => typeof c === 'string') : [],
@@ -144,16 +160,53 @@ export function hydrate(raw) {
   };
 }
 
+/* Per cabinet settings are free form, because a family decides what it reads.
+   The two that carry structure are checked: drawer heights have to be real
+   numbers, and a config override has to be numbers or short strings, so a
+   hand edited file cannot put an object where a thickness should be. */
+function cleanSettings(s) {
+  if (!s || typeof s !== 'object') return {};
+  const out = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (k === 'drawerHeights') {
+      if (Array.isArray(v) && v.length && v.every((x) => Number(x) > 0)) out[k] = v.map(Number);
+      continue;
+    }
+    if (k === 'cfg') {
+      if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+      const cfg = {};
+      for (const [ck, cv] of Object.entries(v)) {
+        if (Number.isFinite(Number(cv)) && cv !== '' && cv !== null) cfg[ck] = Number(cv);
+        else if (typeof cv === 'string' && cv.length <= 60) cfg[ck] = cv;
+      }
+      if (Object.keys(cfg).length) out[k] = cfg;
+      continue;
+    }
+    if (v === null || typeof v === 'object') continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 function mergePrices(incoming) {
-  const base = structuredClone(PRICES);
+  /* Merge onto the seeded list, not onto whatever this session has been
+     edited to, so opening a saved kitchen gives you the prices you saved. */
+  const base = structuredClone(PRICE_SEED);
   if (!incoming || typeof incoming !== 'object') return base;
   for (const [k, v] of Object.entries(incoming)) {
     if (k === 'sheets' && v && typeof v === 'object') {
+      /* The saved stock list replaces the seeded one rather than being laid
+         over it. Otherwise a sheet you deleted comes back every time you
+         open the project. An empty or unreadable list falls back to the
+         seed, because a project with no sheets cannot be nested. */
+      const sheets = {};
       for (const [name, sh] of Object.entries(v)) {
-        if (sh && Array.isArray(sh.size) && Number.isFinite(Number(sh.cost))) {
-          base.sheets[name] = { size: sh.size.map(Number), cost: Number(sh.cost) };
+        if (sh && Array.isArray(sh.size) && sh.size.length === 2
+            && sh.size.every((x) => Number(x) > 0) && Number.isFinite(Number(sh.cost))) {
+          sheets[name] = { size: sh.size.map(Number), cost: Number(sh.cost) };
         }
       }
+      if (Object.keys(sheets).length) base.sheets = sheets;
     } else if (Number.isFinite(Number(v))) {
       base[k] = Number(v);
     }
