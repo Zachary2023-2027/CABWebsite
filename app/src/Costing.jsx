@@ -45,7 +45,9 @@ export default function Costing({ project, quoted, setQuoted }) {
           ['Cabinets, allocated', money(cabinetTotal), `${rows.length} units, board by part area`],
           ['Per linear metre', money(perLinearMetre), `${runMetres.toFixed(2)} m of base run`],
           ['Board, as nested', money(nest.cost), `${nest.sheets} sheets, ${nest.wastePct.toFixed(1)}% waste`],
-          ['Project total', money(tot.cost), 'with benchtop and kickboard'],
+          ['Project total', money(tot.cost),
+            tot.benchIncluded ? 'with benchtop and kickboard'
+              : `kickboard in, benchtop left out (${money(tot.benchCost)})`],
         ].map(([k, v, sub]) => (
           <div className="card stat-card" key={k}>
             <span className="stat__label">{k}</span>

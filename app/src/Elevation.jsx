@@ -171,7 +171,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
                    onClick={(e) => { e.stopPropagation(); onSelect(p.item.uid, drawerNo); }}>
                   <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
                         width={q.size[0]} height={q.size[1]}
-                        fill={drawerNo !== null ? 'var(--dw-drawer)' : 'var(--dw-door)'}
+                        fill={q.code.endsWith('-BLIND') ? 'url(#hatchTight)'
+                          : drawerNo !== null ? 'var(--dw-drawer)' : 'var(--dw-door)'}
                         stroke="var(--dw-line)" strokeWidth={S} />
                   {picked && (
                     <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}

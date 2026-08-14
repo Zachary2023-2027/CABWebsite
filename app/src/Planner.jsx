@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
-import { BOARDS, FAMILIES, FAMILY, GROUPS, PROJECT, unitCost } from './catalog.js';
-import { optimiseWall } from './optimise.js';
+import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, unitCost } from './catalog.js';
+import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
-import { Choice, Close, Num, Pick, Warn } from './Fields.jsx';
-import { layoutWall, money, uid, unitWarnings, wallWarnings } from './project.js';
+import { Board, Choice, Close, Num, Pick, Warn } from './Fields.jsx';
+import { ROOM_SHAPES, layoutFor, money, roomLayout, roomWallIds, uid, unitWarnings, wallWarnings } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -25,6 +25,7 @@ const G = {
   fridge: <><rect x="5" y="2" width="14" height="20" strokeDasharray="2 2" /><path d="M5 9h14" /><path d="M11 4v3M11 11v3" /></>,
   dw: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><path d="M3 7h18" /><rect x="7" y="10" width="10" height="8" /></>,
   cooktop: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><circle cx="8.5" cy="8.5" r="2" /><circle cx="15.5" cy="8.5" r="2" /><circle cx="8.5" cy="15.5" r="2" /><circle cx="15.5" cy="15.5" r="2" /></>,
+  cornerL: <><rect x="2" y="4" width="20" height="16" /><path d="M14 4v16" /><path d="M14 8h8M14 16h8" strokeDasharray="2 2" /><circle cx="11.5" cy="12" r="1" /></>,
   micro: <><rect x="3" y="3" width="18" height="18" /><rect x="5" y="5" width="10" height="7" /><circle cx="18" cy="8.5" r="0.9" /><path d="M3 14h18" /><path d="M10 17.5h4" /></>,
   bin: <><rect x="4" y="3" width="16" height="18" /><path d="M8 7h8l-1 11H9z" /><path d="M9.5 5h5" /></>,
   cooktopOven: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><circle cx="8" cy="6.5" r="1.6" /><circle cx="16" cy="6.5" r="1.6" /><path d="M3 10h18" /><rect x="6" y="13" width="12" height="5" /></>,
@@ -97,6 +98,7 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
   const eff = (k) => over[k] ?? cfg[k];
   const editable = !unit.cavity && unit.kind !== 'filler';
 
+  const boards = boardNames();
   const fronts = unit.parts.filter((q) => q.code.includes('DRWR-F'));
   const heights = item.settings?.drawerHeights;
 
@@ -153,6 +155,16 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                 <Num label="Microwave bay" value={unit.settings.microH ?? 380}
                      onChange={(v) => set({ microH: v ?? 380 })} />
               )}
+              {fam.corner && (
+                <Num label="Blind panel width" value={unit.blindWidth}
+                     min={100} max={1200}
+                     onChange={(v) => set({ blindWidth: v ?? unit.blindWidth })} />
+              )}
+              {fam.corner && (
+                <Choice label="Corner is on the" value={unit.settings.blindSide || 'right'}
+                        options={[{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }]}
+                        onChange={(v) => set({ blindSide: v })} />
+              )}
               {fam.fronts === 'oven' && (
                 <Num label="Oven cavity" value={unit.settings.ovenH ?? 600}
                      onChange={(v) => set({ ovenH: v ?? 600 })} />
@@ -206,20 +218,56 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                 )}
               </div>
               <div className="settings-grid">
-                <Pick label="Carcass board" value={eff('carcassBoard')} options={BOARDS}
-                      onChange={(v) => onOverride(item.uid, { carcassBoard: v })} />
-                <Pick label="Front board" value={eff('frontBoard')} options={BOARDS}
-                      onChange={(v) => onOverride(item.uid, { frontBoard: v })} />
+                <Board label="Carcass board" value={eff('carcassBoard')} options={boards}
+                       onChange={(v) => onOverride(item.uid, { carcassBoard: v })} />
                 <Num label="Carcass thickness" value={eff('carcassThk')}
                      onChange={(v) => onOverride(item.uid, { carcassThk: v ?? cfg.carcassThk })} />
+                <Board label="Front board" value={eff('frontBoard')} options={boards}
+                       onChange={(v) => onOverride(item.uid, { frontBoard: v })} />
                 <Num label="Front thickness" value={eff('frontThk')}
                      onChange={(v) => onOverride(item.uid, { frontThk: v ?? cfg.frontThk })} />
-                {fronts.length > 0 && (
-                  <Num label="Carcass to box, each side" value={eff('runnerClearance')}
-                       onChange={(v) => onOverride(item.uid, { runnerClearance: v ?? cfg.runnerClearance })} />
-                )}
+                <Board label="Back board" value={eff('backBoard')} options={boards}
+                       onChange={(v) => onOverride(item.uid, { backBoard: v })} />
+                <Num label="Back thickness" value={eff('backThk')}
+                     onChange={(v) => onOverride(item.uid, { backThk: v ?? cfg.backThk })} />
               </div>
             </section>
+
+            {fronts.length > 0 && (
+              <section className="sub">
+                <div className="sub-head">
+                  <span className="field__label">Drawer boxes, this cabinet</span>
+                </div>
+                <p className="note">
+                  The box is what holds the load, so it is worth being able to build it
+                  out of something other than the carcass. Every panel here is its own
+                  material and its own thickness.
+                </p>
+                <div className="settings-grid">
+                  <Board label="Box sides board" value={eff('boxBoard')} options={boards}
+                         onChange={(v) => onOverride(item.uid, { boxBoard: v })} />
+                  <Num label="Box side thickness" value={eff('boxSideThk')}
+                       onChange={(v) => onOverride(item.uid, { boxSideThk: v ?? cfg.boxSideThk })} />
+                  <Board label="Box base board" value={eff('boxBaseBoard')} options={boards}
+                         placeholder="Same as the sides"
+                         onChange={(v) => onOverride(item.uid, { boxBaseBoard: v })} />
+                  <Num label="Box base thickness" value={eff('boxBaseThk')}
+                       onChange={(v) => onOverride(item.uid, { boxBaseThk: v ?? cfg.boxBaseThk })} />
+                  <Num label="Box side height" value={eff('boxHeight')}
+                       onChange={(v) => onOverride(item.uid, { boxHeight: v ?? cfg.boxHeight })} />
+                  <Num label="Carcass to box, each side" value={eff('runnerClearance')}
+                       onChange={(v) => onOverride(item.uid, { runnerClearance: v ?? cfg.runnerClearance })} />
+                  <Num label="Runner length" value={eff('runnerLength')}
+                       onChange={(v) => onOverride(item.uid, { runnerLength: v ?? cfg.runnerLength })} />
+                  <Num label="Box behind the front" value={eff('boxSetback')}
+                       onChange={(v) => onOverride(item.uid, { boxSetback: v ?? cfg.boxSetback })} />
+                  <Num label="Base groove from the bottom" value={eff('baseGroove')}
+                       onChange={(v) => onOverride(item.uid, { baseGroove: v ?? cfg.baseGroove })} />
+                  <Num label="Gap between fronts" value={eff('reveal')}
+                       onChange={(v) => onOverride(item.uid, { reveal: v ?? cfg.reveal })} />
+                </div>
+              </section>
+            )}
           </>
         )}
 
@@ -275,8 +323,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 900, []);
 
   const wall = project.walls.find((w) => w.id === project.activeWall) || project.walls[0];
-  const lay = useMemo(() => layoutWall(wall, project.cfg), [wall, project.cfg]);
-  const wallWarns = useMemo(() => wallWarnings(lay), [lay]);
+  const lay = useMemo(() => layoutFor(project, wall), [project, wall]);
+  const wallWarns = useMemo(() => wallWarnings(lay, project), [lay, project]);
+  /* The whole joined run, so the 3D can show the corner rather than one wall
+     at a time. A straight kitchen has nothing to join, so it stays as it was. */
+  const room = useMemo(
+    () => (project.room && project.room !== 'straight' ? roomLayout(project) : null), [project]);
+  const roomIds = useMemo(
+    () => (project.room && project.room !== 'straight' ? roomWallIds(project) : []), [project]);
   const placedSel = lay.placed.find((p) => p.item.uid === selected) || null;
 
   const mutate = (fn) => setProject((prev) => {
@@ -323,6 +377,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const setCfg = (patch) => setProject((prev) => ({ ...prev, cfg: { ...prev.cfg, ...patch } }));
   const resetCfg = () => setProject((prev) => ({ ...prev, cfg: { ...PROJECT } }));
 
+  /* Room shape and the length of any wall in it. Changing the shape only
+     changes which walls are joined at a corner: nothing is deleted, so
+     switching back to one wall gives you everything you had. */
+  const setRoom = (shape) => setProject((prev) => ({ ...prev, room: shape }));
+  const setLengthOf = (id, v) => setProject((prev) => ({
+    ...prev, walls: prev.walls.map((w) => (w.id === id ? { ...w, length: v } : w)),
+  }));
+
   /* Locks are a property of the kitchen, not of this session, so a cabinet
      you have already built stays locked after a reload. */
   const locked = project.locked || [];
@@ -336,8 +398,12 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const runOptimise = () => {
     setOptBusy(true);
     setTimeout(() => {
-      try { setOpt(optimiseWall(wall, project.cfg, new Set(locked))); }
-      finally { setOptBusy(false); }
+      try {
+        setOpt({
+          ...optimiseWall(wall, project.cfg, new Set(locked)),
+          project: optimiseProject(project),
+        });
+      } finally { setOptBusy(false); }
     }, 30);
   };
 
@@ -346,11 +412,34 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     setOpt(null);
   };
 
+  /* A project wide plan. It patches the defaults, and where the plan is about
+     boards it also clears the board a single cabinet was set to, because
+     leaving one cabinet on the old species is exactly what the plan is trying
+     to stop. Thicknesses and everything else set per cabinet are left alone. */
+  const applyPlan = (plan) => {
+    const boardKeys = ['carcassBoard', 'frontBoard', 'backBoard', 'boxBoard', 'boxBaseBoard'];
+    setProject((prev) => {
+      const next = structuredClone(prev);
+      next.cfg = { ...next.cfg, ...plan.patch };
+      if (plan.strip) {
+        for (const w of next.walls) {
+          for (const it of w.units) {
+            if (!it.settings?.cfg) continue;
+            for (const k of boardKeys) delete it.settings.cfg[k];
+            if (!Object.keys(it.settings.cfg).length) delete it.settings.cfg;
+          }
+        }
+      }
+      return next;
+    });
+    setOpt(null);
+  };
+
   const pickUnit = (u, drawer = null) => { setSelected(u); setSelDrawer(drawer); };
 
   const view3d = (
     <div className="three-wrap">
-      <Kitchen3D lay={lay} cfg={project.cfg} selected={selected} setSelected={(u) => pickUnit(u)}
+      <Kitchen3D lay={lay} room={room} cfg={project.cfg} selected={selected} setSelected={(u) => pickUnit(u)}
                  setHovered={setHovered} show={show} preset={preset} nonce={nonce}
                  eye={eye} reduced={reduced} />
       <div className="vp-toolbar float-tl">
@@ -393,7 +482,9 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
       <div className="tabs wall-tabs" role="tablist">
         {project.walls.map((w) => (
-          <button key={w.id} className="tab" role="tab" aria-selected={w.id === project.activeWall}
+          <button key={w.id} className={`tab ${roomIds.includes(w.id) ? 'tab--room' : ''}`}
+                  role="tab" aria-selected={w.id === project.activeWall}
+                  title={roomIds.includes(w.id) ? 'Joined at a corner in this room shape' : undefined}
                   onClick={() => { setProject((p) => ({ ...p, activeWall: w.id })); setSelected(null); }}>
             {w.name} <span className="tab__len">{w.length}</span>
           </button>
@@ -475,12 +566,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       </div>
 
       {advOpen && (
-        <Advanced cfg={project.cfg} onChange={setCfg} onReset={resetCfg}
+        <Advanced cfg={project.cfg} project={project} onChange={setCfg} onReset={resetCfg}
+                  onRoom={setRoom} onWallLength={setLengthOf}
                   onClose={() => setAdvOpen(false)} />
       )}
       {opt && (
-        <OptimiseResult result={opt} wall={wall} locked={locked}
-                        onApply={applyOptimise} onClose={() => setOpt(null)} />
+        <OptimiseResult result={opt} project={project} wall={wall} locked={locked}
+                        onApply={applyOptimise} onApplyPlan={applyPlan}
+                        onClose={() => setOpt(null)} />
       )}
     </div>
   );

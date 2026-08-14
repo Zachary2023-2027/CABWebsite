@@ -24,6 +24,13 @@
   [data-density='compact'] {
     --ctl-h: var(--touch-min);
   }
+
+  /* The control is 44 including its border, so what you can actually tap is
+     42. Two pixels does not sound like much until you are stabbing at a
+     segmented control with one hand. Add the border back on. */
+  .input-shell, .seg, .btn {
+    min-height: calc(var(--touch-min) + 2 * var(--bw));
+  }
 }
 
 /* --- Button -------------------------------------------------------------- */

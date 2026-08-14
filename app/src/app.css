@@ -823,7 +823,8 @@ body {
 /* Advanced design and the optimiser result. Both are tall, so the head and
    the foot stay put and only the middle scrolls. */
 .adv-dialog, .opt-dialog {
-  width: min(760px, 100%);
+  width: min(860px, 100%);
+  max-width: min(860px, calc(100vw - var(--sp-6)));
   max-height: min(86vh, 900px);
   display: grid; grid-template-rows: auto 1fr auto;
   gap: var(--sp-3);
@@ -904,3 +905,18 @@ body {
 /* display: flex on the row beats the hidden attribute, the same way it did on
    the dialog scrim. State it explicitly. */
 .drill-strip-row[hidden] { display: none; }
+
+/* Optimiser tabs, inside the dialog head so the head stays put while the
+   options scroll. */
+.opt-tabs { margin-top: var(--sp-3); width: fit-content; max-width: 100%; flex-wrap: wrap; }
+.opt-dialog .opt-row .num { text-align: right; line-height: var(--lh-2); }
+.opt-dialog .adv-body > .field__label { margin-top: var(--sp-3); }
+
+/* A wall that is part of the joined run of an L or a U. The dot says the
+   wall turns a corner, which is why its first few hundred millimetres are
+   already spoken for. */
+.tab--room::after {
+  content: ''; display: inline-block; margin-left: var(--sp-2);
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  vertical-align: middle;
+}

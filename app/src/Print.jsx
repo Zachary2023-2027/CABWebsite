@@ -302,7 +302,11 @@ function PageBody({ page, project, cut }) {
         <b>Also needed</b>
         <table className="p-table">
           <tbody>
-            <tr><td>Benchtop</td><td className="p-n">{tot.benchMetres.toFixed(2)} m</td><td className="p-n">{money(tot.benchMetres * PRICES.benchPerMetre)}</td></tr>
+            <tr>
+              <td>Benchtop{tot.benchIncluded ? '' : ', not in the total'}</td>
+              <td className="p-n">{tot.benchMetres.toFixed(2)} m</td>
+              <td className="p-n">{money(tot.benchCost)}</td>
+            </tr>
             <tr><td>Kickboard</td><td className="p-n">{tot.kickMetres.toFixed(2)} m</td><td className="p-n">{money(tot.kickMetres * PRICES.kickPerMetre)}</td></tr>
           </tbody>
         </table>

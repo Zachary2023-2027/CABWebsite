@@ -63,6 +63,7 @@ export function starterProject() {
       },
     ],
     activeWall: 'A',
+    room: 'straight',
     locked: [],
     extras: [],
   };
@@ -76,9 +77,13 @@ const occupies = (kind, full) =>
  * Resolve a wall into placed units with real x positions.
  * Two cursors: the base run along the floor and the wall run above it.
  */
-export function layoutWall(wall, cfg = PROJECT) {
-  let baseX = 0;
-  let wallX = 0;
+export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
+  /* A run does not always start at zero. In an L or a U the second wall
+     starts clear of the corner cabinet on the wall before it, because that
+     cabinet's carcass is already occupying the first few hundred
+     millimetres of this wall. */
+  let baseX = startOffset;
+  let wallX = startOffset;
   let n = 0;
   let f = 0;
   const placed = [];
@@ -106,8 +111,118 @@ export function layoutWall(wall, cfg = PROJECT) {
     placed.push({ item, unit, x, where, label });
   }
 
-  return { placed, baseRun: baseX, wallRun: wallX, run: Math.max(baseX, wallX), wall };
+  return {
+    placed, baseRun: baseX, wallRun: wallX, run: Math.max(baseX, wallX),
+    wall, startOffset,
+  };
 }
+
+/* --- room shape -----------------------------------------------------------
+
+   A kitchen is not always one wall. The shape decides which walls join at a
+   corner, where each one starts, and how it is turned in the 3D view.
+
+   Wall A runs along the back. In an L, wall B turns at the right hand end of
+   A and runs toward you. In a U, wall C runs the other side. The island is
+   never part of the joined run: it stands on its own.
+
+   The rotations are the only ones that put the cabinet fronts on the inside
+   of the room. Turning the return wall the other way puts every door facing
+   the wall behind it, which looks fine in plan and is useless to build from.
+   ========================================================================== */
+
+export const ROOM_SHAPES = [
+  { id: 'straight', name: 'One wall', walls: 1 },
+  { id: 'l', name: 'L shape', walls: 2 },
+  { id: 'u', name: 'U shape', walls: 3 },
+];
+
+export const roomShape = (project) =>
+  ROOM_SHAPES.find((s) => s.id === project.room) ? project.room : 'straight';
+
+/** The walls that form the joined run, in corner order. */
+export function roomWallIds(project) {
+  const n = ROOM_SHAPES.find((s) => s.id === roomShape(project)).walls;
+  return project.walls.filter((w) => w.id !== 'ISL').slice(0, n).map((w) => w.id);
+}
+
+/**
+ * Resolve the whole room: every joined wall placed and turned, plus the
+ * corner offset each one inherits from the wall before it.
+ */
+export function roomLayout(project) {
+  const offsets = roomOffsets(project);
+  const ids = roomWallIds(project);
+  const out = [];
+
+  for (const [i, id] of ids.entries()) {
+    const wall = project.walls.find((w) => w.id === id);
+    if (!wall) continue;
+    const lay = layoutWall(wall, project.cfg, offsets[id] || 0);
+
+    /* Where this wall sits in the room, and how far it is turned. The first
+       wall is the back wall. The second turns at its right hand end. The
+       third comes back down the other side. */
+    let origin = [0, 0];
+    let rot = 0;
+    if (i === 1) { origin = [out[0].wall.length, 0]; rot = -Math.PI / 2; }
+    if (i === 2) { origin = [0, wall.length]; rot = Math.PI / 2; }
+
+    out.push({ wall, lay, origin, rot, corner: i > 0 });
+  }
+
+  return out;
+}
+
+/**
+ * The corner cabinet on a wall, if there is one.
+ *
+ * It is looked for anywhere in the base run, not only at the very end. A
+ * filler tucked in after it is a normal enough mistake, and quietly doing
+ * nothing because the last unit was not the corner is worse than turning the
+ * corner and saying the order is wrong.
+ */
+export const cornerUnit = (lay) =>
+  lay.placed.find((p) => p.where !== 'wall' && p.unit.corner) || null;
+
+/** True when the corner cabinet is the last thing in the base run. */
+export function cornerIsLast(lay) {
+  const run = lay.placed.filter((p) => p.where !== 'wall');
+  return run.length > 0 && !!run[run.length - 1].unit.corner;
+}
+
+/**
+ * Every wall's corner offset in one pass. The list builders take this once
+ * and reuse it, rather than resolving the room for each wall in turn.
+ */
+export function roomOffsets(project) {
+  const cfg = project.cfg;
+  const ids = roomWallIds(project);
+  const out = {};
+  let offset = 0;
+  for (const id of ids) {
+    const wall = project.walls.find((w) => w.id === id);
+    if (!wall) continue;
+    out[id] = offset;
+    const lay = layoutWall(wall, cfg, offset);
+    const corner = cornerUnit(lay);
+    offset = corner ? corner.unit.cornerReturn : 0;
+  }
+  return out;
+}
+
+/** Lay out a wall with whatever corner offset the room gives it. */
+export const layoutFor = (project, wall, offsets) =>
+  layoutWall(wall, project.cfg, (offsets || roomOffsets(project))[wall.id] || 0);
+
+/** Walls that are not part of the joined run, so the island and any spares. */
+export const looseWalls = (project) => {
+  const ids = new Set(roomWallIds(project));
+  return project.walls.filter((w) => !ids.has(w.id));
+};
+
+/** The corner offset a wall inherits, or zero when it is not in the run. */
+export const wallOffset = (project, wallId) => roomOffsets(project)[wallId] || 0;
 
 /* --- warnings, drawn on the cabinet itself -------------------------------- */
 
@@ -137,6 +252,20 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
     out.push(`${unit.width}mm on doors. Over 1000 they will drop, split the cabinet`);
   }
 
+  /* A blind corner is only useful if the door can open. The return cabinets
+     and the benchtop above them cross the front of this cabinet, so the dead
+     part of the front has to be wider than they are. */
+  if (unit.corner) {
+    const needed = cfg.benchDepth;
+    if (unit.blindWidth < needed) {
+      out.push(`Blind panel ${unit.blindWidth}mm against a ${needed}mm benchtop return. Widen it or the door will not clear`);
+    }
+    const opening = unit.width - unit.blindWidth - 2 * cfg.reveal;
+    if (opening < 300) {
+      out.push(`Door opening ${Math.round(opening)}mm. Under 300 there is no point in the door, widen the cabinet`);
+    }
+  }
+
   for (const o of lay.wall.obstacles || []) {
     const top = unit.mountY + unit.height;
     const overlapX = x < o.x + o.w && x + unit.width > o.x;
@@ -147,8 +276,29 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
   return out;
 }
 
-export function wallWarnings(lay) {
+export function wallWarnings(lay, project) {
   const out = [];
+
+  /* A wall that starts clear of a corner has less of itself to fill, so say
+     what is going on rather than leaving an unexplained gap at the end. */
+  if (lay.startOffset > 0) {
+    out.push({ level: 'note', text: `First ${Math.round(lay.startOffset)}mm of this wall is the corner cabinet on the wall before it. Cabinets here start after it.` });
+  }
+
+  /* In an L or a U, the wall that runs into a corner needs a corner cabinet
+     at its far end. Without one the two runs are drawn on top of each other. */
+  if (project) {
+    const ids = roomWallIds(project);
+    const i = ids.indexOf(lay.wall.id);
+    if (i >= 0 && i < ids.length - 1) {
+      if (!cornerUnit(lay)) {
+        out.push({ level: 'warn', text: 'This wall turns a corner but has no blind corner cabinet on it. The next wall will run into whatever is at the end of this one.' });
+      } else if (!cornerIsLast(lay)) {
+        out.push({ level: 'warn', text: 'The blind corner is not the last cabinet on this wall. It has to sit in the corner, so move it to the end of the run.' });
+      }
+    }
+  }
+
   if (lay.baseRun > lay.wall.length + 0.5) {
     out.push({ level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm against a ${lay.wall.length}mm wall. Reduce by ${Math.round(lay.baseRun - lay.wall.length)}mm.` });
   } else if (lay.wall.length - lay.baseRun > 5 && lay.baseRun > 0) {
@@ -167,8 +317,9 @@ export function totals(project) {
   let cabinets = 0, doors = 0, drawers = 0, cost = 0;
   let benchMm = 0, kickMm = 0;
 
+  const offsets = roomOffsets(project);
   for (const wall of project.walls) {
-    const lay = layoutWall(wall, cfg);
+    const lay = layoutFor(project, wall, offsets);
     let benchRun = 0;
     for (const p of lay.placed) {
       const { unit } = p;
@@ -211,6 +362,9 @@ export function totals(project) {
      is counted here once and shows up in costing and in the print pack. */
   const extras = extrasCost(project);
 
+  /* The benchtop can be left out of the total. The metres and the rate are
+     still reported, so the number you are not counting is still visible. */
+  const benchIncluded = PRICES.includeBench !== false;
   const bench = (benchMm / 1000) * PRICES.benchPerMetre;
   const kick = (kickMm / 1000) * PRICES.kickPerMetre;
 
@@ -223,7 +377,10 @@ export function totals(project) {
     boardCost: nest.cost,
     hardwareCost: cost + extras,
     extrasCost: extras,
-    cost: nest.cost + cost + extras + bench + kick,
+    benchCost: bench,
+    kickCost: kick,
+    benchIncluded,
+    cost: nest.cost + cost + extras + (benchIncluded ? bench : 0) + kick,
     estimate: true,
   };
 }
@@ -243,8 +400,9 @@ export const money = (n) =>
 /** Every part in the project, tagged with the cabinet and wall it belongs to. */
 export function allParts(project) {
   const out = [];
+  const offsets = roomOffsets(project);
   for (const wall of project.walls) {
-    for (const p of layoutWall(wall, project.cfg).placed) {
+    for (const p of layoutFor(project, wall, offsets).placed) {
       if (!p.unit.parts.length) continue;
       for (const part of p.unit.parts) {
         out.push({ ...part, unitId: p.item.uid, unitLabel: p.label, wallId: wall.id, wallName: wall.name });
@@ -257,8 +415,9 @@ export function allParts(project) {
 /** Every fitting, rolled up by type. */
 export function allFittings(project) {
   const rows = new Map();
+  const offsets = roomOffsets(project);
   for (const wall of project.walls) {
-    for (const p of layoutWall(wall, project.cfg).placed) {
+    for (const p of layoutFor(project, wall, offsets).placed) {
       for (const f of p.unit.fittings || []) {
         const key = f.type === 'runnerPair' ? `runnerPair-${f.length}` : f.type;
         const cur = rows.get(key) || { type: f.type, length: f.length, qty: 0, units: new Set() };
@@ -274,8 +433,9 @@ export function allFittings(project) {
 /** Cabinets across the whole project, for the cut list and costing screens. */
 export function allUnits(project) {
   const out = [];
+  const offsets = roomOffsets(project);
   for (const wall of project.walls) {
-    for (const p of layoutWall(wall, project.cfg).placed) {
+    for (const p of layoutFor(project, wall, offsets).placed) {
       if (p.unit.cavity) continue;
       out.push({ ...p, wallId: wall.id, wallName: wall.name });
     }

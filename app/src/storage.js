@@ -15,6 +15,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
+import { ROOM_SHAPES } from './project.js';
 
 const KEY = 'kcb.store.v2';
 const SCHEMA = 2;
@@ -152,6 +153,9 @@ export function hydrate(raw) {
       walls,
       locked,
       extras,
+      /* A file written before room shapes existed has no room, and one wall
+         is what it was, so that is what it opens as. */
+      room: ROOM_SHAPES.some((s) => s.id === p.room) ? p.room : 'straight',
       activeWall: walls.some((w) => w.id === p.activeWall) ? p.activeWall : walls[0].id,
     },
     cut: Array.isArray(raw.cut) ? raw.cut.filter((c) => typeof c === 'string') : [],
@@ -207,6 +211,8 @@ function mergePrices(incoming) {
         }
       }
       if (Object.keys(sheets).length) base.sheets = sheets;
+    } else if (typeof v === 'boolean') {
+      base[k] = v;
     } else if (Number.isFinite(Number(v))) {
       base[k] = Number(v);
     }

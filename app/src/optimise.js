@@ -16,8 +16,9 @@
    never touches a cabinet you have locked.
    =========================================================================== */
 
-import { FAMILY, buildUnit, sheetFor } from './catalog.js';
+import { FAMILY, PRICES, boardNames, buildUnit, sheetFor } from './catalog.js';
 import { nestProject } from './nesting.js';
+import { allParts } from './project.js';
 
 export const OPT = {
   maxCandidates: 260,     // how many survive the cheap score and get nested
@@ -156,4 +157,184 @@ export function optimiseWall(wall, cfg, locked = new Set()) {
     .slice(0, 5);
 
   return { best, current: now, considered, stopped, fitting: combos.length };
+}
+
+/* ===========================================================================
+   Project wide optimising.
+
+   Widths are one lever and not the biggest one. What a sheet actually costs
+   you is decided by how many different boards you are buying, whether the
+   thickness you typed is a thickness anybody stocks, and whether you are
+   putting a full sheet of MDF behind every cabinet when a rail would do.
+
+   Each option below is a real change to the project, costed by nesting the
+   whole thing again. Nothing is applied until you press Apply.
+   =========================================================================== */
+
+const BOARD_ROLES = [
+  ['carcassBoard', 'carcass'],
+  ['frontBoard', 'fronts'],
+  ['backBoard', 'backs'],
+  ['boxBoard', 'drawer box sides'],
+  ['boxBaseBoard', 'drawer box bases'],
+];
+
+const THK_FOR = {
+  carcassBoard: 'carcassThk',
+  frontBoard: 'frontThk',
+  backBoard: 'backThk',
+  boxBoard: 'boxSideThk',
+  boxBaseBoard: 'boxBaseThk',
+};
+
+/** Nest and cost a project as if cfg were patched. */
+function score(project, patch, stripOverrides) {
+  const next = {
+    ...project,
+    cfg: { ...project.cfg, ...patch },
+    walls: stripOverrides
+      ? project.walls.map((w) => ({
+        ...w,
+        units: w.units.map((u) => {
+          const cfg = u.settings?.cfg;
+          if (!cfg) return u;
+          const kept = { ...cfg };
+          for (const [k] of BOARD_ROLES) delete kept[k];
+          return { ...u, settings: { ...u.settings, cfg: kept } };
+        }),
+      }))
+      : project.walls,
+  };
+  const nest = nestProject(allParts(next));
+  return { sheets: nest.sheets, cost: nest.cost, wastePct: nest.wastePct, groups: nest.groups };
+}
+
+/** Board area actually used, by species, so ranking is by what you buy. */
+function boardUse(project) {
+  const use = new Map();
+  for (const p of allParts(project)) {
+    const base = String(p.material).replace(/\s[\d.]+mm$/, '').trim();
+    use.set(base, (use.get(base) || 0) + (p.L * p.W) / 1e6);
+  }
+  return [...use.entries()].sort((a, b) => b[1] - a[1]).map(([name, m2]) => ({ name, m2 }));
+}
+
+/** The thicknesses actually stocked for a board, from your sheet list. */
+function stockedThicknesses(board) {
+  const out = [];
+  for (const k of Object.keys(PRICES.sheets)) {
+    const m = k.match(/^(.*)\s([\d.]+)mm$/);
+    if (m && m[1].trim() === board) out.push(parseFloat(m[2]));
+  }
+  return out.sort((a, b) => a - b);
+}
+
+const nearest = (list, v) =>
+  list.reduce((best, x) => (Math.abs(x - v) < Math.abs(best - v) ? x : best), list[0]);
+
+/**
+ * Every project wide option worth offering, each one costed for real.
+ * @returns {{current, materials: [], build: [], use: []}}
+ */
+export function optimiseProject(project) {
+  const cfg = project.cfg;
+  const current = score(project, {}, false);
+  const use = boardUse(project);
+  const known = new Set(boardNames());
+
+  const offer = (o) => {
+    const s = score(project, o.patch, !!o.strip);
+    return { ...o, ...s, saving: current.cost - s.cost, sheetsSaved: current.sheets - s.sheets };
+  };
+
+  /* --- materials: fewer boards, less offcut stranded in a species you only
+     used twice. Consolidating is not automatically cheaper, because the board
+     you consolidate onto might cost twice as much a sheet, so every plan is
+     nested and costed and only the ones that win are offered. */
+  const materials = [];
+  const roles = BOARD_ROLES.map(([k]) => k);
+  const roleValue = (k) => cfg[k] || (k === 'boxBaseBoard' ? cfg.boxBoard : '');
+  const distinct = new Set(roles.map(roleValue).filter(Boolean));
+
+  for (const b of use.slice(0, 3).map((u) => u.name)) {
+    if (!known.has(b) && !use.some((u) => u.name === b)) continue;
+    const patch = Object.fromEntries(roles.map((k) => [k, b]));
+    if (roles.every((k) => roleValue(k) === b)) continue;
+    materials.push(offer({
+      id: `one-${b}`,
+      title: `Everything in ${b}`,
+      detail: `One board for the whole kitchen. Changes the ${
+        BOARD_ROLES.filter(([k]) => roleValue(k) !== b).map(([, n]) => n).join(', ')}.`,
+      patch, strip: true,
+    }));
+  }
+
+  if (use.length >= 2 && distinct.size > 2) {
+    const [a, b] = [use[0].name, use[1].name];
+    materials.push(offer({
+      id: 'two-carcass-front',
+      title: `${a} for the boxes, ${b} for the fronts`,
+      detail: 'Two boards. Carcass, backs and drawer boxes on one, doors and drawer fronts on the other.',
+      patch: { carcassBoard: a, backBoard: a, boxBoard: a, boxBaseBoard: a, frontBoard: b },
+      strip: true,
+    }));
+    materials.push(offer({
+      id: 'two-visible-hidden',
+      title: `${a} where it shows, ${b} where it does not`,
+      detail: 'Two boards. Carcass and fronts on one, backs and drawer boxes on the other.',
+      patch: { carcassBoard: a, frontBoard: a, backBoard: b, boxBoard: b, boxBaseBoard: b },
+      strip: true,
+    }));
+  }
+
+  /* --- build: the two changes that move the most board without touching a
+     single cabinet size. */
+  const build = [];
+
+  if ((cfg.backType || 'full') !== 'rail') {
+    build.push(offer({
+      id: 'back-rail',
+      title: 'Back rails instead of full backs',
+      detail: 'A rail braces the carcass and takes a fraction of the board. You lose the dust seal, so it suits base cabinets more than wall cabinets.',
+      patch: { backType: 'rail' },
+    }));
+  }
+
+  /* A thickness nobody stocks is bought as the nearest sheet with the cost
+     scaled, which is a guess. Snapping to a real sheet makes the price the
+     price. */
+  const snap = {};
+  const snapped = [];
+  for (const [k, name] of BOARD_ROLES) {
+    const board = roleValue(k);
+    const thkKey = THK_FOR[k];
+    const have = stockedThicknesses(board);
+    if (!have.length) continue;
+    const want = cfg[thkKey];
+    if (have.includes(want)) continue;
+    const to = nearest(have, want);
+    snap[thkKey] = to;
+    snapped.push(`${name} ${want} to ${to}`);
+  }
+  if (snapped.length) {
+    build.push(offer({
+      id: 'snap-thk',
+      title: 'Round thicknesses to sheets you stock',
+      detail: `${snapped.join(', ')}. Anything not stocked is currently priced off the nearest sheet, which is an estimate on top of an estimate.`,
+      patch: snap,
+    }));
+  }
+
+  /* Cheaper wins. Fewer sheets for the same money also wins. Fewer sheets of
+     a board that costs twice as much does not, however good the nest looks. */
+  const better = (o) => o.saving > 1 || (Math.abs(o.saving) <= 1 && o.sheetsSaved > 0);
+  return {
+    current, use,
+    materials: materials.filter(better).sort((a, b) => b.saving - a.saving),
+    build: build.filter(better).sort((a, b) => b.saving - a.saving),
+    /* Options that lose money are still worth seeing, because sometimes one
+       board is what you want even if it costs a little more. */
+    rejected: [...materials, ...build].filter((o) => !better(o))
+      .sort((a, b) => b.saving - a.saving),
+  };
 }

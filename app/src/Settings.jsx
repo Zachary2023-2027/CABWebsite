@@ -159,6 +159,27 @@ export default function Settings({ prices, setPrices }) {
         </div>
       </section>
 
+      <section className="card settings-card">
+        <div className="card__head">
+          <span className="card__title">What goes in the total</span>
+          <span className="group-note">The metres are still worked out either way.</span>
+        </div>
+        <label className="check">
+          <input type="checkbox" checked={prices.includeBench !== false}
+                 onChange={(e) => setPrices((p) => ({ ...p, includeBench: e.target.checked }))} />
+          <span className="check__box">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+                 strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+          </span>
+          <span className="check__text">Include the benchtop in the project total</span>
+        </label>
+        <p className="note">
+          Turn this off if the benchtop is being supplied by someone else. It still
+          appears on the costing and print pack with its metres and its price, it
+          just stops being added to the project total.
+        </p>
+      </section>
+
       <Sheets prices={prices} setPrices={setPrices} />
     </Screen>
   );

@@ -36,10 +36,18 @@ export const PROJECT = {
   frontBoard: 'White melamine',
   backBoard: 'MDF',
   boxBoard: 'Birch ply',
+  /* The drawer bottom is usually a thinner sheet of something cheaper than
+     the sides, so it gets its own species. Left empty it follows the sides. */
+  boxBaseBoard: '',
 
   backType: 'full',       // 'full' or 'rail', a rail saves a sheet of back
   backRailHeight: 120,
   boxBaseFix: 'dado',     // 'dado' or 'screwed' under the sides
+
+  /* Blind corner. The dead part of the front has to be wider than the
+     benchtop that returns across it, or the door cannot swing past the
+     cabinet butted up against the side. */
+  blindClearance: 50,
 };
 
 /* Seeded prices. Estimates, shown as such everywhere they appear. */
@@ -58,6 +66,10 @@ export const PRICES = {
   binRunner: 64,
   benchPerMetre: 320,
   kickPerMetre: 26,
+  /* Whether the benchtop belongs in the project total. Off if you are buying
+     the top separately, or someone else is supplying it. The metres are still
+     worked out and still shown, they just stop being added up. */
+  includeBench: true,
   edgeTapePerMetre: 0.6,
 };
 
@@ -76,7 +88,7 @@ const materialsFor = (P) => ({
   front: matName(P.frontBoard || 'White melamine', P.frontThk),
   back: matName(P.backBoard || 'MDF', P.backThk),
   box: matName(P.boxBoard || 'Birch ply', P.boxSideThk),
-  boxBase: matName(P.boxBoard || 'Birch ply', P.boxBaseThk),
+  boxBase: matName(P.boxBaseBoard || P.boxBoard || 'Birch ply', P.boxBaseThk),
 });
 
 const toneFor = (material) => {
@@ -86,8 +98,22 @@ const toneFor = (material) => {
   return 'melamine';
 };
 
-/** Board species offered in the pickers. Thickness is typed, not chosen. */
+/** Board species suggested in the fields. Thickness is typed, not chosen. */
 export const BOARDS = ['White melamine', 'Birch ply', 'Hoop pine ply', 'MDF', 'HMR MDF', 'Structural ply'];
+
+/**
+ * Every board name worth suggesting: the seeded species plus whatever you
+ * have actually put in your sheet stock. Typing a name that is not here is
+ * allowed, it just will not have a sheet until you add one.
+ */
+export function boardNames() {
+  const out = new Set(BOARDS);
+  for (const k of Object.keys(PRICES.sheets)) {
+    const base = k.replace(/\s[\d.]+mm$/, '').trim();
+    if (base) out.add(base);
+  }
+  return [...out].sort((a, b) => a.localeCompare(b));
+}
 
 /**
  * Sheet stock for a material. If that exact thickness is not stocked, fall
@@ -138,6 +164,12 @@ export const FAMILIES = [
   { id: 'base-corner', group: 'Base', name: 'Blind corner', kind: 'base', fronts: 'doors',
     desc: 'Runs into the corner. One door, blind return.',
     widths: [900, 1000, 1050], def: { width: 900, doors: 1, shelves: 1 }, glyph: 'corner' },
+
+  { id: 'base-blind-l', group: 'Base', name: 'Blind corner, L shape', kind: 'base', fronts: 'blind',
+    corner: true,
+    desc: 'Sits in the corner of an L. The return cabinets butt against its side.',
+    widths: [900, 1000, 1050, 1100, 1200, 1350],
+    def: { width: 1050, doors: 1, shelves: 1 }, glyph: 'cornerL' },
 
   { id: 'wall-1door', group: 'Wall', name: 'Wall, 1 door', kind: 'wall', fronts: 'doors',
     desc: 'One door, two shelves, 320 deep.',
@@ -334,6 +366,12 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }));
   }
 
+  /* The dead width of a blind corner, and the amount the next wall has to
+     start clear of. Both are read by the room layout and by the warnings. */
+  const blindWidth = fam.corner
+    ? Math.round(s.blindWidth ?? (P.benchDepth + (P.blindClearance ?? 50)))
+    : 0;
+
   const shelves = s.shelves ?? 0;
   const shelfDepth = D - (railBack ? 0 : BT) - P.shelfSetback;
   for (let i = 0; i < shelves; i++) {
@@ -455,6 +493,40 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     const bay = s.microH ?? 380;
     const drawerH = Math.max(120, H - bay - R);
     addDrawers(s.drawers ?? 1, 0, drawerH, s.drawerHeights);
+  } else if (fam.fronts === 'blind') {
+    /* Blind corner in an L.
+
+       The cabinet runs into the corner. The return cabinets on the next wall
+       butt against its side, so the last `blind` millimetres of its front are
+       dead: covered by a fixed panel, not a door. That dead width has to be
+       wider than the benchtop returning across it, otherwise the door has
+       nothing to swing clear of and you cannot open the cabinet you just
+       built. The default is the benchtop depth plus a clearance you can
+       change; anything tighter is flagged on the cabinet. */
+    const blind = blindWidth;
+    const opening = frontW - blind - R;
+    // Which end runs into the corner. Right suits the right hand end of a
+    // run, left suits the other leg of a U.
+    const blindLeft = (s.blindSide || 'right') === 'left';
+    parts.push(mkPart({
+      code: code('BLIND'), name: 'Blind panel', group: 'front', material: MAT.front,
+      L: Math.round(H), W: Math.round(blind), T: FT,
+      size: [blind, H, FT],
+      pos: [blindLeft ? sideGap : sideGap + opening + R, 0, D], explode: [0, 0, 260],
+      edging: 'All four edges',
+    }));
+    if (opening > 150) {
+      const num = ++doorNo;
+      parts.push(mkPart({
+        code: code(`DOOR-${num}`), name: `Door ${num}`, group: 'front', material: MAT.front,
+        L: Math.round(H), W: Math.round(opening), T: FT,
+        size: [opening, H, FT],
+        pos: [blindLeft ? sideGap + blind + R : sideGap, 0, D], explode: [0, 0, 340],
+        edging: 'All four edges', hinge: blindLeft ? 'right' : 'left',
+      }));
+      fittings.push({ type: 'hinge', qty: H > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
+      fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${num}`) });
+    }
   } else if (fam.fronts === 'bin') {
     addDoors(1, 0, H);
     fittings.push({ type: 'binRunner', qty: 1, code: code('BIN-RUNNER') });
@@ -478,6 +550,12 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     id, familyId, family: fam, name: fam.name, kind, settings: s,
     width: W, height: H, depth: D, mountY, size: [W, H, D],
     parts, fittings, hardware: [], cfg: P, drawerOpening,
+    corner: !!fam.corner,
+    blindWidth,
+    /* How far along the next wall the corner is used up. The return cabinets
+       start after this, which is what stops them being drawn inside the
+       corner cabinet. */
+    cornerReturn: fam.corner ? D : 0,
     ovenCavity: fam.fronts === 'oven' ? { y: 300 + P.reveal, h: s.ovenH ?? 600 } : null,
     microBay: fam.fronts === 'microwave'
       ? { y: H - (s.microH ?? 380), h: s.microH ?? 380 } : null,

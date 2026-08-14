@@ -168,20 +168,13 @@ function CooktopOven({ unit, colour, ghost, benchHeight, ...evt }) {
   );
 }
 
-/* --- scene --------------------------------------------------------------- */
+/* --- one wall's run ------------------------------------------------------
+   Everything that stands on a single wall. Positions are that wall's own
+   local coordinates: x along the wall, z out from it. The room places and
+   turns the whole group, so a return wall needs no special cases here.
+   ------------------------------------------------------------------------ */
 
-function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce, eye, reduced, warnMap }) {
-  const wall = lay.wall;
-  const L = wall.length;
-  const dim = cssVar('--dw-dim', '#7A736A');
-  const wallCol = cssVar('--sunken', '#EAE7E1');
-
-  const target = useMemo(() => [L / 2, 900, 0], [L]);
-  const distance = useMemo(() => {
-    const span = Math.max(L, cfg.ceiling, 1800);
-    return (span * 0.5 * 1.5) / Math.sin(THREE.MathUtils.degToRad(35) / 2);
-  }, [L, cfg.ceiling]);
-
+function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap }) {
   /* Benchtop segments, same rule as the elevation. */
   const bench = useMemo(() => {
     const segs = [];
@@ -200,38 +193,6 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
 
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[L * 0.6, 3400, 2600]} intensity={1.1} />
-      <directionalLight position={[-1800, 1500, -1400]} intensity={0.4} />
-
-      <OrbitControls
-        makeDefault enableDamping dampingFactor={0.09}
-        minDistance={eye ? 1 : 700} maxDistance={eye ? 12000 : 14000}
-        maxPolarAngle={Math.PI / 2 - 0.015}
-        target={target}
-      />
-      <Rig preset={preset} nonce={nonce} target={target} distance={distance} eye={eye} run={L} />
-
-      {/* floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[L / 2, 0, 600]} receiveShadow={false}>
-        <planeGeometry args={[L + 2400, 5000]} />
-        <meshStandardMaterial color={wallCol} roughness={1} />
-      </mesh>
-
-      {/* back wall as a thin plane */}
-      {show.walls && (
-        <mesh position={[L / 2, cfg.ceiling / 2, -30]}>
-          <boxGeometry args={[L + 400, cfg.ceiling, 60]} />
-          <meshStandardMaterial color={wallCol} roughness={1} />
-        </mesh>
-      )}
-
-      {!reduced && (
-        <ContactShadows position={[0, 2, 600]} scale={Math.max(L, 3000) * 2}
-                        blur={2.6} opacity={0.3} far={1200} resolution={1024} color="#000000" />
-      )}
-
-      {/* cabinets */}
       {lay.placed.map((p) => {
         const { unit, x } = p;
         if (unit.kind === 'wall' && !show.wallCabs) return null;
@@ -267,11 +228,9 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
           return (
             <mesh key={p.item.uid}
                   position={[x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}
-                  onClick={pick}
-                  onPointerOver={(e) => { e.stopPropagation(); setHovered(p); }}
-                  onPointerOut={() => setHovered(null)}>
+                  {...evt}>
               <boxGeometry args={[unit.width, unit.height, unit.depth]} />
-              <meshStandardMaterial color={sel ? '#BBD3E6' : '#B9BDC0'} roughness={0.55}
+              <meshStandardMaterial color={colour} roughness={0.55}
                                     transparent={ghost} opacity={ghost ? 0.18 : 1} />
             </mesh>
           );
@@ -312,6 +271,91 @@ function Room({ lay, cfg, selected, setSelected, setHovered, show, preset, nonce
   );
 }
 
+/* --- scene --------------------------------------------------------------- */
+
+function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset, nonce,
+                eye, reduced, warnMap }) {
+  const wallCol = cssVar('--sunken', '#EAE7E1');
+
+  /* One wall, or the joined run of an L or a U. Each entry carries where its
+     corner is and how far it is turned, worked out by the room layout. The
+     rotations are the ones that leave every door facing into the room. */
+  const runs = room && room.length
+    ? room.map((r) => ({ lay: r.lay, origin: r.origin, rot: r.rot }))
+    : [{ lay, origin: [0, 0], rot: 0 }];
+
+  /* The room's footprint, so the floor, the back wall and the camera all
+     cover the whole thing rather than the first wall. */
+  const span = useMemo(() => {
+    let x = 0;
+    let z = 0;
+    for (const r of runs) {
+      const L = r.lay.wall.length;
+      // A turned run reaches out in z instead of x.
+      if (Math.abs(r.rot) < 0.01) x = Math.max(x, r.origin[0] + L);
+      else { x = Math.max(x, r.origin[0]); z = Math.max(z, L); }
+    }
+    return { x: Math.max(x, 1200), z: Math.max(z, 900) };
+  }, [room, lay]);
+
+  const target = useMemo(() => [span.x / 2, 900, span.z / 2], [span]);
+  const distance = useMemo(() => {
+    const reach = Math.max(span.x, span.z, cfg.ceiling, 1800);
+    return (reach * 0.5 * 1.6) / Math.sin(THREE.MathUtils.degToRad(35) / 2);
+  }, [span, cfg.ceiling]);
+
+  return (
+    <>
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[span.x * 0.6, 3400, 2600]} intensity={1.1} />
+      <directionalLight position={[-1800, 1500, -1400]} intensity={0.4} />
+
+      <OrbitControls
+        makeDefault enableDamping dampingFactor={0.09}
+        minDistance={eye ? 1 : 700} maxDistance={eye ? 12000 : 20000}
+        maxPolarAngle={Math.PI / 2 - 0.015}
+        target={target}
+      />
+      <Rig preset={preset} nonce={nonce} target={target} distance={distance} eye={eye} run={span.x} />
+
+      {/* floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[span.x / 2, 0, span.z / 2 + 300]}>
+        <planeGeometry args={[span.x + 2400, span.z + 5000]} />
+        <meshStandardMaterial color={wallCol} roughness={1} />
+      </mesh>
+
+      {/* The walls the cabinets stand against, one per run.
+
+          Each is a plane facing into the room and drawn on one side only, so
+          the wall you are standing behind disappears instead of hiding the
+          kitchen. In an L that is the difference between seeing the corner
+          and looking at the back of a slab. */}
+      {show.walls && runs.map((r, i) => (
+        <group key={i} position={[r.origin[0], 0, r.origin[1]]} rotation={[0, r.rot, 0]}>
+          <mesh position={[r.lay.wall.length / 2, cfg.ceiling / 2, -20]}>
+            <planeGeometry args={[r.lay.wall.length + 400, cfg.ceiling]} />
+            <meshStandardMaterial color={wallCol} roughness={1} side={THREE.FrontSide} />
+          </mesh>
+        </group>
+      ))}
+
+      {!reduced && (
+        <ContactShadows position={[span.x / 2, 2, span.z / 2 + 300]}
+                        scale={Math.max(span.x, span.z, 3000) * 2}
+                        blur={2.6} opacity={0.3} far={1200} resolution={1024} color="#000000" />
+      )}
+
+      {runs.map((r, i) => (
+        <group key={r.lay.wall.id ?? i}
+               position={[r.origin[0], 0, r.origin[1]]} rotation={[0, r.rot, 0]}>
+          <WallRun lay={r.lay} cfg={cfg} selected={selected} setSelected={setSelected}
+                   setHovered={setHovered} show={show} warnMap={warnMap} />
+        </group>
+      ))}
+    </>
+  );
+}
+
 export default function Kitchen3D(props) {
   const [bg, setBg] = useState('#F4F2EE');
   useEffect(() => {
@@ -324,11 +368,14 @@ export default function Kitchen3D(props) {
 
   const warnMap = useMemo(() => {
     const m = new Map();
-    for (const p of props.lay.placed) {
-      if (unitWarnings(p, props.lay, props.cfg).length) m.set(p.item.uid, true);
+    const lays = props.room && props.room.length ? props.room.map((r) => r.lay) : [props.lay];
+    for (const lay of lays) {
+      for (const p of lay.placed) {
+        if (unitWarnings(p, lay, props.cfg).length) m.set(p.item.uid, true);
+      }
     }
     return m;
-  }, [props.lay, props.cfg]);
+  }, [props.lay, props.room, props.cfg]);
 
   return (
     <Canvas
