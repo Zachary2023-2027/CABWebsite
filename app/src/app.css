@@ -644,7 +644,7 @@ body {
 .ph-doc { font-size: 8.5pt; letter-spacing: .06em; text-transform: uppercase; }
 .ph-date { font-family: var(--font-mono); font-size: 8pt; }
 
-.page-body { flex: 1; min-height: 0; }
+.page-body { flex: 1; min-height: 0; overflow: hidden; }
 
 .page-foot {
   display: flex; justify-content: space-between; gap: 8mm;
@@ -778,6 +778,12 @@ body {
 @media (max-width: 640px) {
   .app-top .save-state { order: 99; width: 100%; }
   .brand-input { max-width: 55vw; }
+}
+
+/* The project name is an editable field that does not look like one, so it
+   never picked up the control height. On a phone it was a 28px target. */
+@media (pointer: coarse) {
+  .brand-input { min-height: var(--touch-min); }
 }
 
 /* ---------------------------------------------------------------------------
@@ -952,3 +958,42 @@ body {
   display: inline-block; width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent); margin-left: var(--sp-2); vertical-align: middle;
 }
+
+/* Parts that cannot be cut from any sheet you stock. Not a waste warning: the
+   kitchen as drawn cannot be built until one of them changes. */
+.oversize-card { display: grid; gap: var(--sp-3); border-color: var(--error); }
+.oversize-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.oversize-list li {
+  display: grid; gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--sunken); border-radius: var(--r-1);
+}
+.oversize-list .note { margin: 0; }
+.oversize-card > .note { margin: 0; }
+
+/* The one stat in the strip that is a problem rather than a number. */
+.stat--error {
+  background: var(--error-weak, var(--sunken));
+  border: var(--bw) solid var(--error);
+  border-radius: var(--r-1);
+  padding: 0 var(--sp-2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.stat--error .stat__value, .stat--error .stat__label { color: var(--error); }
+
+/* Elevation pages in the print pack. The drawing gets most of the page and
+   the schedule sits under it, because the drawing is the thing you read from
+   across the workshop and the numbers are what you check when you get there. */
+/* The drawing takes what is left after the schedule, and never more, or the
+   last line of the page walks off the paper. */
+.p-plan { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto; gap: 2mm; min-height: 0; }
+.p-plan > b { font-size: 9pt; }
+.p-elev { min-height: 0; display: flex; overflow: hidden; }
+.p-elev .elevation { width: 100%; height: 100%; max-height: 105mm; }
+.p-warns { font-size: 7.4pt; }
+.p-warns b { display: block; margin-bottom: 1mm; }
+.p-warns ul { margin: 0; padding-left: 4mm; }
+.p-plan .p-table { font-size: 7.4pt; }

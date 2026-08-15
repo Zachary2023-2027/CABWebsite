@@ -15,7 +15,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
-import { ROOM_SHAPES } from './project.js';
+import { ROOM_SHAPES, allParts } from './project.js';
 
 const KEY = 'kcb.store.v2';
 const SCHEMA = 2;
@@ -143,11 +143,7 @@ export function hydrate(raw) {
       cost: Number.isFinite(Number(e.cost)) ? Number(e.cost) : 0,
     })) : [];
 
-  return {
-    id: raw.id || newId(),
-    name: String(raw.name || p.name || 'Untitled kitchen'),
-    savedAt: Number(raw.savedAt) || Date.now(),
-    project: {
+  const project = {
       name: String(p.name || raw.name || 'Untitled kitchen'),
       cfg: { ...PROJECT, ...(p.cfg && typeof p.cfg === 'object' ? p.cfg : {}) },
       walls,
@@ -157,8 +153,14 @@ export function hydrate(raw) {
          is what it was, so that is what it opens as. */
       room: ROOM_SHAPES.some((s) => s.id === p.room) ? p.room : 'straight',
       activeWall: walls.some((w) => w.id === p.activeWall) ? p.activeWall : walls[0].id,
-    },
-    cut: Array.isArray(raw.cut) ? raw.cut.filter((c) => typeof c === 'string') : [],
+  };
+
+  return {
+    id: raw.id || newId(),
+    name: String(raw.name || p.name || 'Untitled kitchen'),
+    savedAt: Number(raw.savedAt) || Date.now(),
+    project,
+    cut: migrateCut(raw.cut, project),
     prices: mergePrices(raw.prices),
     quoted: typeof raw.quoted === 'string' ? raw.quoted : '',
   };
@@ -199,6 +201,32 @@ function cleanSettings(s) {
   return out;
 }
 
+/**
+ * Cut ticks used to be stored against part codes, which move when you delete
+ * a cabinet. They are stored against a stable key now. A file written before
+ * that carries codes, and at the moment it is opened the codes still line up
+ * with the project as saved, so this is the one and only chance to translate
+ * them. After this the ticks stay on the right parts for good.
+ */
+function migrateCut(raw, project) {
+  if (!Array.isArray(raw)) return [];
+  const stored = new Set(raw.filter((c) => typeof c === 'string'));
+  if (!stored.size) return [];
+
+  let parts;
+  try { parts = allParts(project); } catch { return [...stored].filter((c) => c.includes('/')); }
+  const byCode = new Map(parts.map((q) => [q.code, q.key]));
+  const valid = new Set(parts.map((q) => q.key));
+
+  const out = new Set();
+  for (const c of stored) {
+    if (valid.has(c)) out.add(c);                 // already a key
+    else if (byCode.has(c)) out.add(byCode.get(c)); // an old code, translate it
+    // anything else refers to a part that no longer exists, so it is dropped
+  }
+  return [...out];
+}
+
 function mergePrices(incoming) {
   /* Merge onto the seeded list, not onto whatever this session has been
      edited to, so opening a saved kitchen gives you the prices you saved. */
@@ -232,16 +260,27 @@ function mergePrices(incoming) {
 const fileName = (name) =>
   `${String(name).trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}.kcb.json`;
 
-export function exportFile(snap) {
-  const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' });
+/**
+ * Hand the browser a file. The anchor has to be in the document and the
+ * object URL has to outlive the click, or the download is cancelled before
+ * it starts in some browsers.
+ */
+export function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = fileName(snap.name);
+  a.download = name;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function exportFile(snap) {
+  downloadBlob(
+    new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' }),
+    fileName(snap.name),
+  );
 }
 
 export function importFile(file) {

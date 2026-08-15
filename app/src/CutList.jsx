@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { allParts } from './project.js';
-
-const sizeOf = (p) => `${p.L} x ${p.W} x ${p.T}`;
+import { nestProject } from './nesting.js';
+import { downloadBlob } from './storage.js';
+import { Oversize } from './Nesting.jsx';
 
 function csv(rows) {
   const head = ['Part code', 'Cabinet', 'Wall', 'Name', 'Length', 'Width', 'Thickness', 'Material', 'Edging'];
@@ -16,6 +17,7 @@ function csv(rows) {
 
 export default function CutList({ project, cut, setCut, onWorkshop }) {
   const parts = useMemo(() => allParts(project), [project]);
+  const oversize = useMemo(() => nestProject(parts).oversize, [parts]);
   const [group, setGroup] = useState('cabinet');   // cabinet | material | flat
   const [fCab, setFCab] = useState('all');
   const [fMat, setFMat] = useState('all');
@@ -32,7 +34,7 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
     (fMat === 'all' || p.material === fMat) &&
     (fThk === 'all' || String(p.T) === fThk)), [parts, fCab, fMat, fThk]);
 
-  const done = rows.filter((p) => cut.has(p.code)).length;
+  const done = rows.filter((p) => cut.has(p.key)).length;
   const areaM2 = rows.reduce((a, p) => a + (p.L * p.W) / 1e6, 0);
   const edgeM = rows.reduce((a, p) => {
     if (!p.edging) return a;
@@ -41,15 +43,15 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
     return a + p.W / 1000;
   }, 0);
 
-  const toggle = (code) => setCut((prev) => {
+  const toggle = (key) => setCut((prev) => {
     const next = new Set(prev);
-    if (next.has(code)) next.delete(code); else next.add(code);
+    if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   });
   const toggleAll = (list) => setCut((prev) => {
     const next = new Set(prev);
-    const allDone = list.every((p) => next.has(p.code));
-    for (const p of list) { if (allDone) next.delete(p.code); else next.add(p.code); }
+    const allDone = list.every((p) => next.has(p.key));
+    for (const p of list) { if (allDone) next.delete(p.key); else next.add(p.key); }
     return next;
   });
 
@@ -65,14 +67,10 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
     return [...m.entries()];
   }, [rows, group]);
 
-  const download = () => {
-    const blob = new Blob([csv(rows)], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${project.name.replace(/\s+/g, '-').toLowerCase()}-cut-list.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const download = () => downloadBlob(
+    new Blob([csv(rows)], { type: 'text/csv;charset=utf-8' }),
+    `${project.name.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}-cut-list.csv`,
+  );
 
   const action = (
     <div className="inline">
@@ -86,6 +84,8 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
 
   return (
     <Screen title="Cut list" context="Every part in the project. Tick them off as you cut." action={action} wide>
+      <Oversize list={oversize} />
+
       <div className="filters">
         <div className="seg" role="group" aria-label="Grouping">
           {[['cabinet', 'By cabinet'], ['material', 'By material'], ['flat', 'Flat']].map(([k, l]) => (
@@ -121,7 +121,7 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
               <div className="cut-group-head">
                 <span className="field__label">{name}</span>
                 <span className="cut-group-meta num">
-                  {list.filter((p) => cut.has(p.code)).length} / {list.length}
+                  {list.filter((p) => cut.has(p.key)).length} / {list.length}
                 </span>
                 <button className="btn btn--ghost" onClick={() => toggleAll(list)}>Toggle all</button>
               </div>
@@ -137,10 +137,10 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
                   </thead>
                   <tbody>
                     {list.map((p) => (
-                      <tr key={p.code} data-done={cut.has(p.code)}>
+                      <tr key={p.code} data-done={cut.has(p.key)}>
                         <td>
                           <label className="check check--target">
-                            <input type="checkbox" checked={cut.has(p.code)} onChange={() => toggle(p.code)}
+                            <input type="checkbox" checked={cut.has(p.key)} onChange={() => toggle(p.key)}
                                    aria-label={`Mark ${p.code} cut`} />
                             <span className="check__box">
                               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"

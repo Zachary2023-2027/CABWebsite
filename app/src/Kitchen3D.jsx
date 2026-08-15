@@ -363,7 +363,12 @@ export default function Kitchen3D(props) {
     read();
     const mo = new MutationObserver(read);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => mo.disconnect();
+    /* On System there is no data-theme to watch, so the observer never fires
+       and the canvas keeps painting the old background after the machine
+       switches to dark. The single cabinet viewer already listens for this. */
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', read);
+    return () => { mo.disconnect(); mq.removeEventListener('change', read); };
   }, []);
 
   const warnMap = useMemo(() => {

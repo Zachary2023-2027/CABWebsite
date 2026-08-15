@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Viewer, { hasWebGL } from './Viewer.jsx';
 import Planner from './Planner.jsx';
 import CutList from './CutList.jsx';
@@ -288,6 +288,64 @@ function Start({ onExample, onEmpty, saved, onOpen, onDelete, onImport, error })
   );
 }
 
+/* --- undo -----------------------------------------------------------------
+
+   Cabinets can be dragged now, and a drag is the one edit you can make
+   without meaning to. Close gaps and the optimiser move the whole wall at
+   once, which is worse. So the project keeps a history.
+
+   Steps are coalesced by time: typing a name or nudging a width produces a
+   change per keystroke, and undoing one letter at a time is not what anyone
+   wants. A pause of half a second starts a new step.
+   -------------------------------------------------------------------------- */
+
+const HISTORY = { limit: 60, coalesceMs: 500 };
+
+function useProjectHistory(project, setProjectRaw) {
+  const past = useRef([]);
+  const future = useRef([]);
+  const lastPush = useRef(0);
+  const [, bump] = useState(0);
+
+  const setProject = (updater) => setProjectRaw((prev) => {
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    if (next === prev || !prev) return next;
+    const now = Date.now();
+    if (now - lastPush.current > HISTORY.coalesceMs) {
+      past.current.push(prev);
+      if (past.current.length > HISTORY.limit) past.current.shift();
+      future.current = [];
+    }
+    lastPush.current = now;
+    bump((n) => n + 1);
+    return next;
+  });
+
+  const undo = () => setProjectRaw((prev) => {
+    if (!past.current.length) return prev;
+    future.current.push(prev);
+    lastPush.current = 0;
+    bump((n) => n + 1);
+    return past.current.pop();
+  });
+
+  const redo = () => setProjectRaw((prev) => {
+    if (!future.current.length) return prev;
+    past.current.push(prev);
+    lastPush.current = 0;
+    bump((n) => n + 1);
+    return future.current.pop();
+  });
+
+  const reset = () => { past.current = []; future.current = []; lastPush.current = 0; };
+
+  return {
+    setProject, undo, redo, reset,
+    canUndo: past.current.length > 0,
+    canRedo: future.current.length > 0,
+  };
+}
+
 /* --- root ----------------------------------------------------------------- */
 
 export default function App() {
@@ -296,10 +354,21 @@ export default function App() {
     if (theme === 'system') delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = theme;
   }, [theme]);
-  const resolvedTheme = theme === 'system'
-    ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : theme;
+  /* Follow the machine while the choice is System. Read once at render and
+     the 3D keeps the colours it started with when the machine changes. */
+  const [systemDark, setSystemDark] = useState(
+    () => matchMedia('(prefers-color-scheme: dark)').matches);
+  useEffect(() => {
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    const on = (e) => setSystemDark(e.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
 
-  const [project, setProject] = useState(null);
+  const [project, setProjectRaw] = useState(null);
+  const history = useProjectHistory(project, setProjectRaw);
+  const setProject = history.setProject;
   const [screen, setScreen] = useState('planner');
   const [arrangement, setArrangement] = useState('drawer');
   const [detailUid, setDetailUid] = useState(null);
@@ -339,7 +408,8 @@ export default function App() {
   }, [project, cut, prices, quoted, projectId]);
 
   const openSnapshot = (snap) => {
-    setProject(snap.project);
+    history.reset();
+    setProjectRaw(snap.project);
     setProjectId(snap.id);
     setCut(new Set(snap.cut));
     setQuoted(snap.quoted);
@@ -349,6 +419,19 @@ export default function App() {
   };
 
   const startNew = (p) => openSnapshot(snapshot({ name: p.name, project: p, cut: new Set(), prices, quoted: '' }));
+
+  useEffect(() => {
+    const key = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const el = e.target;
+      // Let a text field keep its own undo.
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+      e.preventDefault();
+      if (e.shiftKey) history.redo(); else history.undo();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  });
 
   const webgl = useMemo(() => hasWebGL(), []);
   const units = useMemo(() => (project ? allUnits(project) : []), [project]);
@@ -457,6 +540,13 @@ export default function App() {
               <span className="stat__label">Cost, estimate</span>
               <span className="stat__value">{money(tot.cost)}</span>
             </div>
+            {tot.oversize?.length > 0 && (
+              <button className="stat stat--error" onClick={() => setScreen('nesting')}
+                      title="These parts will not come off any sheet you stock. Nesting explains each one.">
+                <span className="stat__label">Will not fit</span>
+                <span className="stat__value">{tot.oversize.length}</span>
+              </button>
+            )}
           </div>
         )}
         <div className="right">
@@ -474,6 +564,12 @@ export default function App() {
               </div>
             </label>
           )}
+          <div className="seg undo-seg" role="group" aria-label="Undo">
+            <button className="seg__item" onClick={history.undo} disabled={!history.canUndo}
+                    title="Undo the last change. Ctrl or Cmd and Z">Undo</button>
+            <button className="seg__item" onClick={history.redo} disabled={!history.canRedo}
+                    title="Redo. Ctrl or Cmd, Shift and Z">Redo</button>
+          </div>
           <button className="btn btn--ghost" title="Download a project file you can keep or move"
                   onClick={() => exportFile(snapshot({ id: projectId, name: project.name, project, cut, prices, quoted }))}>
             Export file

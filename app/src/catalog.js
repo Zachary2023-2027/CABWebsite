@@ -239,7 +239,23 @@ export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
 
 /* --- carcass builder ------------------------------------------------------ */
 
-const mkPart = (o) => ({ drawer: null, tone: toneFor(o.material), ...o });
+/* Cut sizes are rounded here and nowhere else.
+
+   Type a thickness of 18.2 and the arithmetic that follows produces numbers
+   like 190.60000000000002. That is harmless in the geometry, where it is a
+   ten thousandth of a millimetre, and not harmless at all on the workshop
+   screen, where the whole point is one clear number you set the saw to.
+
+   A tenth of a millimetre is finer than any saw and far below the 3.2mm
+   kerf, so rounding here cannot move a part into or out of a sheet in any
+   way that matters, and it means the cut list, the nest, the print pack and
+   the workshop view are all quoting the same figure. */
+const round1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
+
+const mkPart = (o) => ({
+  drawer: null, tone: toneFor(o.material), ...o,
+  L: round1(o.L), W: round1(o.W), T: round1(o.T),
+});
 
 function carcassHeightFor(kind, P) {
   if (kind === 'wall') return P.wallCabHeight;

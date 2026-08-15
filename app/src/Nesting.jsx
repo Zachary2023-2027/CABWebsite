@@ -39,13 +39,50 @@ function SheetSvg({ sheet, highlight, onHover }) {
   );
 }
 
+/* Parts that will not come off any sheet you stock. This is not a warning
+   about waste, it is the kitchen not being cuttable, so it goes at the top
+   and says exactly what sheet each one would need. */
+export function Oversize({ list }) {
+  if (!list?.length) return null;
+  return (
+    <div className="card oversize-card">
+      <div className="warn-inline warn-inline--error">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M8 2.5l6 11H2z" strokeLinejoin="round" /><path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
+        </svg>
+        <span>
+          {list.length} part{list.length === 1 ? '' : 's'} will not fit any sheet you stock, so
+          {list.length === 1 ? ' it is' : ' they are'} not in the layouts, the sheet count or the cost.
+        </span>
+      </div>
+      <ul className="oversize-list">
+        {list.map((o) => (
+          <li key={o.code}>
+            <span className="code">{o.code}</span>
+            <span>{o.name}{o.unitLabel ? `, ${o.unitLabel}` : ''}</span>
+            <span className="num">{o.L} x {o.W}</span>
+            <span className="note">
+              needs a sheet of at least {o.needs[0]} x {o.needs[1]} after {NEST.trim}mm trim.
+              Your {o.material} sheet is {o.sheet[0]} x {o.sheet[1]}.
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="note">
+        Either add a bigger sheet in Settings, or make the part smaller. A part exactly as
+        long as the sheet will never fit, because the edges are trimmed first.
+      </p>
+    </div>
+  );
+}
+
 export default function Nesting({ project }) {
   const parts = useMemo(() => allParts(project), [project]);
   const nest = useMemo(() => nestProject(parts), [parts]);
   const [hover, setHover] = useState(null);
   const [openSeq, setOpenSeq] = useState(null);
 
-  if (!nest.groups.length) {
+  if (!nest.groups.length && !nest.oversize.length) {
     return (
       <Screen title="Nesting" context="Sheet layouts for every material.">
         <Empty text="No parts to nest yet. Add cabinets in the planner." />
@@ -64,6 +101,8 @@ export default function Nesting({ project }) {
 
   return (
     <Screen title="Nesting" context="Shelf packed so every cut runs the full width of the piece. Follow the sequence at the saw." action={action} wide>
+      <Oversize list={nest.oversize} />
+
       {nest.groups.map((g) => (
         <section key={g.material} className="nest-group">
           <div className="nest-group-head">
@@ -110,14 +149,6 @@ export default function Nesting({ project }) {
                   </ol>
                 )}
 
-                {s.oversize?.length > 0 && (
-                  <div className="warn-inline warn-inline--error">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-                      <path d="M8 2.5l6 11H2z" strokeLinejoin="round" /><path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
-                    </svg>
-                    <span>{s.oversize.map((p) => p.code).join(', ')} does not fit this sheet size.</span>
-                  </div>
-                )}
               </article>
             ))}
           </div>

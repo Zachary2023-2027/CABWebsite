@@ -10,7 +10,11 @@
    =========================================================================== */
 
 import { useMemo, useState } from 'react';
-import { allFittings, allParts, allUnits, money, projectExtras, totals } from './project.js';
+import {
+  allFittings, allParts, allUnits, layoutFor, money, projectExtras, roomOffsets, totals,
+  unitWarnings, wallWarnings,
+} from './project.js';
+import Elevation from './Elevation.jsx';
 import { NEST, cutSequence, nestProject } from './nesting.js';
 import { HOLE_STYLE, drillUnit } from './drilling.js';
 import { PRICES, sheetFor } from './catalog.js';
@@ -107,6 +111,17 @@ function buildPages(project, docs, cut) {
   const parts = allParts(project);
   const nest = nestProject(parts);
 
+  /* The elevations come first, because they are the pages that say where
+     everything goes. A pack of cut sizes with no plan is a pile of board. */
+  if (docs.plan) {
+    const offsets = roomOffsets(project);
+    for (const wall of project.walls) {
+      const lay = layoutFor(project, wall, offsets);
+      if (!lay.placed.length) continue;
+      pages.push({ doc: 'Elevations', kind: 'plan', lay, wall });
+    }
+  }
+
   if (docs.cutlist && parts.length) {
     for (const rows of chunk(parts, ROWS_PER_PAGE)) {
       pages.push({ doc: 'Cut list', kind: 'cutlist', rows });
@@ -138,6 +153,60 @@ function buildPages(project, docs, cut) {
 }
 
 function PageBody({ page, project, cut }) {
+  if (page.kind === 'plan') {
+    const { lay, wall } = page;
+    const rows = lay.placed.filter((p) => p.label);
+    /* The drawing outlines a cabinet the app is unhappy about. On screen you
+       hover it to find out why; on paper there is nothing to hover, so the
+       reasons are listed. */
+    const warns = [
+      ...wallWarnings(lay, project).map((w) => w.text),
+      ...rows.flatMap((p) => unitWarnings(p, lay, project.cfg)
+        .map((w) => `${p.label}, ${p.unit.family.name}: ${w}`)),
+    ];
+    return (
+      <div className="p-plan">
+        <b>{wall.name}, {wall.length}mm</b>
+        <div className="p-elev">
+          <Elevation lay={lay} cfg={project.cfg} selected={null} selDrawer={null}
+                     onSelect={() => {}} onHover={() => {}} />
+        </div>
+        <table className="p-table">
+          <thead>
+            <tr>
+              <th>No</th><th>Cabinet</th><th className="p-n">Along</th>
+              <th className="p-n">Width</th><th className="p-n">Height</th>
+              <th className="p-n">Depth</th><th className="p-n">Off floor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.item.uid}>
+                <td className="p-code">{p.label}</td>
+                <td>{p.unit.family.name}</td>
+                <td className="p-n">{Math.round(p.x)}</td>
+                <td className="p-n">{p.unit.width}</td>
+                <td className="p-n">{p.unit.height}</td>
+                <td className="p-n">{p.unit.depth}</td>
+                <td className="p-n">{p.unit.mountY}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {warns.length > 0 && (
+          <div className="p-warns">
+            <b>Check before you cut</b>
+            <ul>{warns.map((w, i) => <li key={i}>{w}</li>)}</ul>
+          </div>
+        )}
+        <p className="p-est">
+          Along is the distance from the left hand end of the wall to the left hand side
+          of the cabinet. A cabinet outlined on the drawing has a note against it below.
+        </p>
+      </div>
+    );
+  }
+
   if (page.kind === 'cutlist') {
     return (
       <table className="p-table">
@@ -326,7 +395,9 @@ function PageBody({ page, project, cut }) {
 /* --- screen --------------------------------------------------------------- */
 
 export default function Print({ project, cut }) {
-  const [docs, setDocs] = useState({ cutlist: true, sheets: true, drilling: false, shopping: true });
+  const [docs, setDocs] = useState({
+    plan: true, cutlist: true, sheets: true, drilling: false, shopping: true,
+  });
   const [size, setSize] = useState('a4');
 
   const pages = useMemo(() => buildPages(project, docs, cut), [project, docs, cut]);
@@ -353,8 +424,8 @@ export default function Print({ project, cut }) {
       </header>
 
       <div className="print-controls no-print">
-        {[['cutlist', 'Cut list'], ['sheets', 'Sheet layouts'], ['drilling', 'Drilling schedule'],
-          ['shopping', 'Shopping list']].map(([k, label]) => (
+        {[['plan', 'Elevations'], ['cutlist', 'Cut list'], ['sheets', 'Sheet layouts'],
+          ['drilling', 'Drilling schedule'], ['shopping', 'Shopping list']].map(([k, label]) => (
           <label className="check" key={k}>
             <input type="checkbox" checked={docs[k]} onChange={() => toggle(k)} />
             <span className="check__box">

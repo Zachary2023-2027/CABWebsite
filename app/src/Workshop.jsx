@@ -20,13 +20,13 @@ export default function Workshop({ project, cut, setCut, onExit }) {
   const touch = useRef(null);
 
   const list = useMemo(
-    () => (onlyRemaining ? all.filter((p) => !cut.has(p.code)) : all),
+    () => (onlyRemaining ? all.filter((p) => !cut.has(p.key)) : all),
     [all, cut, onlyRemaining],
   );
 
   const idx = Math.min(i, Math.max(0, list.length - 1));
   const part = list[idx];
-  const doneCount = all.filter((p) => cut.has(p.code)).length;
+  const doneCount = all.filter((p) => cut.has(p.key)).length;
 
   const go = (d) => {
     setSwipe(0);
@@ -37,7 +37,7 @@ export default function Workshop({ project, cut, setCut, onExit }) {
     if (!part) return;
     setCut((prev) => {
       const next = new Set(prev);
-      next.add(part.code);
+      next.add(part.key);
       return next;
     });
     // In remaining mode the list shrinks under us, so staying put shows the
@@ -49,7 +49,7 @@ export default function Workshop({ project, cut, setCut, onExit }) {
     if (!part) return;
     setCut((prev) => {
       const next = new Set(prev);
-      next.delete(part.code);
+      next.delete(part.key);
       return next;
     });
   };
@@ -102,7 +102,7 @@ export default function Workshop({ project, cut, setCut, onExit }) {
     );
   }
 
-  const isCut = cut.has(part.code);
+  const isCut = cut.has(part.key);
 
   return (
     <div className="ws" onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}>

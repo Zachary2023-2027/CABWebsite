@@ -29,10 +29,17 @@ export function nestMaterial(material, parts, cfg = NEST) {
   const SW = sheet.size[0] - cfg.trim * 2;
   const SH = sheet.size[1] - cfg.trim * 2;
 
-  // Longest edge first. Tall shelves fill from the bottom up.
+  // Sorted by short edge, so parts of a similar width share a shelf and the
+  // strips come off the sheet in a sensible order. Measured against longest
+  // edge first, this packs the example kitchen into 26 sheets instead of 27.
+  /* The sort keys are their own fields. They used to be written over L,
+     which left W holding the original value: a part 568 long and 2084 wide
+     came out of this as 2084 by 2084, a square that fits no sheet at all, so
+     it was quietly dropped from the plan. Every pantry back in the example
+     kitchen was going missing exactly this way. */
   const queue = parts
-    .map((p, i) => ({ ...p, seq: i, L: Math.max(p.L, p.W), S: Math.min(p.L, p.W) }))
-    .sort((a, b) => b.S - a.S || b.L - a.L);
+    .map((p, i) => ({ ...p, seq: i, long: Math.max(p.L, p.W), short: Math.min(p.L, p.W) }))
+    .sort((a, b) => b.short - a.short || b.long - a.long);
 
   const sheets = [];
   const newSheet = () => {
@@ -41,20 +48,32 @@ export function nestMaterial(material, parts, cfg = NEST) {
     return s;
   };
 
+  /* Parts too big for the stock. A 2400 long part will not come out of a
+     2400 sheet once you have trimmed the edges, which is easy to do by
+     accident and used to be handled by opening a fresh sheet, failing to
+     place the part on that either, and leaving an empty sheet behind. You
+     were then charged for a sheet with nothing on it, and the part quietly
+     vanished from the cut plan. They are collected instead and reported. */
+  const oversize = [];
+
   for (const p of queue) {
     let placed = false;
 
     for (const s of sheets) {
       if (tryPlace(s, p, SW, SH, cfg)) { placed = true; break; }
     }
-    if (!placed) {
-      const s = newSheet();
-      if (!tryPlace(s, p, SW, SH, cfg)) {
-        // Part does not fit any sheet of this material at all.
-        s.oversize = s.oversize || [];
-        s.oversize.push(p);
-      }
-    }
+    if (placed) continue;
+
+    const s = newSheet();
+    if (tryPlace(s, p, SW, SH, cfg)) continue;
+
+    sheets.pop();
+    oversize.push({
+      code: p.code, name: p.name, material, L: p.L, W: p.W, T: p.T,
+      unitLabel: p.unitLabel,
+      needs: [Math.round(Math.max(p.L, p.W) + cfg.trim * 2), Math.round(Math.min(p.L, p.W) + cfg.trim * 2)],
+      sheet: sheet.size,
+    });
   }
 
   for (const s of sheets) {
@@ -64,7 +83,7 @@ export function nestMaterial(material, parts, cfg = NEST) {
     s.offcuts = offcutsFor(s, SW, SH, cfg);
   }
 
-  return sheets;
+  return { sheets, oversize };
 }
 
 function tryPlace(sheet, p, SW, SH, cfg) {
@@ -135,9 +154,13 @@ export function nestProject(parts, cfg = NEST) {
   }
 
   const groups = [];
+  const oversize = [];
   for (const [material, list] of byMaterial) {
-    const sheets = nestMaterial(material, list, cfg);
-    if (!sheets) continue;
+    const res = nestMaterial(material, list, cfg);
+    if (!res) continue;
+    const { sheets } = res;
+    oversize.push(...res.oversize);
+    if (!sheets.length) continue;
     const totalArea = sheets.reduce((a, s) => a + area(s.size[0], s.size[1]), 0);
     const usedArea = sheets.reduce((a, s) => a + s.usedArea, 0);
     groups.push({
@@ -152,6 +175,9 @@ export function nestProject(parts, cfg = NEST) {
 
   return {
     groups,
+    /* Parts that will not come off any sheet you stock. Nothing downstream
+       can quietly ignore this: it means the kitchen as drawn cannot be cut. */
+    oversize,
     sheets: groups.reduce((a, g) => a + g.count, 0),
     cost: groups.reduce((a, g) => a + g.cost, 0),
     wastePct: groups.length

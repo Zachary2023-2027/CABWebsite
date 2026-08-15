@@ -133,7 +133,7 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
       baseX = Math.max(baseX, x + unit.width);
     }
 
-    placed.push({ item, unit, x, where, label, pinned: pinned !== null });
+    placed.push({ item, unit, x, where, label, codeId, pinned: pinned !== null });
   }
 
   return {
@@ -534,6 +534,7 @@ export function totals(project) {
     kickMetres: kickMm / 1000,
     sheets: nest.sheets,
     wastePct: nest.wastePct,
+    oversize: nest.oversize,
     boardCost: nest.cost,
     hardwareCost: cost + extras,
     extrasCost: extras,
@@ -557,7 +558,16 @@ export const money = (n) =>
 
 /* --- project wide part and fitting lists ---------------------------------- */
 
-/** Every part in the project, tagged with the cabinet and wall it belongs to. */
+/**
+ * Every part in the project, tagged with the cabinet and wall it belongs to.
+ *
+ * Each part also carries a key that survives editing. The part code contains
+ * the cabinet number, and cabinet numbers are positions in the run: delete
+ * one cabinet and every code after it shifts up. Anything remembered against
+ * a code, the cut ticks above all, would then be pointing at a different
+ * piece of board without saying so. The key is built from the cabinet's own
+ * id, which never changes, so a tick stays on the part you actually cut.
+ */
 export function allParts(project) {
   const out = [];
   const offsets = roomOffsets(project);
@@ -565,7 +575,11 @@ export function allParts(project) {
     for (const p of layoutFor(project, wall, offsets).placed) {
       if (!p.unit.parts.length) continue;
       for (const part of p.unit.parts) {
-        out.push({ ...part, unitId: p.item.uid, unitLabel: p.label, wallId: wall.id, wallName: wall.name });
+        out.push({
+          ...part,
+          key: `${p.item.uid}/${part.code.slice(p.codeId.length + 1)}`,
+          unitId: p.item.uid, unitLabel: p.label, wallId: wall.id, wallName: wall.name,
+        });
       }
     }
   }
