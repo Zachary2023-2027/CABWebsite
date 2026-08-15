@@ -1,6 +1,18 @@
 /* ===========================================================================
-   Project model. Walls hold an ordered run of units. Positions are derived,
-   never stored, so reordering or resizing a cabinet moves everything after it.
+   Project model.
+
+   A wall holds an ordered run of units. A unit with no position of its own
+   flows: it lands wherever the run has got to, so reordering or resizing a
+   cabinet moves everything after it, which is what you want while you are
+   still deciding what goes where.
+
+   Drag one and it pins: from then on it stays at the millimetre you put it
+   at and the flow works around it. Both kinds live in the same run, and
+   Close gaps unpins the lot and packs them back together.
+
+   Nothing else in the app knows about this. Positions never reach the cut
+   list, the nest or the drilling, because where a cabinet stands does not
+   change what it is made of.
    =========================================================================== */
 
 import { FAMILY, PRICES, PROJECT, buildUnit, unitCost } from './catalog.js';
@@ -103,12 +115,25 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
     const unit = buildUnit(codeId, item.familyId, item.settings, cfg);
     const where = occupies(unit.kind, unit.fullHeight);
 
-    let x;
-    if (where === 'both') { x = Math.max(baseX, wallX); baseX = wallX = x + unit.width; }
-    else if (where === 'wall') { x = wallX; wallX += unit.width; }
-    else { x = baseX; baseX += unit.width; }
+    /* A pinned unit sits where you put it. The cursor still advances past
+       it, so anything flowing after it carries on from its right hand edge
+       rather than being drawn straight through it. */
+    const raw = Number(item.settings?.x);
+    const pinned = Number.isFinite(raw) ? Math.max(0, raw) : null;
 
-    placed.push({ item, unit, x, where, label });
+    let x;
+    if (where === 'both') {
+      x = pinned ?? Math.max(baseX, wallX);
+      baseX = wallX = Math.max(baseX, wallX, x + unit.width);
+    } else if (where === 'wall') {
+      x = pinned ?? wallX;
+      wallX = Math.max(wallX, x + unit.width);
+    } else {
+      x = pinned ?? baseX;
+      baseX = Math.max(baseX, x + unit.width);
+    }
+
+    placed.push({ item, unit, x, where, label, pinned: pinned !== null });
   }
 
   return {
@@ -224,6 +249,115 @@ export const looseWalls = (project) => {
 /** The corner offset a wall inherits, or zero when it is not in the run. */
 export const wallOffset = (project, wallId) => roomOffsets(project)[wallId] || 0;
 
+/* --- placing and snapping -------------------------------------------------
+
+   Dragging a cabinet to the millimetre with a finger on a tablet is not
+   going to happen, and it is not what you want anyway: cabinets butt against
+   each other and against the ends of the wall, and anything in between is a
+   gap you will have to fill later. So a drag looks for the joins that
+   matter and pulls to the nearest one.
+   ========================================================================== */
+
+export const SNAP = {
+  tolerance: 60,       // how close a join has to be before it takes hold
+  cornerPull: 400,     // a corner cabinet is pulled much harder, see below
+};
+
+/** Which run a placed unit shares with the one being dragged. */
+const sameRun = (a, b) => a === b || a === 'both' || b === 'both';
+
+/**
+ * Every position worth snapping a unit to on its wall.
+ * @returns {{x:number, kind:string, label:string, pull:number}[]}
+ */
+export function snapTargets(lay, item, unit, opts = SNAP) {
+  const where = occupies(unit.kind, unit.fullHeight);
+  const w = unit.width;
+  const out = [];
+  const add = (x, kind, label, pull = opts.tolerance) => {
+    if (Number.isFinite(x)) out.push({ x, kind, label, pull });
+  };
+
+  add(lay.startOffset, 'start', 'start of the wall');
+  add(lay.wall.length - w, 'end', 'end of the wall');
+
+  for (const p of lay.placed) {
+    if (p.item.uid === item.uid) continue;
+    if (!sameRun(where, p.where)) continue;
+    add(p.x + p.unit.width, 'butt', `right of ${p.label || p.unit.family.name}`);
+    add(p.x - w, 'butt', `left of ${p.label || p.unit.family.name}`);
+  }
+
+  /* A blind corner belongs in the corner and nowhere else, so it is pulled
+     from much further out. Dropping it anywhere near the right end of an L
+     puts it exactly in the corner, which is the only place it works. */
+  if (unit.corner) {
+    const left = (unit.settings?.blindSide || 'right') === 'left';
+    add(left ? lay.startOffset : lay.wall.length - w, 'corner', 'the corner', opts.cornerPull);
+  }
+
+  return out;
+}
+
+/**
+ * Snap a dragged position to the nearest join.
+ * @returns {{x:number, snap:{x,kind,label}|null}}
+ */
+export function snapX(lay, item, unit, rawX, opts = SNAP) {
+  const targets = snapTargets(lay, item, unit, opts);
+  let best = null;
+  for (const c of targets) {
+    const d = Math.abs(c.x - rawX);
+    if (d > c.pull) continue;
+    /* A corner beats a plain butt joint at the same distance, because that
+       is the join that decides whether the kitchen closes up at all. */
+    const rank = c.kind === 'corner' ? -1 : 0;
+    if (!best || rank < best.rank || (rank === best.rank && d < best.d)) {
+      best = { ...c, d, rank };
+    }
+  }
+  const x = Math.max(0, Math.round(best ? best.x : rawX));
+  return { x, snap: best ? { x: best.x, kind: best.kind, label: best.label } : null };
+}
+
+/**
+ * The first place a cabinet of this width will fit on a wall, or null if it
+ * will not. Used when you add one, so it lands in the first real gap rather
+ * than on top of something.
+ */
+export function firstFreeX(lay, unit, width) {
+  const where = occupies(unit.kind, unit.fullHeight);
+  const taken = lay.placed
+    .filter((p) => sameRun(where, p.where))
+    .map((p) => [p.x, p.x + p.unit.width])
+    .sort((a, b) => a[0] - b[0]);
+
+  let cursor = lay.startOffset;
+  for (const [a, b] of taken) {
+    if (a - cursor >= width) return cursor;
+    cursor = Math.max(cursor, b);
+  }
+  return cursor + width <= lay.wall.length + 0.5 ? cursor : null;
+}
+
+/** Gaps left in a run, so the wall can say where they are. */
+export function runGaps(lay, which = 'base') {
+  const spans = lay.placed
+    .filter((p) => (which === 'wall' ? p.where !== 'base' : p.where !== 'wall'))
+    .map((p) => [p.x, p.x + p.unit.width])
+    .sort((a, b) => a[0] - b[0]);
+  if (!spans.length) return [];
+
+  const gaps = [];
+  let cursor = lay.startOffset;
+  for (const [a, b] of spans) {
+    if (a - cursor > 5) gaps.push({ x: cursor, w: a - cursor });
+    cursor = Math.max(cursor, b);
+  }
+  if (lay.wall.length - cursor > 5) gaps.push({ x: cursor, w: lay.wall.length - cursor, trailing: true });
+  return gaps;
+}
+
 /* --- warnings, drawn on the cabinet itself -------------------------------- */
 
 export function unitWarnings(p, lay, cfg = PROJECT) {
@@ -233,6 +367,19 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
 
   if (x + unit.width > lay.wall.length + 0.5) {
     out.push(`Past the end of the wall by ${Math.round(x + unit.width - lay.wall.length)}mm`);
+  }
+
+  /* Two cabinets in the same run cannot occupy the same millimetres. Before
+     you could drag one this was impossible by construction, so it was never
+     worth saying. */
+  for (const q of lay.placed) {
+    if (q.item.uid === p.item.uid) continue;
+    if (!sameRun(p.where, q.where)) continue;
+    const over = Math.min(x + unit.width, q.x + q.unit.width) - Math.max(x, q.x);
+    if (over > 0.5) {
+      out.push(`Overlaps ${q.label || q.unit.family.name} by ${Math.round(over)}mm`);
+      break;
+    }
   }
 
   if ((s.shelves ?? 0) > 0) {
@@ -304,8 +451,18 @@ export function wallWarnings(lay, project) {
 
   if (lay.baseRun > lay.wall.length + 0.5) {
     out.push({ level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm against a ${lay.wall.length}mm wall. Reduce by ${Math.round(lay.baseRun - lay.wall.length)}mm.` });
-  } else if (lay.wall.length - lay.baseRun > 5 && lay.baseRun > 0) {
-    out.push({ level: 'warn', text: `${Math.round(lay.wall.length - lay.baseRun)}mm of the base run is unfilled. Add a filler or widen a cabinet.` });
+  } else {
+    /* Free placement means a gap can be anywhere, not just at the end, so
+       say where it is rather than only how much is left over. */
+    const gaps = runGaps(lay, 'base');
+    const inner = gaps.filter((g) => !g.trailing);
+    const tail = gaps.find((g) => g.trailing);
+    for (const g of inner) {
+      out.push({ level: 'warn', text: `${Math.round(g.w)}mm gap at ${Math.round(g.x)}mm along the base run. Add a filler, widen a cabinet, or press Close gaps.` });
+    }
+    if (tail && lay.baseRun > 0) {
+      out.push({ level: 'warn', text: `${Math.round(tail.w)}mm of the base run is unfilled at the end. Add a filler or widen a cabinet.` });
+    }
   }
   if (lay.wallRun > lay.wall.length + 0.5) {
     out.push({ level: 'error', text: `Wall run is ${Math.round(lay.wallRun)}mm against a ${lay.wall.length}mm wall.` });

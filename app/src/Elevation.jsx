@@ -5,14 +5,92 @@
    Hairline strokes, monospaced dimension text, restrained fills.
    =========================================================================== */
 
-import { useMemo } from 'react';
-import { unitWarnings } from './project.js';
+import { useMemo, useRef, useState } from 'react';
+import { snapX, unitWarnings } from './project.js';
 
 const S = 4;        // hairline, mm at drawing scale
 const FS = 40;      // label text
 const FS_DIM = 46;  // dimension text
 
-export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover }) {
+/* How far the pointer has to travel before a press turns into a drag. Below
+   this it is a tap, and a tap selects. In millimetres of drawing, so it
+   scales with the zoom rather than being a fixed number of pixels. */
+const DRAG_START = 40;
+
+export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover, onDrag }) {
+  /* The drag is held here and committed on release. Writing every pointer
+     move into the project would re-derive the whole kitchen, and the nest
+     with it, sixty times a second. */
+  const [drag, setDrag] = useState(null);
+  const press = useRef(null);
+  const svgRef = useRef(null);
+
+  /** Pointer position in drawing millimetres. */
+  const atPointer = (e) => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const m = svg.getScreenCTM();
+    if (!m) return null;
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    return pt.matrixTransform(m.inverse());
+  };
+
+  const startPress = (p) => (e) => {
+    if (e.button != null && e.button !== 0) return;
+    const at = atPointer(e);
+    if (!at) return;
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    press.current = { uid: p.item.uid, from: at.x, x0: p.x, moved: false, placed: p };
+  };
+
+  const movePress = (e) => {
+    const st = press.current;
+    if (!st) return;
+    const at = atPointer(e);
+    if (!at) return;
+    const delta = at.x - st.from;
+    if (!st.moved && Math.abs(delta) < DRAG_START) return;
+    st.moved = true;
+    e.preventDefault();
+    const { placed } = st;
+    const { x, snap } = snapX(lay, placed.item, placed.unit, st.x0 + delta);
+    setDrag({ uid: st.uid, x, snap, width: placed.unit.width });
+  };
+
+  const endPress = (p, drawerNo = null) => (e) => {
+    /* A drawer front sits inside its cabinet's group, so this fires twice on
+       the way up: once for the front, once for the cabinet. Without stopping
+       here the cabinet's turn immediately clears the drawer the front just
+       chose. */
+    e.stopPropagation();
+    const st = press.current;
+    press.current = null;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    if (st && st.moved) {
+      const at = atPointer(e);
+      const last = drag;
+      setDrag(null);
+      if (last) onDrag?.(st.uid, last.x);
+      else if (at) onDrag?.(st.uid, Math.round(st.x0 + (at.x - st.from)));
+      return;
+    }
+    setDrag(null);
+    onSelect(p.item.uid, drawerNo);
+  };
+
+  const cancelPress = () => { press.current = null; setDrag(null); };
+
+  /* touch-action lives on .elevation in the stylesheet. Setting it on a child
+     of an svg does nothing, and setting it once a drag has started is too
+     late, because the browser has already given the gesture to the scroller.
+
+     Where a unit is drawn right now, which is not where it is stored while
+     you are dragging it. */
+  const drawX = (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x);
+
   const wall = lay.wall;
   const CEIL = cfg.ceiling;
   const L = wall.length;
@@ -35,19 +113,20 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
   const benchSegs = useMemo(() => {
     const segs = [];
     let cur = null;
+    const at = (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x);
     const floor = lay.placed
       .filter((p) => p.where !== 'wall')
-      .sort((a, b) => a.x - b.x);
+      .sort((a, b) => at(a) - at(b));
     for (const p of floor) {
       const carries =
         p.unit.kind === 'base' || p.unit.kind === 'filler' ||
         (p.unit.cavity && !p.unit.breaksBench && !p.unit.fullHeight);
       if (!carries) { cur = null; continue; }
-      if (cur && Math.abs(cur.x + cur.w - p.x) < 0.5) cur.w += p.unit.width;
-      else { cur = { x: p.x, w: p.unit.width }; segs.push(cur); }
+      if (cur && Math.abs(cur.x + cur.w - at(p)) < 0.5) cur.w += p.unit.width;
+      else { cur = { x: at(p), w: p.unit.width }; segs.push(cur); }
     }
     return segs;
-  }, [lay]);
+  }, [lay, drag]);
 
   const rect = (x, y, w, h, fill, extra = {}) => (
     <rect x={x} y={y} width={Math.max(0, w)} height={Math.max(0, h)}
@@ -55,7 +134,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
   );
 
   return (
-    <svg className="elevation" role="img"
+    <svg className="elevation" role="img" ref={svgRef}
+         onPointerMove={movePress} onPointerCancel={cancelPress}
          aria-label={`Elevation of ${wall.name}, ${L}mm long`}
          viewBox={`${-padX} ${-padTop} ${L + padX * 2} ${CEIL + padTop + padBottom}`}
          preserveAspectRatio="xMidYMid meet">
@@ -92,22 +172,31 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
 
       {/* kickboard, one strip under each floor standing unit */}
       {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
-        <rect key={`k${p.item.uid}`} x={p.x + 20} y={Y(cfg.kick)} width={p.unit.width - 40} height={cfg.kick}
+        <rect key={`k${p.item.uid}`} x={drawX(p) + 20} y={Y(cfg.kick)} width={p.unit.width - 40} height={cfg.kick}
               fill="var(--dw-kick)" stroke="var(--dw-line)" strokeWidth={S} />
       ))}
 
       {/* units */}
       {lay.placed.map((p) => {
-        const { unit, x } = p;
+        const { unit } = p;
+        const x = drawX(p);
         const isSel = selected === p.item.uid;
+        const isDragging = drag && drag.uid === p.item.uid;
         const warned = warnMap.has(p.item.uid);
         const y = Y(unit.mountY + unit.height);
 
         const common = {
-          onClick: (e) => { e.stopPropagation(); onSelect(p.item.uid); },
+          onPointerDown: startPress(p),
+          onPointerUp: endPress(p),
+          /* Selection is decided on pointer up, but a press and release still
+             produces a click afterwards, and the background listens for that
+             to clear the selection. Swallow it here or every drag ends with
+             nothing selected. */
+          onClick: (e) => e.stopPropagation(),
           onMouseEnter: () => onHover?.(p),
           onMouseLeave: () => onHover?.(null),
-          style: { cursor: 'pointer' },
+          style: { cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none' },
+          opacity: isDragging ? 0.85 : undefined,
         };
 
         if (unit.cavity) {
@@ -167,8 +256,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
               const drawerNo = q.drawer ?? null;
               const picked = isSel && drawerNo !== null && selDrawer === drawerNo;
               return (
-                <g key={q.code}
-                   onClick={(e) => { e.stopPropagation(); onSelect(p.item.uid, drawerNo); }}>
+                <g key={q.code} onClick={(e) => e.stopPropagation()}
+                   onPointerDown={startPress(p)} onPointerUp={endPress(p, drawerNo)}>
                   <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
                         width={q.size[0]} height={q.size[1]}
                         fill={q.code.endsWith('-BLIND') ? 'url(#hatchTight)'
@@ -208,12 +297,36 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
           ? Y(p.unit.mountY) + FS + 30
           : Y(p.unit.mountY + p.unit.height) - 30;
         return (
-          <text key={`l${p.item.uid}`} x={p.x + p.unit.width / 2} y={ty} textAnchor="middle"
+          <text key={`l${p.item.uid}`} x={drawX(p) + p.unit.width / 2} y={ty} textAnchor="middle"
                 fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>
             {p.label} {p.unit.width}
           </text>
         );
       })}
+
+      {/* While you are dragging: the join it has locked on to, drawn as a
+          line the full height of the wall, and the position in millimetres.
+          Without this you are guessing whether it took hold. */}
+      {drag && drag.snap && (
+        <g pointerEvents="none">
+          <line x1={drag.snap.kind === 'butt' && drag.snap.label.startsWith('left')
+            ? drag.x + drag.width : drag.x}
+                y1={-40} x2={drag.snap.kind === 'butt' && drag.snap.label.startsWith('left')
+                  ? drag.x + drag.width : drag.x} y2={CEIL + 60}
+                stroke="var(--dw-selected)" strokeWidth={S * 2} strokeDasharray="30 18" />
+          <text x={drag.x + drag.width / 2} y={-60} textAnchor="middle"
+                fill="var(--dw-selected)" fontFamily="var(--font-mono)" fontSize={FS}>
+            {drag.snap.label}
+          </text>
+        </g>
+      )}
+      {drag && (
+        <text x={drag.x + drag.width / 2} y={Y(0) + 120} textAnchor="middle"
+              fill="var(--dw-selected)" fontFamily="var(--font-mono)" fontSize={FS_DIM}
+              pointerEvents="none">
+          {Math.round(drag.x)}
+        </text>
+      )}
 
       {/* dimension line along the bottom */}
       <g>

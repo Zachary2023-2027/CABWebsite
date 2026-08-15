@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
-import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, unitCost } from './catalog.js';
+import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
 import { Board, Choice, Close, Num, Pick, Warn } from './Fields.jsx';
-import { ROOM_SHAPES, layoutFor, money, roomLayout, roomWallIds, uid, unitWarnings, wallWarnings } from './project.js';
+import {
+  ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
+  unitWarnings, wallWarnings,
+} from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -81,7 +84,8 @@ function Picker({ onAdd }) {
 /* --- inspector ------------------------------------------------------------ */
 
 function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
-                    onChange, onOverride, onRemove, onMove, onOpen3D, onClose }) {
+                    onChange, onOverride, onRemove, onMove, onDrop, onUnpin,
+                    onOpen3D, onClose }) {
   if (!placed) {
     return (
       <div className="empty inspector-empty">
@@ -125,7 +129,17 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
       </div>
 
       <div className="inspector-body">
+        {placed.pinned && (
+          <div className="sub-head pin-row">
+            <span className="note">Placed by hand. Its neighbours will not push it.</span>
+            <button className="btn btn--ghost" onClick={() => onUnpin(item.uid)}
+                    title="Let this cabinet flow after the one before it again">Back in line</button>
+          </div>
+        )}
+
         <div className="settings-grid">
+          <Num label="Along the wall" value={Math.round(placed.x)} min={0} max={12000}
+               onChange={(v) => onDrop(item.uid, v ?? placed.x)} />
           <Num label="Width" value={unit.width} min={50} max={1400}
                onChange={(v) => set({ width: v ?? unit.width })} />
           <Num label="Height" value={unit.height} min={100} max={2400}
@@ -326,6 +340,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
   const [optBusy, setOptBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const reduced = useMemo(
     () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 900, []);
@@ -362,11 +377,119 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     return next;
   });
 
+  /* Adding a cabinet.
+
+     It goes in the first gap on this wall that it actually fits in. If it
+     will not fit anywhere and this wall turns a corner, it goes on the next
+     wall in the run instead and the planner follows it there, which is what
+     wrapping around a corner means when the walls are separate drawings.
+     A blind corner is different: it belongs in the corner, so that is where
+     it lands. */
   const addUnit = (familyId) => {
     const id = uid();
-    mutate((w) => { w.units.push({ uid: id, familyId, settings: {} }); });
+    const fam = FAMILY[familyId];
+    const probe = buildUnit('probe', familyId, {}, project.cfg);
+
+    const place = (targetWall, targetLay) => {
+      if (probe.corner) {
+        const left = (probe.settings?.blindSide || 'right') === 'left';
+        return left ? targetLay.startOffset
+          : Math.max(targetLay.startOffset, targetWall.length - probe.width);
+      }
+      return firstFreeX(targetLay, probe, probe.width);
+    };
+
+    let x = place(wall, lay);
+    let targetId = wall.id;
+
+    if (x === null) {
+      const ids = roomWallIds(project);
+      const i = ids.indexOf(wall.id);
+      const nextId = i >= 0 && i < ids.length - 1 ? ids[i + 1] : null;
+      const nextWall = nextId ? project.walls.find((w) => w.id === nextId) : null;
+      if (nextWall) {
+        const nextLay = layoutFor(project, nextWall);
+        const nx = place(nextWall, nextLay);
+        if (nx !== null) { x = nx; targetId = nextId; }
+      }
+    }
+
+    setProject((prev) => {
+      const next = structuredClone(prev);
+      const w = next.walls.find((q) => q.id === targetId);
+      const settings = x === null ? {} : { x };
+      w.units.push({ uid: id, familyId, settings });
+      if (targetId !== prev.activeWall) next.activeWall = targetId;
+      return next;
+    });
     setSelected(id);
+    setSelDrawer(null);
+    if (targetId !== wall.id) {
+      const name = project.walls.find((w) => w.id === targetId)?.name || targetId;
+      setNotice(`${fam?.name || 'Cabinet'} did not fit on ${wall.name}, so it went on ${name}.`);
+    } else if (x === null) {
+      setNotice(`${fam?.name || 'Cabinet'} does not fit on ${wall.name}. It is on the end, past the wall.`);
+    } else setNotice(null);
   };
+
+  /* Committing a drag.
+
+     Dragged off the end of a wall that turns a corner, a cabinet carries on
+     to the next wall rather than piling up past the end. Dragged back before
+     the start, it goes back the way it came. */
+  const dropUnit = (u, x) => {
+    const ids = roomWallIds(project);
+    const i = ids.indexOf(wall.id);
+    const placed = lay.placed.find((q) => q.item.uid === u);
+    if (!placed) return;
+    const w = placed.unit.width;
+
+    const hop = (dir) => {
+      const id = ids[i + dir];
+      if (i < 0 || !id) return false;
+      const target = project.walls.find((q) => q.id === id);
+      if (!target) return false;
+      const tLay = layoutFor(project, target);
+      const nx = dir > 0 ? tLay.startOffset : Math.max(0, target.length - w);
+      setProject((prev) => {
+        const next = structuredClone(prev);
+        const from = next.walls.find((q) => q.id === wall.id);
+        const idx = from.units.findIndex((q) => q.uid === u);
+        if (idx < 0) return prev;
+        const [item] = from.units.splice(idx, 1);
+        item.settings = { ...item.settings, x: Math.round(nx) };
+        next.walls.find((q) => q.id === id).units.push(item);
+        next.activeWall = id;
+        return next;
+      });
+      setNotice(`Moved to ${target.name}, around the corner.`);
+      return true;
+    };
+
+    if (x > wall.length - w / 2 && hop(1)) return;
+    if (x + w < lay.startOffset + w / 2 && i > 0 && hop(-1)) return;
+
+    setNotice(null);
+    mutate((wl) => {
+      const it = wl.units.find((q) => q.uid === u);
+      if (it) it.settings = { ...it.settings, x: Math.round(x) };
+    });
+  };
+
+  /* Unpin everything on this wall and let it pack back together. */
+  const closeGaps = () => {
+    setNotice(null);
+    mutate((wl) => {
+      for (const it of wl.units) {
+        if (it.settings && 'x' in it.settings) { const s = { ...it.settings }; delete s.x; it.settings = s; }
+      }
+    });
+  };
+
+  const unpin = (u) => mutate((wl) => {
+    const it = wl.units.find((q) => q.uid === u);
+    if (it && it.settings) { const s = { ...it.settings }; delete s.x; it.settings = s; }
+  });
   const changeUnit = (u, patch) =>
     mutate((w) => {
       const it = w.units.find((x) => x.uid === u);
@@ -495,7 +618,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const elevation = (
     <div className="elev-wrap" onClick={() => pickUnit(null)}>
       <Elevation lay={lay} cfg={project.cfg} selected={selected} selDrawer={selDrawer}
-                 onSelect={pickUnit} onHover={setHovered} />
+                 onSelect={pickUnit} onHover={setHovered} onDrag={dropUnit} />
     </div>
   );
 
@@ -518,6 +641,8 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                       onClick={() => setArrangement(k)}>{label}</button>
             ))}
           </div>
+          <button className="btn btn--ghost" onClick={closeGaps}
+                  title="Unpin every cabinet on this wall and pack them back together">Close gaps</button>
           <button className="btn btn--ghost" onClick={() => setAdvOpen(true)}>Advanced design</button>
           <button className="btn btn--ghost" onClick={runOptimise} disabled={optBusy}>
             {optBusy ? 'Working' : 'Optimise'}
@@ -563,10 +688,19 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
             </div>
           )}
 
-          {wallWarns.length > 0 && (
+          {(notice || wallWarns.length > 0) && (
             <div className="wall-warnings">
+              {notice && (
+                <div className="warn-inline warn-inline--note">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+                    <circle cx="8" cy="8" r="6" /><path d="M8 7.4v4M8 5.1v.1" strokeLinecap="round" />
+                  </svg>
+                  <span>{notice}</span>
+                </div>
+              )}
               {wallWarns.map((w, i) => (
-                <div key={i} className={`warn-inline ${w.level === 'error' ? 'warn-inline--error' : ''}`}>
+                <div key={i} className={`warn-inline ${w.level === 'error' ? 'warn-inline--error'
+                  : w.level === 'note' ? 'warn-inline--note' : ''}`}>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
                     <path d="M8 2.5l6 11H2z" strokeLinejoin="round" /><path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
                   </svg>
@@ -579,6 +713,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
         <aside className="side inspector-side">
           <Inspector placed={placedSel} lay={lay} cfg={project.cfg}
+                     onDrop={dropUnit} onUnpin={unpin}
                      selDrawer={selDrawer} setSelDrawer={setSelDrawer}
                      locked={placedSel ? locked.includes(placedSel.item.uid) : false}
                      onLock={toggleLock} onOverride={setOverride}

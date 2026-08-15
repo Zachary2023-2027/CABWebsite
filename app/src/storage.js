@@ -172,6 +172,13 @@ function cleanSettings(s) {
   if (!s || typeof s !== 'object') return {};
   const out = {};
   for (const [k, v] of Object.entries(s)) {
+    if (k === 'x') {
+      /* Where the cabinet was put along its wall. Anything that is not a
+         real number is dropped, and the cabinet goes back to flowing after
+         the one before it rather than landing at NaN. */
+      if (Number.isFinite(Number(v)) && v !== '' && v !== null) out[k] = Math.max(0, Number(v));
+      continue;
+    }
     if (k === 'drawerHeights') {
       if (Array.isArray(v) && v.length && v.every((x) => Number(x) > 0)) out[k] = v.map(Number);
       continue;

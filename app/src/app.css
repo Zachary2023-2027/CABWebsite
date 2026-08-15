@@ -929,3 +929,26 @@ body {
   background: var(--sunken);
   border-radius: var(--r-1);
 }
+
+/* A note is not a warning. The corner offset and the wall the planner moved
+   a cabinet to are things you should know, not things you should fix. */
+.warn-inline--note {
+  background: var(--sunken);
+  border-color: var(--border-strong);
+  color: var(--text-2);
+}
+
+/* A cabinet you have put somewhere on purpose carries a mark, so you can see
+   at a glance which ones will not move when you resize their neighbours. */
+/* Dragging a cabinet is horizontal, scrolling the page is vertical, so the
+   drawing claims one axis and leaves the other alone. Without this a touch
+   drag is swallowed by the scroller before the first pointermove arrives. */
+.elevation { touch-action: pan-y; }
+
+.pin-row { padding: var(--sp-3) var(--sp-4) 0; align-items: center; }
+.pin-row .note { margin: 0; }
+
+.pin-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent); margin-left: var(--sp-2); vertical-align: middle;
+}
