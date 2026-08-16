@@ -9,7 +9,11 @@
 import { useState } from 'react';
 import { FAMILY, PROJECT, boardNames } from './catalog.js';
 import { ROOM_SHAPES, roomWallIds } from './project.js';
-import { DEPTH_ALLOWANCE, RUNNER_LIST, longestFitting, runnerProfile } from './hardware.js';
+import {
+  DEPTH_ALLOWANCE, HINGE_LIST, RUNNER_LIST, boringInRange, cupCentre, hingeProfile,
+  longestFitting, runnerProfile,
+} from './hardware.js';
+import { fmt } from './mm.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
 const GROUPS = [
@@ -47,6 +51,9 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
      measured if you set one, the published figure otherwise. */
   const isCustomDeduction = cfg.runnerDeduction !== null && cfg.runnerDeduction !== undefined;
   const deduction = isCustomDeduction ? cfg.runnerDeduction : profile.insideDeduction;
+
+  const hinge = hingeProfile(cfg.hingeProfile);
+  const boring = cfg.hingeBoringDistance ?? hinge.boringDistance;
 
   const opening = 600 - 2 * cfg.carcassThk;
   const boxNote = `In a 600mm cabinet: opening ${opening}, drawer box `
@@ -124,6 +131,40 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
                 </button>
               </div>
             )}
+          </section>
+
+          <section className="adv-group">
+            <span className="field__label">Hinges</span>
+            <p className="note">
+              The cup centre is half the 35mm cup plus the boring distance, so the
+              boring distance is the only half you choose and it is what sets the
+              overlay. Blum allow roughly {hinge.boringMin} to {hinge.boringMax}mm,
+              and the mounting plate you buy has to match what you drill.
+            </p>
+            <div className="settings-grid">
+              <Choice label="Hinge" value={cfg.hingeProfile || 'clip-top-blumotion-110'}
+                      options={HINGE_LIST.map((x) => ({ value: x.id, label: x.name.replace('Blum ', '') }))}
+                      onChange={(v) => onChange({ hingeProfile: v })} />
+              <Num label="Boring distance" value={boring}
+                   onChange={(v) => onChange({ hingeBoringDistance: v ?? 5 })} />
+            </div>
+            <p className="note">
+              Cup centre {fmt(cupCentre(hinge, boring))}mm from the hinged edge.
+              {boringInRange(boring, hinge) ? '' : ' That is outside the range this hinge is made for.'}
+            </p>
+            <p className="note">
+              How tall a door can be before it needs another hinge. Height is only
+              half of it, weight is the other half, so a heavy door is worth setting
+              lower than these.
+            </p>
+            <div className="settings-grid">
+              <Num label="Two hinges up to" value={cfg.hinge2MaxHeight ?? 900}
+                   onChange={(v) => onChange({ hinge2MaxHeight: v ?? 900 })} />
+              <Num label="Three up to" value={cfg.hinge3MaxHeight ?? 1600}
+                   onChange={(v) => onChange({ hinge3MaxHeight: v ?? 1600 })} />
+              <Num label="Four up to" value={cfg.hinge4MaxHeight ?? 2000}
+                   onChange={(v) => onChange({ hinge4MaxHeight: v ?? 2000 })} />
+            </div>
           </section>
 
           <section className="adv-group">

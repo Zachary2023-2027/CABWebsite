@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NOMINAL_LENGTHS, RUNNERS, drawerBox, isLegalLength, longestFitting,
   migrateRunnerClearance, nearestLength, runnerProfile,
+  boringInRange, cupCentre, hingeCentres, hingeCountFor, hingeProfile,
 } from '../hardware.js';
 import { FAMILIES, PROJECT, buildUnit } from '../catalog.js';
 
@@ -238,5 +239,105 @@ describe('runnerProfile', () => {
   it('returns a custom profile when it is the one named', () => {
     const custom = { id: 'custom-runner', insideDeduction: 25, lengths: NOMINAL_LENGTHS, boxDepthFor: (n) => n };
     expect(runnerProfile('custom-runner', custom)).toBe(custom);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+   Hinges.
+
+   The cup centre used to be a single number, 22.5, with nothing saying where
+   it came from. It is two things added: half the 35mm cup, which the cutter
+   decides, and the boring distance, which you decide and which sets the
+   overlay. Splitting it has to leave the default answer exactly where it was,
+   because every door already drilled in an existing project was drilled to it.
+   --------------------------------------------------------------------------- */
+describe('the hinge cup', () => {
+  it('at the default boring distance the centre is where it has always been', () => {
+    expect(cupCentre(hingeProfile('clip-top-blumotion-110'), 5)).toBe(22.5);
+    expect(cupCentre(hingeProfile('clip-top-blumotion-110'))).toBe(22.5);
+    expect(cupCentre(hingeProfile(), PROJECT.hingeBoringDistance)).toBe(22.5);
+  });
+
+  it('boring closer to the edge moves the centre in by the same amount', () => {
+    const p = hingeProfile();
+    for (const b of [3, 4, 5, 6, 7]) {
+      expect(cupCentre(p, b)).toBe(17.5 + b);
+      expect(boringInRange(b, p)).toBe(true);
+    }
+    expect(boringInRange(2, p)).toBe(false);
+    expect(boringInRange(8, p)).toBe(false);
+  });
+
+  it('an empty boring distance falls back to the profile, it does not read as zero', () => {
+    const p = hingeProfile();
+    for (const empty of [null, undefined, '']) {
+      expect(cupCentre(p, empty), String(empty)).toBe(22.5);
+    }
+  });
+
+  it('the cup never runs off the edge of the door', () => {
+    const p = hingeProfile();
+    for (const b of [p.boringMin, p.boringMax]) {
+      expect(cupCentre(p, b) - p.cupDia / 2).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('how many hinges a door gets', () => {
+  it('follows the typed thresholds', () => {
+    expect(hingeCountFor(400)).toBe(2);
+    expect(hingeCountFor(900)).toBe(2);
+    expect(hingeCountFor(901)).toBe(3);
+    expect(hingeCountFor(1600)).toBe(3);
+    expect(hingeCountFor(1601)).toBe(4);
+    expect(hingeCountFor(2000)).toBe(4);
+    expect(hingeCountFor(2100)).toBe(5);
+  });
+
+  it('a lower threshold puts more hinges on the same door', () => {
+    expect(hingeCountFor(800, { two: 600, three: 1600, four: 2000 })).toBe(3);
+  });
+
+  it('never returns fewer than two', () => {
+    for (const h of [0, 1, 100, 3000]) expect(hingeCountFor(h)).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('hinge centres', () => {
+  it('the outer pair sit the stated distance from the ends', () => {
+    const c = hingeCentres(2000, 4, 100);
+    expect(c).toHaveLength(4);
+    expect(c[0]).toBe(100);
+    expect(c[3]).toBe(1900);
+  });
+
+  it('the middle ones are evenly spread', () => {
+    const c = hingeCentres(2000, 4, 100);
+    const gaps = c.slice(1).map((y, i) => y - c[i]);
+    for (const g of gaps) expect(g).toBeCloseTo(gaps[0], 6);
+  });
+
+  it('every centre is on the door', () => {
+    for (const h of [400, 720, 1200, 2100]) {
+      for (const y of hingeCentres(h, hingeCountFor(h), 100)) {
+        expect(y).toBeGreaterThanOrEqual(0);
+        expect(y).toBeLessThanOrEqual(h);
+      }
+    }
+  });
+});
+
+describe('a cabinet buys the hinges it drills', () => {
+  it('the hinge count in the fittings matches the cups on the door', () => {
+    for (const f of FAMILIES.filter((x) => !x.cavity)) {
+      const u = buildUnit('T1', f.id, {}, PROJECT);
+      const doors = u.parts.filter((p) => p.code.includes('DOOR'));
+      const bought = (u.fittings || []).filter((x) => x.type === 'hinge')
+        .reduce((a, x) => a + x.qty, 0);
+      const needed = doors.reduce((a, p) => a + hingeCountFor(p.L, {
+        two: PROJECT.hinge2MaxHeight, three: PROJECT.hinge3MaxHeight, four: PROJECT.hinge4MaxHeight,
+      }), 0);
+      expect(bought, f.id).toBe(needed);
+    }
   });
 });

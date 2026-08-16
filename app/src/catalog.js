@@ -8,7 +8,7 @@
 
 import { assertMm, round1 } from './mm.js';
 import {
-  drawerBox, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
+  drawerBox, hingeCountFor, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
 } from './hardware.js';
 import { newRow, resolveStack } from './stack.js';
 
@@ -45,6 +45,19 @@ export const PROJECT = {
   runnerDeduction: null,
   /* How much deeper than the runner the cabinet has to be. */
   runnerDepthAllowance: 25,
+
+  hingeProfile: 'clip-top-blumotion-110',
+  /* The gap from the edge of the cup to the edge of the door. Half the 35mm
+     cup plus this is where the cup centre goes, so 5 gives the 22.5 this app
+     has always drilled. It is what sets the overlay, and the mounting plate
+     you buy has to match it. */
+  hingeBoringDistance: 5,
+  /* The tallest door that takes two hinges, three, and four. Anything above
+     the last one takes five. Height is only half the question, the other
+     half is weight, so these are yours to set. */
+  hinge2MaxHeight: 900,
+  hinge3MaxHeight: 1600,
+  hinge4MaxHeight: 2000,
   boxSideThk: 16,
   boxBaseThk: 6,
   boxHeight: 140,
@@ -535,6 +548,11 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
 
   let doorNo = 0;
   let drawerNo = 0;
+  /* How many hinges a door of this height gets. The thresholds are typed, so
+     a heavy door can be told to take another hinge without touching code. */
+  const hingeCount = (doorHeight) => hingeCountFor(doorHeight, {
+    two: P.hinge2MaxHeight, three: P.hinge3MaxHeight, four: P.hinge4MaxHeight,
+  });
   /**
    * A row of doors.
    *
@@ -556,7 +574,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         size: [each, h, FT], pos: [sideGap + i * (each + R), y, D], explode: [0, 0, 340],
         edging: 'All four edges', hinge, row: rowIndex,
       }));
-      fittings.push({ type: 'hinge', qty: h > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
+      fittings.push({ type: 'hinge', qty: hingeCount(h), code: code(`HINGE-${num}`) });
     }
   };
 
@@ -721,7 +739,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         pos: [blindLeft ? sideGap + blind + R : sideGap, 0, D], explode: [0, 0, 340],
         edging: 'All four edges', hinge: blindLeft ? 'right' : 'left',
       }));
-      fittings.push({ type: 'hinge', qty: H > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
+      fittings.push({ type: 'hinge', qty: hingeCount(H), code: code(`HINGE-${num}`) });
       fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${num}`) });
     }
   }

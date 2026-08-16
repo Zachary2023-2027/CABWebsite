@@ -10,6 +10,7 @@
    =========================================================================== */
 
 import { whole } from './mm.js';
+import { CUP_RADIUS, cupCentre, hingeCentres, hingeCountFor, hingeProfile } from './hardware.js';
 
 export const DRILL = {
   pitch: 32,          // system hole spacing
@@ -19,8 +20,12 @@ export const DRILL = {
   systemDia: 5,
   systemDepth: 13,
   cupDia: 35,
-  cupDepth: 12.5,
-  cupSetback: 22.5,   // cup centre to the door edge, 3mm overlay
+  cupDepth: 13,
+  /* Kept so a caller passing its own DRILL still works. The cup centre is
+     really half the cup plus the boring distance, and it is read off the
+     hinge profile and the project setting rather than sitting here as one
+     unexplained number. */
+  cupSetback: CUP_RADIUS + 5,
   cupFromEnd: 100,    // top and bottom hinge centres from the door ends
   handleDia: 5,
   constructionDia: 8,
@@ -51,11 +56,19 @@ function shelfHoles(shelfYs, height, d = DRILL) {
   return [...out].sort((a, b) => a - b);
 }
 
-/** Hinge centres up a door, from the bottom. */
-export function hingePositions(doorHeight, d = DRILL) {
-  const n = doorHeight > 900 ? 3 : 2;
-  if (n === 2) return [d.cupFromEnd, doorHeight - d.cupFromEnd];
-  return [d.cupFromEnd, doorHeight / 2, doorHeight - d.cupFromEnd];
+/**
+ * Hinge centres up a door, from the bottom.
+ *
+ * cfg carries the hinge settings when there is a cabinet behind the call.
+ * Without one the defaults apply, which is the same answer the hard coded
+ * version gave for every door under 900.
+ */
+export function hingePositions(doorHeight, d = DRILL, cfg = {}) {
+  const profile = hingeProfile(cfg.hingeProfile);
+  const n = hingeCountFor(doorHeight, {
+    two: cfg.hinge2MaxHeight, three: cfg.hinge3MaxHeight, four: cfg.hinge4MaxHeight,
+  });
+  return hingeCentres(doorHeight, n, d.cupFromEnd ?? profile.cupFromEnd);
 }
 
 /**
@@ -114,9 +127,13 @@ export function drillPanel(unit, part, d = DRILL) {
     const w = part.W;   // door width across
     const h = part.L;   // door height up
     const hingeSide = part.hinge === 'right' ? 'right' : 'left';
-    const x = hingeSide === 'left' ? d.cupSetback : w - d.cupSetback;
-    const holes = hingePositions(h, d).map((y) =>
-      hole(Math.round(x), Math.round(y), d.cupDia, d.cupDepth, 'cup', ''));
+    const profile = hingeProfile(cfg.hingeProfile);
+    /* Half the cup plus the boring distance. The boring distance is the only
+       half of it you choose, and it is what sets the overlay. */
+    const setback = cupCentre(profile, cfg.hingeBoringDistance);
+    const x = hingeSide === 'left' ? setback : w - setback;
+    const holes = hingePositions(h, d, cfg).map((y) =>
+      hole(Math.round(x), Math.round(y), profile.cupDia, profile.cupDepth, 'cup', ''));
     // Handle, opposite the hinges.
     const hx = hingeSide === 'left' ? w - 45 : 45;
     holes.push(hole(hx, Math.round(h / 2), d.handleDia, 0, 'handle', 'through'));
@@ -126,8 +143,10 @@ export function drillPanel(unit, part, d = DRILL) {
       xLabel: 'Width', yLabel: 'Height',
       holes,
       notes: [
-        `${d.cupDia}mm cup, ${d.cupDepth}mm deep, centre ${d.cupSetback}mm from the ${hingeSide} edge.`,
+        `${profile.cupDia}mm cup, ${profile.cupDepth}mm deep, centre ${whole(setback)}mm from the ${hingeSide} edge.`,
+        `That is half the cup plus a boring distance of ${whole(setback - profile.cupDia / 2)}mm.`,
         `${holes.length - 1} hinges. Handle hole is through, ${d.handleDia}mm.`,
+        `Mounting plates go on the front hole row of the side panel, ${profile.plateSetback}mm in.`,
         'Drill cups from the back face.',
       ],
     };

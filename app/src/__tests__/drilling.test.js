@@ -111,6 +111,20 @@ describe('hinges', () => {
     expect(hingePositions(1000)).toHaveLength(3);
   });
 
+  it('the drilled cup follows the typed boring distance', () => {
+    const cfg = { ...PROJECT, hingeBoringDistance: 3 };
+    const u = buildUnit('T1', 'base-2door', {}, cfg);
+    const left = drillPanel(u, u.parts.find((p) => p.code.includes('DOOR') && p.hinge === 'left'));
+    for (const h of left.holes.filter((x) => x.kind === 'cup')) expect(h.x).toBe(21);
+  });
+
+  it('a lower threshold puts another hinge on the same door', () => {
+    const u = buildUnit('T1', 'base-2door', {}, { ...PROJECT, hinge2MaxHeight: 400 });
+    const door = u.parts.find((p) => p.code.includes('DOOR'));
+    const panel = drillPanel(u, door);
+    expect(panel.holes.filter((x) => x.kind === 'cup')).toHaveLength(3);
+  });
+
   it('sets the outer hinges the stated distance from the door ends', () => {
     const p = hingePositions(700);
     expect(p[0]).toBe(DRILL.cupFromEnd);

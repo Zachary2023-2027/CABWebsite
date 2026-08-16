@@ -174,6 +174,127 @@ export function drawerBox({
    profile rather than being silently reinterpreted, and the user is told.
    --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   Hinges.
+
+   The old code carried a single number, cupSetback: 22.5, with no statement
+   of where it came from. It comes from two separate things added together,
+   and only one of them is yours to choose:
+
+     17.5   half the 35mm cup, fixed by the cutter
+      5     the boring distance, the gap from the cup edge to the door edge
+
+   The boring distance is what sets the overlay: bore closer to the edge and
+   the door covers more of the carcass. Blum publish it as a range, roughly
+   3mm to 7mm, and the plate you buy has to match. Splitting the number in
+   two means the app can say which half you are allowed to change.
+
+   VERIFY BEFORE IMPLEMENTING: the overlay chart, the boring distance that
+   goes with each mounting plate height, and the door weight limits per hinge.
+   Those are catalogue tables and nothing here invents them. The hinge count
+   below is a typed setting with a conservative default, not a published
+   figure dressed up as one.
+   --------------------------------------------------------------------------- */
+
+/** Half a 35mm cup. Not a setting: it is the cutter. */
+export const CUP_RADIUS = 17.5;
+
+export const BORING_DISTANCE = 5;
+export const BORING_DISTANCE_MIN = 3;
+export const BORING_DISTANCE_MAX = 7;
+
+export const HINGES = {
+  'clip-top-blumotion-110': {
+    id: 'clip-top-blumotion-110',
+    name: 'Blum CLIP top BLUMOTION 110',
+    note: 'Soft close, 110 degree opening. Full overlay, half overlay and inset all use the same 35mm cup.',
+    cupDia: 35,
+    cupDepth: 13,
+    boringDistance: BORING_DISTANCE,
+    boringMin: BORING_DISTANCE_MIN,
+    boringMax: BORING_DISTANCE_MAX,
+    /* Mounting plate screw holes sit on the front row of the system grid,
+       37mm in from the front edge and 32mm apart up the panel. */
+    plateSetback: 37,
+    platePitch: 32,
+    plateDia: 5,
+    plateDepth: 13,
+    /* Distance from the top and the bottom of the door to the end hinges.
+       A convention, not a specification: it keeps the cup clear of the edge
+       banding and off the shelf line. */
+    cupFromEnd: 100,
+  },
+
+  'clip-top-155': {
+    id: 'clip-top-155',
+    name: 'Blum CLIP top 155',
+    note: 'Wide angle, for a corner cabinet where the door has to clear a return.',
+    cupDia: 35,
+    cupDepth: 13,
+    boringDistance: BORING_DISTANCE,
+    boringMin: BORING_DISTANCE_MIN,
+    boringMax: BORING_DISTANCE_MAX,
+    plateSetback: 37,
+    platePitch: 32,
+    plateDia: 5,
+    plateDepth: 13,
+    cupFromEnd: 100,
+  },
+};
+
+export const HINGE_LIST = Object.values(HINGES);
+
+export const hingeProfile = (id) => HINGES[id] || HINGES['clip-top-blumotion-110'];
+
+/** Where the cup centre sits, measured from the hinged edge of the door. */
+export function cupCentre(profile = HINGES['clip-top-blumotion-110'], boringDistance) {
+  const typed = (boringDistance === null || boringDistance === undefined || boringDistance === '')
+    ? null : Number(boringDistance);
+  const b = (typed !== null && Number.isFinite(typed)) ? typed : profile.boringDistance;
+  return (profile.cupDia / 2) + b;
+}
+
+/** True when a typed boring distance is one the hinge can actually be set to. */
+export const boringInRange = (b, profile = HINGES['clip-top-blumotion-110']) =>
+  Number.isFinite(Number(b)) && Number(b) >= profile.boringMin && Number(b) <= profile.boringMax;
+
+/**
+ * How many hinges a door of this height needs.
+ *
+ * Typed as three heights rather than a fixed table, because the real answer
+ * depends on the door weight as much as the height and the honest thing is
+ * to let you set it. The defaults are deliberately on the safe side.
+ */
+export const HINGE_COUNTS = { two: 900, three: 1600, four: 2000 };
+
+export function hingeCountFor(doorHeight, table = HINGE_COUNTS) {
+  const two = Number(table.two) || HINGE_COUNTS.two;
+  const three = Number(table.three) || HINGE_COUNTS.three;
+  const four = Number(table.four) || HINGE_COUNTS.four;
+  const h = Number(doorHeight) || 0;
+  if (h <= two) return 2;
+  if (h <= three) return 3;
+  if (h <= four) return 4;
+  return 5;
+}
+
+/**
+ * Hinge centres up a door, from the bottom edge.
+ *
+ * The end pair sit a fixed distance in from the ends and anything else is
+ * spread evenly between them, which is what you would do by eye and what
+ * keeps the load off the middle of a tall door.
+ */
+export function hingeCentres(doorHeight, count, fromEnd = 100) {
+  const n = Math.max(2, Math.round(Number(count) || 2));
+  const first = fromEnd;
+  const last = doorHeight - fromEnd;
+  if (last <= first) return [doorHeight / 2];
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(first + ((last - first) * i) / (n - 1));
+  return out;
+}
+
 export function migrateRunnerClearance(clearance) {
   const perSide = Number(clearance);
   if (!Number.isFinite(perSide)) return { profileId: 'tandem-563h', custom: null, changed: false };
