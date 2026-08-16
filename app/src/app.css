@@ -1040,3 +1040,15 @@ body {
    row of specks. Tall panels get the height instead. Not the width: the
    drawing keeps its proportions, so a wider card would only add margin. */
 .panel-card--tall .panel-svg { max-height: 640px; }
+
+/* A one time notice across the top of the app, for something in an opened
+   project that had to be reinterpreted. It sits above the rail rather than
+   over the work, and it stays until it is dismissed. */
+.app-notice {
+  display: flex; align-items: center; gap: var(--sp-3); flex: none;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: var(--bw) solid var(--border);
+  background: var(--surface);
+}
+.app-notice .warn-inline { flex: 1; min-width: 0; }
+.app-notice .warn-inline span { white-space: normal; }

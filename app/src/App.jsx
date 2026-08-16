@@ -288,6 +288,22 @@ function Start({ onExample, onEmpty, saved, onOpen, onDelete, onImport, error })
   );
 }
 
+/**
+ * What to say when an older project's runner clearance became a profile.
+ *
+ * The old number was a clearance with no stated meaning, and the geometry
+ * read it as a deduction to the outside of the drawer box. The profile reads
+ * it to the inside, which is what Blum specifies, so the boxes get wider by
+ * twice the box side thickness. That is a real change to a saved kitchen, so
+ * it is said plainly rather than made quietly.
+ */
+function runnerNoticeText(n) {
+  if (n.unconfirmed) {
+    return `This project stored a drawer runner clearance of ${n.wasClearance}mm each side, which is not a standard runner. It has been kept as a profile called Custom runner. Check it against the runner you are buying before cutting: the drawer box widths depend on it.`;
+  }
+  return `Drawer boxes in this project are now built to a named runner profile rather than a bare clearance. The stored ${n.wasClearance}mm each side matches Blum TANDEM 563H, where the figure is a deduction to the inside of the box. The old geometry read it as the outside, so every drawer box is wider than it was by twice the box side thickness. Check one against your runners before cutting.`;
+}
+
 /* --- undo -----------------------------------------------------------------
 
    Cabinets can be dragged now, and a drag is the one edit you can make
@@ -368,6 +384,9 @@ export default function App() {
   const [saved, setSaved] = useState([]);
   const [saveState, setSaveState] = useState({ at: null, error: null });
   const [startError, setStartError] = useState(null);
+  /* Set when an older file is opened and something in it had to be
+     reinterpreted. Shown once, dismissed by the user, never repeated. */
+  const [notice, setNotice] = useState(null);
 
   /* Pricing functions read the shared PRICES object at call time, so an edit
      has to land there as well as in state for the totals to follow. */
@@ -398,6 +417,7 @@ export default function App() {
 
   const openSnapshot = (snap) => {
     history.reset();
+    setNotice(snap.runnerNotice ? runnerNoticeText(snap.runnerNotice) : null);
     setProjectRaw(snap.project);
     setProjectId(snap.id);
     setCut(new Set(snap.cut));
@@ -562,6 +582,18 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {notice && (
+        <div className="app-notice">
+          <div className="warn-inline warn-inline--note">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+              <circle cx="8" cy="8" r="6" /><path d="M8 7.4v4M8 5.1v.1" strokeLinecap="round" />
+            </svg>
+            <span>{notice}</span>
+          </div>
+          <button className="btn btn--secondary" onClick={() => setNotice(null)}>Got it</button>
+        </div>
+      )}
 
       <div className="app-body">
         <Rail screen={screen} setScreen={setScreen} />

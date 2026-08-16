@@ -7,6 +7,9 @@
    =========================================================================== */
 
 import { assertMm, round1 } from './mm.js';
+import {
+  drawerBox, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
+} from './hardware.js';
 
 export const PROJECT = {
   benchHeight: 900,     // finished benchtop height
@@ -23,7 +26,11 @@ export const PROJECT = {
   backThk: 6,
   frontThk: 18,
   reveal: 3,
+  /* Kept so a project saved before runner profiles still opens. It is not
+     read by the geometry any more: the profile below decides the drawer box
+     width, and hydrate turns a stored clearance into a profile. */
   runnerClearance: 21,
+  runnerProfile: 'tandem-563h',
   boxSideThk: 16,
   boxBaseThk: 6,
   boxHeight: 140,
@@ -464,10 +471,23 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       ? heights.map(Number)
       : Array.from({ length: n }, () => even);
 
-    const boxW = internalW - 2 * P.runnerClearance;
-    const boxInnerW = boxW - 2 * P.boxSideThk;
-    const RL = P.runnerLength && P.runnerLength <= D - P.boxSetback
-      ? P.runnerLength : (D >= 560 ? 500 : 400);
+    /* The drawer box comes out of the runner profile, not out of a bare
+       clearance number. The profile's deduction is to the inside of the box,
+       so the outside is the inside plus twice the real side thickness. See
+       hardware.js: reading it the other way makes every box in the kitchen
+       32mm too narrow. */
+    const profile = runnerProfile(P.runnerProfile, P.customRunner);
+    const internalDepth = D - P.boxSetback;
+    const wantLength = Number(P.runnerLength) || 500;
+    const RL = Math.min(nearestLength(wantLength, profile), longestFitting(internalDepth, profile));
+
+    const box = drawerBox({
+      cabinetWidth: W, carcassThk: T, boxSideThk: P.boxSideThk,
+      nominalLength: RL, profile,
+    });
+    const boxW = box.outsideWidth;
+    const boxInnerW = box.insideWidth;
+    const boxSide = (internalW - boxW) / 2;   // clearance beside each box side
     const boxZ = D - P.boxSetback - RL;
     const dado = (P.boxBaseFix || 'dado') === 'dado';
 
@@ -496,21 +516,21 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         explode: [ex[0] + sh[0], ex[1] + sh[1], ex[2] + sh[2]],
       }));
 
-      push('SIDE-L', 'box, left side', RL, BH, BST, [BST, BH, RL], [T + P.runnerClearance, by, boxZ], [-170, 0, 0], MAT.box);
-      push('SIDE-R', 'box, right side', RL, BH, BST, [BST, BH, RL], [T + P.runnerClearance + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
-      push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + P.runnerClearance + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
-      push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + P.runnerClearance + BST, by, boxZ], [0, 0, -150], MAT.box);
+      push('SIDE-L', 'box, left side', RL, BH, BST, [BST, BH, RL], [T + boxSide, by, boxZ], [-170, 0, 0], MAT.box);
+      push('SIDE-R', 'box, right side', RL, BH, BST, [BST, BH, RL], [T + boxSide + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
+      push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
+      push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ], [0, 0, -150], MAT.box);
 
       if (dado) {
         // Base captured in a groove, so it is the inside size and sits up a little.
         push('BASE', 'base', boxInnerW, RL - 2 * BST, P.boxBaseThk,
           [boxInnerW, P.boxBaseThk, RL - 2 * BST],
-          [T + P.runnerClearance + BST, by + P.baseGroove, boxZ + BST], [0, -150, 0], MAT.boxBase);
+          [T + boxSide + BST, by + P.baseGroove, boxZ + BST], [0, -150, 0], MAT.boxBase);
       } else {
         // Screwed on underneath, so it is the full box footprint.
         push('BASE', 'base, screwed under', boxW, RL, P.boxBaseThk,
           [boxW, P.boxBaseThk, RL],
-          [T + P.runnerClearance, by - P.boxBaseThk, boxZ], [0, -150, 0], MAT.boxBase);
+          [T + boxSide, by - P.boxBaseThk, boxZ], [0, -150, 0], MAT.boxBase);
       }
 
       fittings.push({ type: 'runnerPair', qty: 1, code: code(`RUNNER-${num}`), length: RL });

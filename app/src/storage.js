@@ -16,6 +16,7 @@
 
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
 import { ROOM_SHAPES, allParts } from './project.js';
+import { migrateRunnerClearance } from './hardware.js';
 
 const KEY = 'kcb.store.v2';
 const SCHEMA = 2;
@@ -143,9 +144,25 @@ export function hydrate(raw) {
       cost: Number.isFinite(Number(e.cost)) ? Number(e.cost) : 0,
     })) : [];
 
+  /* Runner clearance became a runner profile. Twice 21 is 42, the TANDEM
+     563H deduction, so a stored 21 becomes that profile. The old code read
+     the number as a deduction to the outside of the drawer box and the
+     profile reads it to the inside, which is the correct reading, so the
+     boxes in an older project get wider by twice the box side thickness.
+     That is a real change to a saved kitchen and it is reported rather than
+     made quietly: see runnerNotice below. */
+  const cfgIn = (p.cfg && typeof p.cfg === 'object') ? p.cfg : {};
+  const hadProfile = typeof cfgIn.runnerProfile === 'string';
+  const migrated = hadProfile ? null : migrateRunnerClearance(cfgIn.runnerClearance);
+
   const project = {
       name: String(p.name || raw.name || 'Untitled kitchen'),
-      cfg: { ...PROJECT, ...(p.cfg && typeof p.cfg === 'object' ? p.cfg : {}) },
+      cfg: {
+        ...PROJECT,
+        ...cfgIn,
+        ...(migrated ? { runnerProfile: migrated.profileId } : {}),
+        ...(migrated && migrated.custom ? { customRunner: migrated.custom } : {}),
+      },
       walls,
       locked,
       extras,
@@ -161,6 +178,13 @@ export function hydrate(raw) {
     savedAt: Number(raw.savedAt) || Date.now(),
     project,
     cut: migrateCut(raw.cut, project),
+    /* Set once, when an older file is opened, so the app can say what moved
+       and why. Null on a file that already carried a profile. */
+    runnerNotice: migrated && migrated.changed ? {
+      profileId: migrated.profileId,
+      unconfirmed: !!(migrated.custom && migrated.custom.unconfirmed),
+      wasClearance: Number(cfgIn.runnerClearance),
+    } : null,
     prices: mergePrices(raw.prices),
     quoted: typeof raw.quoted === 'string' ? raw.quoted : '',
   };

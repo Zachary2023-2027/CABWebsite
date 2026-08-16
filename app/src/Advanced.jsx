@@ -9,6 +9,7 @@
 import { useState } from 'react';
 import { FAMILY, PROJECT, boardNames } from './catalog.js';
 import { ROOM_SHAPES, roomWallIds } from './project.js';
+import { RUNNER_LIST, longestFitting, runnerProfile } from './hardware.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
 const GROUPS = [
@@ -24,8 +25,7 @@ const GROUPS = [
     fields: [['baseDepth', 'Base depth'], ['wallDepth', 'Wall depth'],
              ['benchDepth', 'Benchtop depth'], ['blindClearance', 'Blind corner, past the benchtop'],
              ['reveal', 'Gap between fronts'],
-             ['runnerClearance', 'Carcass to drawer box, each side'],
-             ['boxSetback', 'Box behind the front'], ['runnerLength', 'Runner length'],
+             ['boxSetback', 'Box behind the front'],
              ['boxHeight', 'Drawer box side height'], ['backRailHeight', 'Back rail height']] },
 ];
 
@@ -34,6 +34,18 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
   const roomIds = project ? roomWallIds({ ...project, room: shape }) : [];
   const roomWalls = roomIds.map((id) => project.walls.find((w) => w.id === id)).filter(Boolean);
   const boards = boardNames();
+
+  /* Only the lengths this runner is sold in, and only the ones that fit the
+     base cabinet depth. Offering a length you cannot buy, or cannot fit, is
+     offering a drawer that does not exist. */
+  const profile = runnerProfile(cfg.runnerProfile, cfg.customRunner);
+  const maxLength = longestFitting(cfg.baseDepth - cfg.boxSetback, profile);
+  const legalLengths = (profile.lengths || []).filter((L) => L <= maxLength);
+  const opening = 600 - 2 * cfg.carcassThk;
+  const boxNote = `In a 600mm cabinet: opening ${opening}, drawer box `
+    + `${opening - profile.insideDeduction} inside, `
+    + `${opening - profile.insideDeduction + 2 * cfg.boxSideThk} outside, `
+    + `${(profile.insideDeduction - 2 * cfg.boxSideThk) / 2}mm clear each side.`;
 
   return (
     <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -68,6 +80,26 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
               </div>
             </section>
           )}
+
+          <section className="adv-group">
+            <span className="field__label">Drawer runners</span>
+            <p className="note">
+              The runner decides the drawer box width. The figure it deducts is to the
+              inside of the box, so the outside is that plus twice your box side
+              thickness. Check it against the runner you are buying before cutting.
+            </p>
+            <div className="settings-grid">
+              <Choice label="Runner" value={cfg.runnerProfile || 'tandem-563h'}
+                      options={RUNNER_LIST.map((r) => ({ value: r.id, label: r.name.replace('Blum ', '') }))}
+                      onChange={(v) => onChange({ runnerProfile: v })} />
+            </div>
+            <div className="settings-grid">
+              <Choice label="Nominal length" value={String(cfg.runnerLength ?? 500)}
+                      options={legalLengths.map((L) => ({ value: String(L), label: `${L}` }))}
+                      onChange={(v) => onChange({ runnerLength: Number(v) })} />
+            </div>
+            <p className="note">{boxNote}</p>
+          </section>
 
           <section className="adv-group">
             <span className="field__label">Build</span>
