@@ -143,6 +143,33 @@ describe('every part can be bought', () => {
   });
 });
 
+/* Every front you open needs something to open it by. The old code only
+   added handles in the plain doors branch, so a sink base and an oven tower
+   went to the supplier without them: the example kitchen was three handles
+   short and twenty seven dollars light. */
+describe('every front that opens has a handle', () => {
+  for (const f of built) {
+    it(f.id, () => {
+      const u = buildUnit('T1', f.id, {}, PROJECT);
+      const opens = u.parts.filter((p) => p.group === 'front'
+        && !p.code.includes('FALSE') && !p.code.includes('BLIND'));
+      const handles = (u.fittings || []).filter((x) => x.type === 'handle').length;
+      expect(handles).toBe(opens.length);
+    });
+  }
+});
+
+describe('every door has hinges', () => {
+  for (const f of built) {
+    it(f.id, () => {
+      const u = buildUnit('T1', f.id, {}, PROJECT);
+      const doors = u.parts.filter((p) => p.code.includes('DOOR'));
+      const hinged = (u.fittings || []).filter((x) => x.type === 'hinge').length;
+      expect(hinged).toBe(doors.length);
+    });
+  }
+});
+
 describe('buildUnit refuses a value that is not a millimetre', () => {
   it('throws rather than letting NaN into the part list', () => {
     expect(() => buildUnit('T1', 'base-2door', { width: NaN }, PROJECT)).toThrow(/width/);

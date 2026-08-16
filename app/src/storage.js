@@ -17,9 +17,13 @@
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
 import { ROOM_SHAPES, allParts } from './project.js';
 import { migrateRunnerClearance } from './hardware.js';
+import { cleanStack } from './stack.js';
 
 const KEY = 'kcb.store.v2';
-const SCHEMA = 2;
+/* 3 added the front stack. A cabinet with no stack of its own still resolves
+   one from its preset and builds exactly what it always did, so a schema 1 or
+   2 file needs nothing done to it beyond being read. */
+const SCHEMA = 3;
 
 const newId = () => `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
@@ -252,6 +256,15 @@ function cleanSettings(s) {
          real number is dropped, and the cabinet goes back to flowing after
          the one before it rather than landing at NaN. */
       if (Number.isFinite(Number(v)) && v !== '' && v !== null) out[k] = Math.max(0, Number(v));
+      continue;
+    }
+    if (k === 'stack') {
+      /* Null means resolve from the preset, which is what every cabinet does
+         until its front is edited. A stack that arrives broken is cleaned
+         rather than trusted, and more than one fill row is left in place so
+         the user is told rather than corrected behind their back. */
+      const clean = cleanStack(v);
+      if (clean) out[k] = clean;
       continue;
     }
     if (k === 'drawerHeights') {

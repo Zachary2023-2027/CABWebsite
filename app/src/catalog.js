@@ -10,6 +10,7 @@ import { assertMm, round1 } from './mm.js';
 import {
   drawerBox, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
 } from './hardware.js';
+import { newRow, resolveStack } from './stack.js';
 
 export const PROJECT = {
   benchHeight: 900,     // finished benchtop height
@@ -262,6 +263,82 @@ export const FAMILIES = [
 export const FAMILY = Object.fromEntries(FAMILIES.map((f) => [f.id, f]));
 export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
 
+/* ---------------------------------------------------------------------------
+   Default front stacks.
+
+   Every preset resolves to one of these when the cabinet has no stack of its
+   own. The arithmetic is the arithmetic the old branching code did, written
+   down as data. A test asserts every preset produces the same parts as it did
+   before, at every width it offers, so this cannot drift.
+   --------------------------------------------------------------------------- */
+
+export function defaultStackFor(fam, s, H, P) {
+  const R = Number(P.reveal) || 0;
+
+  switch (fam.fronts) {
+    case 'doors': {
+      /* A pantry gets a lower pair and an upper pair rather than one pair of
+         2100mm doors, which nobody can hang on their own. */
+      if (fam.kind === 'tall' && (s.doors ?? 2) >= 2 && H > 1600) {
+        const lower = Math.round(H * 0.45);
+        return [
+          { type: 'doors', height: H - lower - R / 2, doors: 2, hingeSide: 'pair' },
+          { type: 'doors', height: lower - R / 2, doors: 2, hingeSide: 'pair' },
+        ];
+      }
+      const n = s.doors ?? 1;
+      return [{ type: 'doors', height: 'fill', doors: n, hingeSide: n >= 2 ? 'pair' : 'left' }];
+    }
+
+    case 'drawers': {
+      const n = s.drawers ?? 3;
+      const heights = Array.isArray(s.drawerHeights) && s.drawerHeights.length === n
+        && s.drawerHeights.every((v) => Number(v) > 0)
+        ? s.drawerHeights.map(Number)
+        : null;
+      const even = (H - (n - 1) * R) / n;
+      return Array.from({ length: n }, (_, i) => ({
+        type: 'drawer', height: heights ? heights[i] : even,
+      }));
+    }
+
+    case 'microwave': {
+      // An open bay for the microwave, over a drawer.
+      const bay = s.microH ?? 380;
+      return [
+        { type: 'open', height: bay },
+        { type: 'drawer', height: Math.max(120, H - bay - R) },
+      ];
+    }
+
+    case 'sink': {
+      // A false front over a pair of doors, so the bowl has somewhere to go.
+      const fh = 150;
+      return [
+        { type: 'false', height: fh },
+        { type: 'doors', height: H - fh - R, doors: 2, hingeSide: 'pair' },
+      ];
+    }
+
+    case 'oven': {
+      const cavity = s.ovenH ?? 600;
+      const drawerH = 300;
+      return [
+        { type: 'doors', height: H - cavity - drawerH - 2 * R, doors: 1, hingeSide: 'left' },
+        { type: 'bay', height: cavity, appliance: 'oven' },
+        { type: 'drawer', height: drawerH },
+      ];
+    }
+
+    case 'bin':
+      return [{ type: 'doors', height: 'fill', doors: 1, hingeSide: 'left' }];
+
+    // Open shelves, fillers, cavities and the blind corner have no stack.
+    default:
+      return null;
+  }
+}
+
 /* --- carcass builder ------------------------------------------------------ */
 
 /* Cut sizes are rounded here and nowhere else.
@@ -321,6 +398,9 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   const MAT = materialsFor(P);
   const parts = [];
   let drawerOpening = 0;
+  /* What the resolved stack had to say, so the inspector and the checks
+     screen can report a stack that does not add up. */
+  let stackNotes = null;
   const fittings = [];
   const code = (x) => `${id}-${x}`;
 
@@ -448,22 +528,33 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   const sideGap = R / 2;
 
   let doorNo = 0;
-  const addDoors = (n, y, h) => {
+  let drawerNo = 0;
+  /**
+   * A row of doors.
+   *
+   * hingeSide decides which carcass panel gets the hinge plate holes and
+   * which way the door swings. A pair is hinged on its outer edges and meets
+   * in the middle, which is what two doors on one opening always are, and is
+   * what this produced before the side became something you can set.
+   */
+  const addDoors = (n, y, h, hingeSide, rowIndex) => {
     const each = (frontW - (n - 1) * R) / n;
+    const side = hingeSide || (n >= 2 ? 'pair' : 'left');
     for (let i = 0; i < n; i++) {
       const num = ++doorNo;
+      const hinge = side === 'pair' ? (i < n / 2 ? 'left' : 'right') : side;
       parts.push(mkPart({
         code: code(`DOOR-${num}`),
         name: `Door ${num}`, group: 'front', material: MAT.front,
         L: Math.round(h), W: Math.round(each), T: FT,
         size: [each, h, FT], pos: [sideGap + i * (each + R), y, D], explode: [0, 0, 340],
-        edging: 'All four edges', hinge: i < n / 2 ? 'left' : 'right',
+        edging: 'All four edges', hinge, row: rowIndex,
       }));
       fittings.push({ type: 'hinge', qty: h > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
     }
   };
 
-  const addDrawers = (n, y, h, heights) => {
+  const addDrawers = (n, y, h, heights, rowIndex) => {
     /* Remember the opening these drawers have to fill. The inspector checks
        typed heights against this, not against the whole carcass, so a
        microwave unit with a bay above the drawer is judged correctly. */
@@ -506,11 +597,14 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       const each = hs[i];
       const fy = top - each;
       top = fy - R;
-      const num = i + 1;
+      /* Numbered across the whole cabinet, not within the call. Each drawer
+         row is now its own call, so a per call counter would number every
+         drawer in the cabinet 1 and collide every part code. */
+      const num = ++drawerNo;
 
       parts.push(mkPart({
         code: code(`DRWR-F${num}`), name: `Drawer front ${num}`, group: 'front', material: MAT.front,
-        L: Math.round(frontW), W: Math.round(each), T: FT, drawer: num,
+        L: Math.round(frontW), W: Math.round(each), T: FT, drawer: num, row: rowIndex,
         size: [frontW, each, FT], pos: [sideGap, fy, D], explode: [0, 0, 340],
         edging: 'All four edges',
       }));
@@ -548,24 +642,49 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
   };
 
-  if (fam.fronts === 'doors') {
-    if (kind === 'tall' && (s.doors ?? 2) >= 2 && H > 1600) {
-      // Pantry: a lower pair and an upper pair rather than 2100 tall doors.
-      const lower = Math.round(H * 0.45);
-      addDoors(2, 0, lower - R / 2);
-      addDoors(2, lower + R / 2, H - lower - R / 2);
-    } else {
-      addDoors(s.doors ?? 1, 0, H);
+  /* The front is a stack of rows, top to bottom.
+
+     A cabinet with no stack of its own resolves one from its preset, and
+     that produces exactly the parts this app has always produced: the row
+     heights below are the same arithmetic the old branch did, just written
+     down as data instead of buried in a conditional. Once the stack is set,
+     it is the stack that decides, and any layout is buildable.
+
+     The row emitters underneath are unchanged. Only the heights they are
+     handed come from somewhere new. */
+  const stack = Array.isArray(s.stack) && s.stack.length
+    ? s.stack
+    : defaultStackFor(fam, s, H, P);
+
+  if (stack) {
+    const resolved = resolveStack(stack, H, P);
+    stackNotes = resolved;
+
+    for (const [i, row] of resolved.rows.entries()) {
+      if (row.height <= 0) continue;
+      if (row.type === 'doors') {
+        addDoors(row.doors ?? 1, row.y, row.height, row.hingeSide, i);
+      } else if (row.type === 'drawer') {
+        addDrawers(1, row.y, row.height, null, i);
+      } else if (row.type === 'false') {
+        parts.push(mkPart({
+          code: code('FALSE'), name: 'False front', group: 'front', material: MAT.front,
+          L: Math.round(frontW), W: Math.round(row.height), T: FT, row: i,
+          size: [frontW, row.height, FT], pos: [sideGap, row.y, D],
+          explode: [0, 0, 340], edging: 'All four edges',
+        }));
+      }
+      /* An open row and an appliance bay are holes, not parts. They take up
+         their height in the stack and emit nothing, which is what makes a
+         microwave bay or an oven cavity work. */
     }
-    for (let i = 0; i < doorNo; i++) fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
-  } else if (fam.fronts === 'drawers') {
-    addDrawers(s.drawers ?? 3, 0, H, s.drawerHeights);
-  } else if (fam.fronts === 'microwave') {
-    /* Open bay for the microwave over a drawer. The bay is a hole, not a part. */
-    const bay = s.microH ?? 380;
-    const drawerH = Math.max(120, H - bay - R);
-    addDrawers(s.drawers ?? 1, 0, drawerH, s.drawerHeights);
-  } else if (fam.fronts === 'blind') {
+
+    if (doorNo > 0) {
+      for (let i = 0; i < doorNo; i++) fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
+    }
+  }
+
+  if (fam.fronts === 'blind') {
     /* Blind corner in an L.
 
        The cabinet runs into the corner. The return cabinets on the next wall
@@ -599,29 +718,19 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       fittings.push({ type: 'hinge', qty: H > 900 ? 3 : 2, code: code(`HINGE-${num}`) });
       fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${num}`) });
     }
-  } else if (fam.fronts === 'bin') {
-    addDoors(1, 0, H);
+  }
+
+  if (fam.fronts === 'bin') {
     fittings.push({ type: 'binRunner', qty: 1, code: code('BIN-RUNNER') });
-  } else if (fam.fronts === 'sink') {
-    const fh = 150;
-    parts.push(mkPart({
-      code: code('FALSE'), name: 'False front', group: 'front', material: MAT.front,
-      L: Math.round(frontW), W: fh, T: FT,
-      size: [frontW, fh, FT], pos: [sideGap, H - fh, D], explode: [0, 0, 340], edging: 'All four edges',
-    }));
-    addDoors(2, 0, H - fh - R);
-  } else if (fam.fronts === 'oven') {
-    const cavity = s.ovenH ?? 600;
-    const drawerH = 300;
-    const doorH = H - cavity - drawerH - 2 * R;
-    addDoors(1, H - doorH, doorH);
-    addDrawers(1, 0, drawerH, s.drawerHeights);
   }
 
   return {
     id, familyId, family: fam, name: fam.name, kind, settings: s,
     width: W, height: H, depth: D, mountY, size: [W, H, D],
     parts, fittings, hardware: [], cfg: P, drawerOpening,
+    /* The stack as resolved, with every row's real height and position, and
+       anything wrong with it. Null on a cabinet that has no front. */
+    stack: stackNotes,
     corner: !!fam.corner,
     blindWidth,
     blindExtra,
