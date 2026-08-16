@@ -9,6 +9,8 @@
    the panel as drawn.
    =========================================================================== */
 
+import { whole } from './mm.js';
+
 export const DRILL = {
   pitch: 32,          // system hole spacing
   frontSetback: 37,   // front line, centre to the front edge
@@ -25,7 +27,10 @@ export const DRILL = {
   adjustSteps: 2,   // shelf pin holes either side of the shelf, for adjustment
 };
 
-const hole = (x, y, dia, depth, kind, label) => ({ x, y, dia, depth, kind, label });
+/* A hole position is a whole millimetre. Nobody sets out 37.5 with a tape,
+   and a jig is drilled to a mark, not to a tenth. */
+const hole = (x, y, dia, depth, kind, label) =>
+  ({ x: whole(x), y: whole(y), dia, depth, kind, label });
 
 /**
  * Shelf pin positions. The template is for shelves, so instead of a full

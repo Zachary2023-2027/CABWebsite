@@ -6,6 +6,8 @@
    Frameless European carcass, 32mm system. All dimensions mm, all costs AUD.
    =========================================================================== */
 
+import { assertMm, round1 } from './mm.js';
+
 export const PROJECT = {
   benchHeight: 900,     // finished benchtop height
   benchThk: 30,
@@ -259,8 +261,6 @@ export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
    kerf, so rounding here cannot move a part into or out of a sheet in any
    way that matters, and it means the cut list, the nest, the print pack and
    the workshop view are all quoting the same figure. */
-const round1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n);
-
 const mkPart = (o) => ({
   drawer: null, tone: toneFor(o.material), ...o,
   L: round1(o.L), W: round1(o.W), T: round1(o.T),
@@ -285,6 +285,13 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   if (!fam) throw new Error(`Unknown family ${familyId}`);
 
   const s = { ...fam.def, ...inst };
+
+  /* Guard the numbers coming in, at the one boundary they all pass through.
+     A NaN width propagates into every part, every sheet and every price
+     before anything visibly goes wrong, so it is worth stopping here. */
+  assertMm(s.width, `${familyId} width`);
+  if (s.height !== undefined) assertMm(s.height, `${familyId} height`);
+  if (s.depth !== undefined) assertMm(s.depth, `${familyId} depth`);
 
   /* A cabinet may carry its own overrides, which win over the project
      defaults. That is what lets one cabinet be 18mm while the rest stay 16,

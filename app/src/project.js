@@ -17,6 +17,7 @@
 
 import { FAMILY, PRICES, PROJECT, buildUnit, unitCost } from './catalog.js';
 import { NEST, nestProject } from './nesting.js';
+import { assertMm } from './mm.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -94,6 +95,9 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
      starts clear of the corner cabinet on the wall before it, because that
      cabinet's carcass is already occupying the first few hundred
      millimetres of this wall. */
+  assertMm(wall.length, `${wall.id} length`);
+  assertMm(startOffset, `${wall.id} start offset`);
+
   let baseX = startOffset;
   let wallX = startOffset;
   let n = 0;

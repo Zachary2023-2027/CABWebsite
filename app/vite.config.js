@@ -15,4 +15,13 @@ export default defineConfig({
     target: 'es2022',
     assetsInlineLimit: single ? 100000000 : 4096,
   },
+
+  /* Tests run in node, not a browser. Everything under test is the model:
+     part geometry, nesting, drilling, layout and storage. None of it touches
+     the DOM, and keeping it that way is what makes the suite fast enough to
+     run on every change. */
+  test: {
+    environment: 'node',
+    include: ['src/__tests__/**/*.test.js'],
+  },
 });

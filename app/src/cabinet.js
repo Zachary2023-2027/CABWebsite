@@ -9,6 +9,8 @@
    Frameless European carcass, 32mm system, all dimensions mm.
    =========================================================================== */
 
+import { fmt } from './mm.js';
+
 export const DEFAULTS = {
   width: 600,          // outside width of the carcass
   depth: 560,          // carcass depth, benchtop overhangs this
@@ -198,7 +200,11 @@ export function bounds(cab, t = 0) {
 /** Runner travel, used by the open state. Full extension runners. */
 export const runnerTravel = (cfg = DEFAULTS) => cfg.runnerLength;
 
-export const fmt = (n) => (Math.round(n * 10) / 10).toString();
+/* fmt lives in mm.js now, so there is one implementation. Re-exported here
+   because several screens already import it from this module. A re-export on
+   its own would not put fmt in this module's scope, and cutSize below needs
+   it, so it is imported as well. */
+export { fmt };
 
 /** The cut list line for a part, in the order the brief asks for. */
 export const cutSize = (p) => `${fmt(p.L)} x ${fmt(p.W)} x ${fmt(p.T)}`;
