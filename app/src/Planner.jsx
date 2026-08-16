@@ -5,6 +5,7 @@ import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } fr
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
 import { Board, Choice, Close, Num, Pick, Warn } from './Fields.jsx';
+import StackEditor from './StackEditor.jsx';
 import {
   ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
   unitWarnings, wallWarnings,
@@ -104,21 +105,6 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
 
   const boards = boardNames();
   const fronts = unit.parts.filter((q) => q.code.includes('DRWR-F'));
-  const heights = item.settings?.drawerHeights;
-
-  /* Heights are used as typed. If they do not add up, say so rather than
-     quietly rescaling them behind your back. */
-  const used = fronts.length
-    ? fronts.reduce((acc, q) => acc + q.W, 0) + (fronts.length - 1) * eff('reveal')
-    : 0;
-  const overrun = fronts.length ? Math.round(used - (unit.drawerOpening || unit.height)) : 0;
-
-  const setDrawerH = (i, v) => {
-    const base = (heights && heights.length === fronts.length)
-      ? [...heights] : fronts.map((q) => Math.round(q.W));
-    base[i] = v ?? base[i];
-    set({ drawerHeights: base });
-  };
 
   return (
     <div className="inspector">
@@ -151,11 +137,11 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
         {editable && (
           <>
             <div className="settings-grid">
-              {fam.fronts === 'doors' && unit.kind !== 'tall' && (
+              {fam.fronts === 'doors' && unit.kind !== 'tall' && !unit.settings.stack && (
                 <Pick label="Doors" value={String(unit.settings.doors ?? 1)} options={['1', '2']}
                       onChange={(v) => set({ doors: +v })} />
               )}
-              {(fam.fronts === 'drawers' || fam.fronts === 'microwave') && (
+              {(fam.fronts === 'drawers' || fam.fronts === 'microwave') && !unit.settings.stack && (
                 <Pick label="Drawers" value={String(unit.settings.drawers ?? 3)}
                       options={['1', '2', '3', '4', '5']}
                       onChange={(v) => set({ drawers: +v, drawerHeights: undefined })} />
@@ -193,31 +179,15 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
               </p>
             )}
 
-            {fronts.length > 0 && (
+            {unit.stack && unit.stack.rows.length > 0 && (
               <section className="sub">
                 <div className="sub-head">
-                  <span className="field__label">Drawer heights</span>
-                  {heights && (
-                    <button className="btn btn--ghost"
-                            onClick={() => set({ drawerHeights: undefined })}>Make equal</button>
-                  )}
+                  <span className="field__label">Front layout</span>
                 </div>
-                <div className="settings-grid">
-                  {fronts.map((q, i) => (
-                    <div key={q.code} className={`drawer-field ${selDrawer === i + 1 ? 'is-sel' : ''}`}
-                         onFocusCapture={() => setSelDrawer(i + 1)}>
-                      <Num label={`Drawer ${i + 1}`} value={Math.round(q.W)} min={60} max={900}
-                           onChange={(v) => setDrawerH(i, v)} />
-                    </div>
-                  ))}
-                </div>
-                {overrun !== 0 && (
-                  <Warn level={overrun > 0 ? 'error' : 'warn'}>
-                    {overrun > 0
-                      ? `Drawers are ${overrun}mm taller than the opening.`
-                      : `${-overrun}mm of the opening is unused.`}
-                  </Warn>
-                )}
+                <StackEditor unit={unit} cfg={cfg} selRow={selDrawer} setSelRow={setSelDrawer}
+                             onStack={(stack) => set({ stack, drawerHeights: undefined })} />
+                {unit.stack.errors.map((e, i) => <Warn key={`e${i}`} level="error">{e}</Warn>)}
+                {unit.stack.warnings.map((w, i) => <Warn key={`w${i}`}>{w}</Warn>)}
               </section>
             )}
 

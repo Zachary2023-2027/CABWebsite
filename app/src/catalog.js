@@ -27,6 +27,12 @@ export const PROJECT = {
   backThk: 6,
   frontThk: 18,
   reveal: 3,
+  /* The gap above the top front and below the bottom one. Zero is the
+     geometry this app has always produced, fronts filling the carcass
+     exactly. A base cabinet has a benchtop sitting over its top front, so a
+     gap there stops it rubbing: that is your call, not a constant. */
+  revealTop: 0,
+  revealBottom: 0,
   /* Kept so a project saved before runner profiles still opens. It is not
      read by the geometry any more: the profile below decides the drawer box
      width, and hydrate turns a stored clearance into a profile. */

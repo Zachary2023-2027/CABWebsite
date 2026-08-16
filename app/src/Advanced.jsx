@@ -25,6 +25,8 @@ const GROUPS = [
     fields: [['baseDepth', 'Base depth'], ['wallDepth', 'Wall depth'],
              ['benchDepth', 'Benchtop depth'], ['blindClearance', 'Blind corner, past the benchtop'],
              ['reveal', 'Gap between fronts'],
+             ['revealTop', 'Gap above the top front'],
+             ['revealBottom', 'Gap below the bottom front'],
              ['boxSetback', 'Box behind the front'],
              ['boxHeight', 'Drawer box side height'], ['backRailHeight', 'Back rail height']] },
 ];
