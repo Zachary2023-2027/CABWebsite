@@ -10,11 +10,11 @@ import { useState } from 'react';
 import { FAMILY, PROJECT, boardNames } from './catalog.js';
 import { ROOM_SHAPES, roomWallIds } from './project.js';
 import {
-  DEPTH_ALLOWANCE, HINGE_LIST, RUNNER_LIST, boringInRange, cupCentre, hingeProfile,
+  HINGE_LIST, boringInRange, cupCentre, hingeProfile,
   longestFitting, runnerProfile,
 } from './hardware.js';
 import { JOINT_LIST, REAR_ROWS, SYS32, jointMethod, rearRowX } from './drilling.js';
-import { fmt } from './mm.js';
+import { fmt, round1 } from './mm.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
 const GROUPS = [
@@ -57,12 +57,17 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
   const hinge = hingeProfile(cfg.hingeProfile);
   const boring = cfg.hingeBoringDistance ?? hinge.boringDistance;
 
+  /* The stored figure is what the runner takes off the opening, because that
+     is what the catalogue publishes and what the geometry is built from. The
+     gap each side is the same fact said the way you measure it, so that is
+     what the field shows and the conversion happens here rather than in the
+     geometry. */
+  const clearEachSide = round1((deduction - 2 * cfg.boxSideThk) / 2);
+
   const opening = 600 - 2 * cfg.carcassThk;
   const boxNote = `In a 600mm cabinet: opening ${opening}, drawer box `
-    + `${opening - deduction} inside, `
-    + `${opening - deduction + 2 * cfg.boxSideThk} outside, `
-    + `${(deduction - 2 * cfg.boxSideThk) / 2}mm clear each side.`
-    + (isCustomDeduction ? ' Using your measured figure.' : '');
+    + `${opening - deduction + 2 * cfg.boxSideThk} wide outside, `
+    + `${opening - deduction} inside, with ${clearEachSide}mm each side.`;
 
   return (
     <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -101,35 +106,25 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
           <section className="adv-group">
             <span className="field__label">Drawer runners</span>
             <p className="note">
-              The runner decides the drawer box width. The figure it deducts is to the
-              inside of the box, so the outside is that plus twice your box side
-              thickness. The published figures are a starting point: measure your own
-              runner and type it in, because every drawer box in the kitchen is built
-              from this number.
+              One number: the gap between the inside of the carcass and the outside
+              of the drawer box, on each side. Everything else about the drawer box
+              is worked out from it.
             </p>
             <div className="settings-grid">
-              <Choice label="Runner" value={cfg.runnerProfile || 'tandem-563h'}
-                      options={RUNNER_LIST.map((r) => ({ value: r.id, label: r.name.replace('Blum ', '') }))}
-                      onChange={(v) => onChange({ runnerProfile: v })} />
-            </div>
-            <div className="settings-grid">
-              <Choice label="Nominal length" value={String(cfg.runnerLength ?? 500)}
+              <Num label="Gap each side" value={clearEachSide}
+                   onChange={(v) => onChange({
+                     runnerDeduction: v === null ? null : 2 * (v + cfg.boxSideThk),
+                   })} />
+              <Choice label="Runner length" value={String(cfg.runnerLength ?? 500)}
                       options={legalLengths.map((L) => ({ value: String(L), label: `${L}` }))}
                       onChange={(v) => onChange({ runnerLength: Number(v) })} />
-            </div>
-            <div className="settings-grid">
-              <Num label="Deducts from the opening" value={deduction}
-                   onChange={(v) => onChange({ runnerDeduction: v ?? null })} />
-              <Num label="Cabinet deeper than the runner"
-                   value={cfg.runnerDepthAllowance ?? DEPTH_ALLOWANCE}
-                   onChange={(v) => onChange({ runnerDepthAllowance: v ?? DEPTH_ALLOWANCE })} />
             </div>
             <p className="note">{boxNote}</p>
             {isCustomDeduction && (
               <div className="group-foot">
                 <button className="btn btn--ghost"
                         onClick={() => onChange({ runnerDeduction: null })}>
-                  Back to the {profile.name.replace('Blum ', '')} figure of {profile.insideDeduction}
+                  Back to {round1((profile.insideDeduction - 2 * cfg.boxSideThk) / 2)}mm, the gap this runner is made for
                 </button>
               </div>
             )}

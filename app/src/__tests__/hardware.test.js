@@ -341,3 +341,33 @@ describe('a cabinet buys the hinges it drills', () => {
     }
   });
 });
+
+/* The runner setting is typed as the gap you can measure with a rule: from
+   the inside of the carcass to the outside of the drawer box, each side. The
+   geometry still works in what the runner takes off the opening, because that
+   is what the catalogue publishes, so the two readings have to agree exactly
+   or the box comes out the wrong width. */
+describe('the gap each side and the deduction are the same fact', () => {
+  const carcassThk = 16;
+  const boxSideThk = 16;
+
+  for (const gap of [0, 3, 5, 12.5]) {
+    it(`a typed gap of ${gap}mm produces exactly that gap`, () => {
+      const deduction = 2 * (gap + boxSideThk);
+      const box = drawerBox({
+        cabinetWidth: 600, carcassThk, boxSideThk, nominalLength: 500,
+        profile: tandem, deduction,
+      });
+      expect(box.clearanceEachSide).toBeCloseTo(gap, 6);
+      expect(box.outsideWidth).toBeCloseTo(box.openingWidth - 2 * gap, 6);
+      expect(box.insideWidth).toBeCloseTo(box.outsideWidth - 2 * boxSideThk, 6);
+    });
+  }
+
+  it('the published figure reads back as 5mm each side', () => {
+    const box = drawerBox({
+      cabinetWidth: 600, carcassThk, boxSideThk, nominalLength: 500, profile: tandem,
+    });
+    expect(box.clearanceEachSide).toBe(5);
+  });
+});
