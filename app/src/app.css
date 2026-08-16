@@ -1019,3 +1019,24 @@ body {
 
 /* The saw settings sit above the sheets they change. */
 .saw-card { margin-bottom: var(--sp-2); }
+
+/* ---------------------------------------------------------------------------
+   Screens that run down the page.
+
+   The default is a fixed height shell with the body scrolling inside it, so
+   the heading stays put over a long list. A short screen does not need that,
+   and a scrollbar drawn around three rows makes the table look smaller than
+   it is. A flow screen takes its natural height and the main area scrolls.
+
+   No :has() needed: a normal screen is flex: 1 against a min-height of zero,
+   so it fits the pane exactly and never asks the main area to scroll.
+   --------------------------------------------------------------------------- */
+.app-main { overflow-y: auto; overflow-x: hidden; }
+.app-main > .screen--flow { flex: none; min-height: auto; }
+.screen--flow { overflow: visible; }
+.screen--flow .screen-body { overflow: visible; min-height: auto; }
+
+/* A 560 by 2100 side panel capped at 420px tall drew the hole ladder as a
+   row of specks. Tall panels get the height instead. Not the width: the
+   drawing keeps its proportions, so a wider card would only add margin. */
+.panel-card--tall .panel-svg { max-height: 640px; }

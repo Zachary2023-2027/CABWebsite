@@ -72,14 +72,26 @@ function PanelSvg({ panel }) {
 
 export default function Drilling({ project }) {
   const units = useMemo(() => allUnits(project), [project]);
-  const [sel, setSel] = useState(null);
 
-  const current = units.find((u) => u.item.uid === sel) || units[0];
-  const panels = useMemo(() => (current ? drillUnit(current.unit) : []), [current]);
+  /* Work out what every cabinet has to be drilled before choosing one to
+     show. Drawer banks have nothing to set out, so a third of a kitchen has
+     no panels at all: opening this screen onto one of those looked like the
+     screen was broken rather than like the cabinet being finished. */
+  const withPanels = useMemo(() => units.map((u) => ({
+    ...u, panels: drillUnit(u.unit),
+  })), [units]);
+
+  const drilled = withPanels.filter((u) => u.panels.length);
+  const [sel, setSel] = useState('all');
+
+  const current = sel === 'all' ? null : withPanels.find((u) => u.item.uid === sel);
+  const showing = sel === 'all' ? drilled : (current ? [current] : []);
+  const panels = showing.flatMap((u) => u.panels.map((p) => ({ ...p, unitLabel: u.label })));
+  const holes = panels.reduce((a, p) => a + p.holes.length, 0);
 
   if (!units.length) {
     return (
-      <Screen title="Drilling" context="Hole positions for every panel, 32mm system.">
+      <Screen title="Drilling" context="Hole positions for every panel, 32mm system." flow>
         <Empty text="No cabinets yet. Add some in the planner." />
       </Screen>
     );
@@ -87,13 +99,20 @@ export default function Drilling({ project }) {
 
   const action = (
     <div className="inline">
+      <span className="progress-count">
+        <span className="num">{panels.length}</span> panels, <span className="num">{holes}</span> holes
+      </span>
       <label className="field compact filter">
         <span className="field__label">Cabinet</span>
         <div className="input-shell select-shell">
-          <select value={current.item.uid} onChange={(e) => setSel(e.target.value)}>
-            {units.map((u) => (
+          <select value={sel} onChange={(e) => setSel(e.target.value)}>
+            <option value="all">
+              Every cabinet, {drilled.length} of {units.length}
+            </option>
+            {withPanels.map((u) => (
               <option key={u.item.uid} value={u.item.uid}>
-                {u.label} {u.unit.family.name} {u.unit.width}
+                {u.label ? `${u.label} ` : ''}{u.unit.family.name} {u.unit.width}
+                {u.panels.length ? ` (${u.panels.length})` : ' (nothing to drill)'}
               </option>
             ))}
           </select>
@@ -104,7 +123,9 @@ export default function Drilling({ project }) {
   );
 
   return (
-    <Screen title="Drilling" context={`${DRILL.pitch}mm system. Positions are to hole centres, measured from the bottom left of the panel as drawn.`} action={action} wide>
+    <Screen title="Drilling"
+            context={`${DRILL.pitch}mm system. Positions are to hole centres, measured from the bottom left of the panel as drawn.`}
+            action={action} wide flow>
       <div className="legend">
         {Object.entries(HOLE_STYLE).map(([k, v]) => (
           <span className="legend-item" key={k}>
@@ -114,13 +135,31 @@ export default function Drilling({ project }) {
       </div>
 
       {!panels.length ? (
-        <Empty text="This cabinet has no drilled panels." />
+        <div className="card">
+          <p className="note">
+            {current
+              ? `${current.label ? `${current.label}, ` : ''}${current.unit.family.name} has nothing to drill.`
+              : 'Nothing in this kitchen needs drilling yet.'}
+            {' '}
+            The template is for shelves. A drawer bank carries its load on the runners, and
+            a filler is a strip of board, so neither has holes to set out. Doors are drilled
+            for their hinges and show up here with the cabinet they belong to.
+          </p>
+          {drilled.length > 0 && (
+            <button className="btn btn--secondary" onClick={() => setSel('all')}>
+              Show the {drilled.length} cabinet{drilled.length === 1 ? '' : 's'} that do need drilling
+            </button>
+          )}
+        </div>
       ) : (
         <div className="panel-grid">
           {panels.map((p) => (
-            <article className="card panel-card" key={p.code}>
+            <article className={`card panel-card ${p.h > p.w * 1.6 ? 'panel-card--tall' : ''}`}
+                     key={p.code}>
               <div className="card__head">
-                <span className="card__title">{p.name}</span>
+                <span className="card__title">
+                  {sel === 'all' && p.unitLabel ? `${p.unitLabel} ` : ''}{p.name}
+                </span>
                 <span className="badge badge--neutral badge--num">{p.code}</span>
               </div>
               <PanelSvg panel={p} />

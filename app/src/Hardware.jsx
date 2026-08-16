@@ -82,7 +82,7 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
 
   if (!fittings.length) {
     return (
-      <Screen title="Hardware" context="Everything that is not board.">
+      <Screen title="Hardware" context="Everything that is not board." flow>
         <Empty text="No hardware yet. Add cabinets in the planner." />
         <Extras project={project} setProject={setProject} />
       </Screen>
@@ -122,7 +122,8 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
 
   return (
     <Screen title="Hardware" context="Grouped totals. Edit a unit cost and the project total follows."
-            action={<div className="inline"><Est /><span className="progress-count num">{money(total)}</span></div>} wide>
+            action={<div className="inline"><Est /><span className="progress-count num">{money(total)}</span></div>}
+            wide flow>
       <div className="table-wrap hardware-table">
         <table className="table">
           <thead>

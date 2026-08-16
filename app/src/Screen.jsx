@@ -1,9 +1,18 @@
 /* Page shell used by every screen except the planner, which owns its own
-   canvas layout. Title, one line of context, primary action right. */
+   canvas layout. Title, one line of context, primary action right.
 
-export default function Screen({ title, context, action, children, wide }) {
+   By default the body scrolls inside the shell, which keeps the heading and
+   its running total in view while you work down a long list. That is what
+   you want on a cut list of two hundred rows.
+
+   `flow` turns that off and lets the screen run to its natural height, so
+   the page scrolls instead of a box inside it. That is what you want on a
+   short screen, where a scrollbar around three rows of a table just makes
+   the table look smaller than it is. */
+
+export default function Screen({ title, context, action, children, wide, flow }) {
   return (
-    <div className={`screen ${wide ? 'screen--wide' : ''}`}>
+    <div className={`screen ${wide ? 'screen--wide' : ''} ${flow ? 'screen--flow' : ''}`}>
       <header className="screen-head">
         <div>
           <h1 className="screen-title">{title}</h1>
