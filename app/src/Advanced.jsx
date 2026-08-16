@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { FAMILY, PROJECT, boardNames } from './catalog.js';
 import { ROOM_SHAPES, roomWallIds } from './project.js';
-import { RUNNER_LIST, longestFitting, runnerProfile } from './hardware.js';
+import { DEPTH_ALLOWANCE, RUNNER_LIST, longestFitting, runnerProfile } from './hardware.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
 const GROUPS = [
@@ -41,11 +41,17 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
   const profile = runnerProfile(cfg.runnerProfile, cfg.customRunner);
   const maxLength = longestFitting(cfg.baseDepth - cfg.boxSetback, profile);
   const legalLengths = (profile.lengths || []).filter((L) => L <= maxLength);
+  /* The deduction shown is whatever is actually being used: the figure you
+     measured if you set one, the published figure otherwise. */
+  const isCustomDeduction = cfg.runnerDeduction !== null && cfg.runnerDeduction !== undefined;
+  const deduction = isCustomDeduction ? cfg.runnerDeduction : profile.insideDeduction;
+
   const opening = 600 - 2 * cfg.carcassThk;
   const boxNote = `In a 600mm cabinet: opening ${opening}, drawer box `
-    + `${opening - profile.insideDeduction} inside, `
-    + `${opening - profile.insideDeduction + 2 * cfg.boxSideThk} outside, `
-    + `${(profile.insideDeduction - 2 * cfg.boxSideThk) / 2}mm clear each side.`;
+    + `${opening - deduction} inside, `
+    + `${opening - deduction + 2 * cfg.boxSideThk} outside, `
+    + `${(deduction - 2 * cfg.boxSideThk) / 2}mm clear each side.`
+    + (isCustomDeduction ? ' Using your measured figure.' : '');
 
   return (
     <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -86,7 +92,9 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
             <p className="note">
               The runner decides the drawer box width. The figure it deducts is to the
               inside of the box, so the outside is that plus twice your box side
-              thickness. Check it against the runner you are buying before cutting.
+              thickness. The published figures are a starting point: measure your own
+              runner and type it in, because every drawer box in the kitchen is built
+              from this number.
             </p>
             <div className="settings-grid">
               <Choice label="Runner" value={cfg.runnerProfile || 'tandem-563h'}
@@ -98,7 +106,22 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
                       options={legalLengths.map((L) => ({ value: String(L), label: `${L}` }))}
                       onChange={(v) => onChange({ runnerLength: Number(v) })} />
             </div>
+            <div className="settings-grid">
+              <Num label="Deducts from the opening" value={deduction}
+                   onChange={(v) => onChange({ runnerDeduction: v ?? null })} />
+              <Num label="Cabinet deeper than the runner"
+                   value={cfg.runnerDepthAllowance ?? DEPTH_ALLOWANCE}
+                   onChange={(v) => onChange({ runnerDepthAllowance: v ?? DEPTH_ALLOWANCE })} />
+            </div>
             <p className="note">{boxNote}</p>
+            {isCustomDeduction && (
+              <div className="group-foot">
+                <button className="btn btn--ghost"
+                        onClick={() => onChange({ runnerDeduction: null })}>
+                  Back to the {profile.name.replace('Blum ', '')} figure of {profile.insideDeduction}
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="adv-group">

@@ -68,6 +68,67 @@ describe('drawer box width, TANDEM 563H', () => {
   });
 });
 
+/* The deduction is the one figure that cannot be checked from inside a
+   browser, so it is typed. These assert that a measured number wins over the
+   published one, and that an unset one falls back rather than deducting
+   nothing. */
+describe('the deduction is a value you can set', () => {
+  it('a measured figure wins over the published one', () => {
+    const box = drawerBox({
+      cabinetWidth: 600, carcassThk: 16, boxSideThk: 16,
+      nominalLength: 500, profile: tandem, deduction: 40,
+    });
+    expect(box.insideDeduction).toBe(40);
+    expect(box.insideWidth).toBe(528);
+    expect(box.outsideWidth).toBe(560);
+    expect(box.clearanceEachSide).toBe(4);
+  });
+
+  it('an unset figure falls back to the profile, never to zero', () => {
+    for (const unset of [null, undefined, '']) {
+      const box = drawerBox({
+        cabinetWidth: 600, carcassThk: 16, boxSideThk: 16,
+        nominalLength: 500, profile: tandem, deduction: unset,
+      });
+      expect(box.insideDeduction, String(unset)).toBe(42);
+      expect(box.outsideWidth, String(unset)).toBe(558);
+    }
+  });
+
+  it('nonsense falls back rather than building a box the size of the cabinet', () => {
+    for (const bad of ['wide', NaN, -5, {}]) {
+      const box = drawerBox({
+        cabinetWidth: 600, carcassThk: 16, boxSideThk: 16,
+        nominalLength: 500, profile: tandem, deduction: bad,
+      });
+      expect(box.insideDeduction, String(bad)).toBe(42);
+    }
+  });
+
+  it('zero is a legal value, because some runners deduct nothing', () => {
+    const box = drawerBox({
+      cabinetWidth: 600, carcassThk: 16, boxSideThk: 16,
+      nominalLength: 500, profile: tandem, deduction: 0,
+    });
+    expect(box.insideDeduction).toBe(0);
+    expect(box.insideWidth).toBe(568);
+  });
+
+  it('the built cabinet uses the typed figure, not the published one', () => {
+    const u = buildUnit('T1', 'base-3drawer', { width: 600 },
+      { ...PROJECT, runnerDeduction: 40 });
+    const front = u.parts.find((p) => p.code.endsWith('DRWR1-FRONT'));
+    expect(front.L).toBe(528);
+  });
+
+  it('the depth allowance is a value you can set', () => {
+    // A 500 runner needs 525 of depth at the default allowance.
+    expect(longestFitting(530, tandem, 25)).toBe(500);
+    // Allow 60 and the same cabinet only takes a 450.
+    expect(longestFitting(530, tandem, 60)).toBe(450);
+  });
+});
+
 describe('nominal lengths', () => {
   it('only lengths that are actually sold are legal', () => {
     expect(isLegalLength(500, tandem)).toBe(true);

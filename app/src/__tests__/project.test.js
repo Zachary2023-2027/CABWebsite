@@ -162,6 +162,39 @@ describe('hydrate', () => {
     }).not.toThrow();
   });
 
+  it('checks the project config against the shape it should have', () => {
+    const h = hydrate({
+      schema: 2, id: 'x', name: 'k', savedAt: 1, cut: [], prices: {}, quoted: '',
+      project: {
+        ...tinyProject(),
+        cfg: {
+          carcassThk: 'thick', reveal: {}, carcassBoard: 42,
+          runnerDeduction: 'wide', bogusKey: 1, kerf: -5,
+        },
+      },
+    });
+
+    // Junk is dropped and the default stands, rather than being carried in
+    // the file and coming back every time it is opened.
+    expect(h.project.cfg.carcassThk).toBe(16);
+    expect(h.project.cfg.reveal).toBe(3);
+    expect(h.project.cfg.carcassBoard).toBe('White melamine');
+    expect(h.project.cfg.kerf).toBe(3.2);
+    expect(h.project.cfg.bogusKey).toBeUndefined();
+    // Null is the real value for a deduction that follows the profile.
+    expect(h.project.cfg.runnerDeduction).toBeNull();
+  });
+
+  it('keeps a measured runner deduction, including zero', () => {
+    for (const d of [40, 0]) {
+      const h = hydrate({
+        schema: 2, id: 'x', name: 'k', savedAt: 1, cut: [], prices: {}, quoted: '',
+        project: { ...tinyProject(), cfg: { ...tinyProject().cfg, runnerDeduction: d } },
+      });
+      expect(h.project.cfg.runnerDeduction, String(d)).toBe(d);
+    }
+  });
+
   it('rejects something that is not a project at all', () => {
     expect(hydrate(null)).toBeNull();
     expect(hydrate({})).toBeNull();

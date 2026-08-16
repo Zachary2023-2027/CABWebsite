@@ -159,7 +159,7 @@ export function hydrate(raw) {
       name: String(p.name || raw.name || 'Untitled kitchen'),
       cfg: {
         ...PROJECT,
-        ...cfgIn,
+        ...cleanCfg(cfgIn),
         ...(migrated ? { runnerProfile: migrated.profileId } : {}),
         ...(migrated && migrated.custom ? { customRunner: migrated.custom } : {}),
       },
@@ -190,6 +190,48 @@ export function hydrate(raw) {
   };
 }
 
+/**
+ * The project config, checked against the shape of PROJECT.
+ *
+ * A key whose default is a number has to arrive as a number, and one whose
+ * default is a string has to arrive as a string. Anything else is dropped
+ * and the default stands. Without this a hand edited file could put the word
+ * "wide" where a thickness goes: the geometry falls back safely, but the junk
+ * stays in the file and comes back every time it is opened.
+ */
+function cleanCfg(cfg) {
+  if (!cfg || typeof cfg !== 'object') return {};
+  const out = {};
+
+  for (const [k, v] of Object.entries(cfg)) {
+    const fallback = PROJECT[k];
+
+    /* Null means follow the runner profile, and zero is a real deduction, so
+       this one cannot use the numeric rule below. */
+    if (k === 'runnerDeduction') {
+      if (v === null || v === undefined || v === '') out[k] = null;
+      else if (Number.isFinite(Number(v)) && Number(v) >= 0) out[k] = Number(v);
+      continue;
+    }
+
+    // A profile carried over by migration is an object, and it is trusted
+    // because migration built it, not the file.
+    if (k === 'customRunner') { if (v && typeof v === 'object') out[k] = v; continue; }
+
+    if (typeof fallback === 'number') {
+      if (Number.isFinite(Number(v)) && Number(v) >= 0 && v !== '' && v !== null) out[k] = Number(v);
+      continue;
+    }
+    if (typeof fallback === 'string') {
+      if (typeof v === 'string') out[k] = v;
+      continue;
+    }
+    if (fallback === undefined) continue;   // not a key this app knows
+    out[k] = v;
+  }
+  return out;
+}
+
 /* Per cabinet settings are free form, because a family decides what it reads.
    The two that carry structure are checked: drawer heights have to be real
    numbers, and a config override has to be numbers or short strings, so a
@@ -198,6 +240,13 @@ function cleanSettings(s) {
   if (!s || typeof s !== 'object') return {};
   const out = {};
   for (const [k, v] of Object.entries(s)) {
+    if (k === 'runnerDeduction') {
+      /* Null means follow the profile. Zero is a real value, so it cannot be
+         filtered out with a falsy test. */
+      if (v === null || v === undefined || v === '') { out[k] = null; continue; }
+      if (Number.isFinite(Number(v)) && Number(v) >= 0) out[k] = Number(v);
+      continue;
+    }
     if (k === 'x') {
       /* Where the cabinet was put along its wall. Anything that is not a
          real number is dropped, and the cabinet goes back to flowing after

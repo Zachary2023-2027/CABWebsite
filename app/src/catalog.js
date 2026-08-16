@@ -31,6 +31,13 @@ export const PROJECT = {
      width, and hydrate turns a stored clearance into a profile. */
   runnerClearance: 21,
   runnerProfile: 'tandem-563h',
+  /* The figure the runner deducts from the opening width, to the inside of
+     the drawer box. Empty means use the profile's published figure. Set it
+     to whatever you measure off the runner in your hand: it is the number
+     every drawer box in the kitchen is built from. */
+  runnerDeduction: null,
+  /* How much deeper than the runner the cabinet has to be. */
+  runnerDepthAllowance: 25,
   boxSideThk: 16,
   boxBaseThk: 6,
   boxHeight: 140,
@@ -479,11 +486,14 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     const profile = runnerProfile(P.runnerProfile, P.customRunner);
     const internalDepth = D - P.boxSetback;
     const wantLength = Number(P.runnerLength) || 500;
-    const RL = Math.min(nearestLength(wantLength, profile), longestFitting(internalDepth, profile));
+    const RL = Math.min(
+      nearestLength(wantLength, profile),
+      longestFitting(internalDepth, profile, P.runnerDepthAllowance),
+    );
 
     const box = drawerBox({
       cabinetWidth: W, carcassThk: T, boxSideThk: P.boxSideThk,
-      nominalLength: RL, profile,
+      nominalLength: RL, profile, deduction: P.runnerDeduction,
     });
     const boxW = box.outsideWidth;
     const boxInnerW = box.insideWidth;

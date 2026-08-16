@@ -29,11 +29,14 @@ export const NOMINAL_LENGTHS = [270, 300, 350, 400, 450, 500, 550, 600, 650];
 /**
  * How much internal cabinet depth a nominal length needs.
  *
- * VERIFY BEFORE IMPLEMENTING against the Blum catalogue. Defaulting to the
- * nominal length plus 25 and warning rather than blocking, because a runner
- * that will not fit is worth saying out loud and not worth refusing to draw.
+ * The allowance is a typed setting, because the catalogue figure depends on
+ * the runner and on how the back is built. Defaulting to 25 and warning
+ * rather than blocking, since a runner that will not fit is worth saying out
+ * loud and not worth refusing to draw.
  */
-export const minDepthFor = (nominalLength) => nominalLength + 25;
+export const DEPTH_ALLOWANCE = 25;
+export const minDepthFor = (nominalLength, allowance = DEPTH_ALLOWANCE) =>
+  nominalLength + allowance;
 
 export const RUNNERS = {
   'tandem-563h': {
@@ -104,9 +107,10 @@ export const isLegalLength = (length, profile) =>
   (profile.lengths || NOMINAL_LENGTHS).includes(length);
 
 /** The longest nominal length that fits a cabinet of this internal depth. */
-export function longestFitting(internalDepth, profile = RUNNERS['tandem-563h']) {
+export function longestFitting(internalDepth, profile = RUNNERS['tandem-563h'],
+  allowance = DEPTH_ALLOWANCE) {
   const fits = (profile.lengths || NOMINAL_LENGTHS)
-    .filter((L) => minDepthFor(L) <= internalDepth);
+    .filter((L) => minDepthFor(L, allowance) <= internalDepth);
   return fits.length ? fits[fits.length - 1] : (profile.lengths || NOMINAL_LENGTHS)[0];
 }
 
@@ -126,12 +130,27 @@ export function longestFitting(internalDepth, profile = RUNNERS['tandem-563h']) 
  * @param {number} a.nominalLength  runner length, one of the legal lengths
  * @param {object} a.profile        a runner profile
  */
-export function drawerBox({ cabinetWidth, carcassThk, boxSideThk, nominalLength, profile }) {
+export function drawerBox({
+  cabinetWidth, carcassThk, boxSideThk, nominalLength, profile, deduction,
+}) {
+  /* The deduction is the one number every drawer in the kitchen depends on,
+     and it is the one number that cannot be checked from inside a browser.
+     So it is typed: the profile carries the published figure as a starting
+     point, and whatever you measure off the runner in your hand wins. */
+  /* Number(null) is 0 and Number('') is 0, so an unset deduction would read
+     as deducting nothing and make every box the full width of the opening.
+     Emptiness has to be tested before the number is. */
+  const typed = (deduction === null || deduction === undefined || deduction === '')
+    ? null : Number(deduction);
+  const insideDeduction = (typed !== null && Number.isFinite(typed) && typed >= 0)
+    ? typed : profile.insideDeduction;
+
   const openingWidth = cabinetWidth - 2 * carcassThk;
-  const insideWidth = openingWidth - profile.insideDeduction;
+  const insideWidth = openingWidth - insideDeduction;
   const outsideWidth = insideWidth + 2 * boxSideThk;
 
   return {
+    insideDeduction,
     openingWidth,
     insideWidth,
     outsideWidth,
