@@ -58,6 +58,17 @@ export const PROJECT = {
   hinge2MaxHeight: 900,
   hinge3MaxHeight: 1600,
   hinge4MaxHeight: 2000,
+
+  /* Which line the back row of system holes sits on. On the grid means both
+     rows are a whole number of 32mm steps apart and one jig setting drills
+     both. Mirrored means 37mm in from each edge, which is what a fixed twin
+     line jig gives you. They are different holes, so pick one and stay with
+     it across the kitchen. */
+  rearRow: 'grid',
+  /* How the carcass is held together. Both halves of every joint are drawn
+     from this: a clearance hole through the side, a pilot down the edge of
+     what it screws into. */
+  jointMethod: 'confirmat-7x50',
   boxSideThk: 16,
   boxBaseThk: 6,
   boxHeight: 140,

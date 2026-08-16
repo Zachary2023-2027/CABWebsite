@@ -1094,3 +1094,28 @@ body {
 @media (pointer: coarse) {
   .stack-row { min-height: var(--touch-min); }
 }
+
+/* The hole schedule under each drilling template. Counting holes off a
+   drawing is how you find out at the bench that you drilled five instead of
+   six, so the drawing gets a list beside it. */
+.hole-schedule {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--sp-3);
+  font-size: var(--fs-2);
+}
+.hole-schedule th,
+.hole-schedule td {
+  padding: var(--sp-2) var(--sp-2);
+  border-bottom: 1px solid var(--line-weak);
+  text-align: left;
+  vertical-align: middle;
+}
+.hole-schedule th {
+  color: var(--text-2);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+.hole-schedule .num { text-align: right; font-variant-numeric: tabular-nums; }
+.hole-schedule tr:last-child td { border-bottom: 0; }
+.hole-schedule .legend-dot { margin-right: var(--sp-2); }

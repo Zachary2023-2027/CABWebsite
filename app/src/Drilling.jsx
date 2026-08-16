@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { allUnits } from './project.js';
 import { DRILL, HOLE_STYLE, drillUnit } from './drilling.js';
+import { fmt } from './mm.js';
 
 /* Panel drawn flat at a known scale, so a print at 100 percent is usable
    as a setting out sheet. Dimensions are to hole centres. */
@@ -66,7 +67,54 @@ function PanelSvg({ panel }) {
       <text x={-pad + 10} y={h / 2} textAnchor="middle" fill="var(--dw-dim)"
             fontFamily="var(--font-mono)" fontSize="28"
             transform={`rotate(-90 ${-pad + 10} ${h / 2})`}>{panel.yLabel} {h}</text>
+
+      {/* Scale check. Printed at 100 percent this bar measures 100mm, so a
+          rule across it says straight away whether the sheet came out at
+          size or whether the printer has shrunk it to fit the page. */}
+      <g transform={`translate(0 ${-pad + 34})`}>
+        <line x1="0" y1="0" x2="100" y2="0" stroke="var(--dw-dim)" strokeWidth="4" />
+        <line x1="0" y1="-10" x2="0" y2="10" stroke="var(--dw-dim)" strokeWidth="4" />
+        <line x1="100" y1="-10" x2="100" y2="10" stroke="var(--dw-dim)" strokeWidth="4" />
+        <line x1="50" y1="-6" x2="50" y2="6" stroke="var(--dw-dim)" strokeWidth="2" />
+        <text x="112" y="10" fill="var(--dw-dim)" fontFamily="var(--font-mono)"
+              fontSize="26">100mm, check this with a rule before you drill</text>
+      </g>
     </svg>
+  );
+}
+
+/* Every hole on the panel as a list, grouped by what it is. The drawing is
+   for setting out and the table is for checking: counting holes off a drawing
+   is how you find out at the bench that you drilled five instead of six. */
+function HoleSchedule({ panel }) {
+  const groups = new Map();
+  for (const h of panel.holes) {
+    const key = `${h.kind}|${h.dia}|${h.depth}`;
+    if (!groups.has(key)) groups.set(key, { ...h, qty: 0, ys: [] });
+    const g = groups.get(key);
+    g.qty++;
+    if (!g.ys.includes(h.y)) g.ys.push(h.y);
+  }
+
+  return (
+    <table className="hole-schedule">
+      <thead>
+        <tr><th>Hole</th><th className="num">Size</th><th className="num">Depth</th><th className="num">How many</th></tr>
+      </thead>
+      <tbody>
+        {[...groups.values()].map((g, i) => (
+          <tr key={i}>
+            <td>
+              <span className="legend-dot" style={{ background: HOLE_STYLE[g.kind]?.fill }} />
+              {HOLE_STYLE[g.kind]?.label || g.kind}
+            </td>
+            <td className="num">{fmt(g.dia)}mm</td>
+            <td className="num">{g.depth ? `${fmt(g.depth)}mm` : 'through'}</td>
+            <td className="num">{g.qty}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -160,7 +208,12 @@ export default function Drilling({ project }) {
                 <span className="card__title">
                   {sel === 'all' && p.unitLabel ? `${p.unitLabel} ` : ''}{p.name}
                 </span>
-                <span className="badge badge--neutral badge--num">{p.code}</span>
+                <span className="inline">
+                  {p.hand && (
+                    <span className="badge badge--warn">{p.hand === 'left' ? 'LEFT hand' : 'RIGHT hand'}</span>
+                  )}
+                  <span className="badge badge--neutral badge--num">{p.code}</span>
+                </span>
               </div>
               <PanelSvg panel={p} />
               <div className="panel-meta">
@@ -170,6 +223,7 @@ export default function Drilling({ project }) {
               <ul className="panel-notes">
                 {p.notes.map((n, i) => <li key={i}>{n}</li>)}
               </ul>
+              <HoleSchedule panel={p} />
             </article>
           ))}
         </div>

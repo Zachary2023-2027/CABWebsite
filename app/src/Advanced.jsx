@@ -13,6 +13,7 @@ import {
   DEPTH_ALLOWANCE, HINGE_LIST, RUNNER_LIST, boringInRange, cupCentre, hingeProfile,
   longestFitting, runnerProfile,
 } from './hardware.js';
+import { JOINT_LIST, REAR_ROWS, SYS32, jointMethod, rearRowX } from './drilling.js';
 import { fmt } from './mm.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
@@ -52,6 +53,7 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
   const isCustomDeduction = cfg.runnerDeduction !== null && cfg.runnerDeduction !== undefined;
   const deduction = isCustomDeduction ? cfg.runnerDeduction : profile.insideDeduction;
 
+  const joint = jointMethod(cfg.jointMethod);
   const hinge = hingeProfile(cfg.hingeProfile);
   const boring = cfg.hingeBoringDistance ?? hinge.boringDistance;
 
@@ -165,6 +167,29 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
               <Num label="Four up to" value={cfg.hinge4MaxHeight ?? 2000}
                    onChange={(v) => onChange({ hinge4MaxHeight: v ?? 2000 })} />
             </div>
+          </section>
+
+          <section className="adv-group">
+            <span className="field__label">Drilling</span>
+            <p className="note">
+              Where the back row of shelf pin holes goes, and how the carcass is
+              held together. Both halves of every joint are drawn from this: a hole
+              through the side and a pilot down the edge of what it screws into.
+            </p>
+            <div className="settings-grid">
+              <Choice label="Back row of holes" value={cfg.rearRow || 'grid'}
+                      options={REAR_ROWS.map((r) => ({ value: r.id, label: r.name }))}
+                      onChange={(v) => onChange({ rearRow: v })} />
+              <Choice label="Carcass joint" value={cfg.jointMethod || 'confirmat-7x50'}
+                      options={JOINT_LIST.map((j) => ({ value: j.id, label: j.name }))}
+                      onChange={(v) => onChange({ jointMethod: v })} />
+            </div>
+            <p className="note">
+              {(cfg.rearRow || 'grid') === 'grid'
+                ? `On a ${cfg.baseDepth}mm deep side the back row lands ${rearRowX(cfg.baseDepth, 'grid')}mm in, a whole number of 32mm steps behind the front row, so one jig setting drills both.`
+                : `The back row sits ${SYS32.frontSetback}mm in from the back edge, mirroring the front. It is not on the same grid as the front row.`}
+            </p>
+            <p className="note">{joint.note}</p>
           </section>
 
           <section className="adv-group">
