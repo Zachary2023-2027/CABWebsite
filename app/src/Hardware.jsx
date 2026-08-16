@@ -123,7 +123,7 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
   return (
     <Screen title="Hardware" context="Grouped totals. Edit a unit cost and the project total follows."
             action={<div className="inline"><Est /><span className="progress-count num">{money(total)}</span></div>} wide>
-      <div className="table-wrap" data-density="comfortable">
+      <div className="table-wrap hardware-table">
         <table className="table">
           <thead>
             <tr>
@@ -149,7 +149,7 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
                   </div>
                 </td>
                 <td className="n">{money(r.total)}</td>
-                <td className="dim-cell">{r.units.slice(0, 6).join(', ')}{r.units.length > 6 ? ` +${r.units.length - 6}` : ''}</td>
+                <td className="dim-cell used-in">{r.units.join(', ')}</td>
               </tr>
             ))}
           </tbody>

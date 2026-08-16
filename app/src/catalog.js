@@ -49,6 +49,15 @@ export const PROJECT = {
      returns across the front, so if you change its depth the blind has to
      follow or the door stops clearing. This is only the extra past it. */
   blindClearance: 50,
+
+  /* The saw. Kerf is the width of the blade, and it is the gap left between
+     every part on a sheet so that cutting one does not cut into the next.
+     Trim is what comes off each edge of the sheet before anything else, to
+     get a straight reference edge. Both are yours to set: a thin kerf blade
+     and a 3mm track saw do not take the same bite. */
+  kerf: 3.2,
+  trim: 10,
+  minOffcut: 150,
 };
 
 /* Seeded prices. Estimates, shown as such everywhere they appear. */

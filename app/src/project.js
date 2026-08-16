@@ -16,7 +16,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICES, PROJECT, buildUnit, unitCost } from './catalog.js';
-import { nestProject } from './nesting.js';
+import { NEST, nestProject } from './nesting.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -248,6 +248,19 @@ export const looseWalls = (project) => {
 
 /** The corner offset a wall inherits, or zero when it is not in the run. */
 export const wallOffset = (project, wallId) => roomOffsets(project)[wallId] || 0;
+
+/**
+ * The saw settings for a project, for anything that nests.
+ *
+ * Every screen that lays parts out on sheets has to use the same numbers, or
+ * the cut list, the sheet drawings, the costing and the print pack quietly
+ * disagree about how many sheets you are buying.
+ */
+export function nestCfg(project) {
+  const c = project?.cfg || {};
+  const pick = (k) => (Number.isFinite(Number(c[k])) && Number(c[k]) >= 0 ? Number(c[k]) : NEST[k]);
+  return { kerf: pick('kerf'), trim: pick('trim'), minOffcut: pick('minOffcut') };
+}
 
 /* --- placing and snapping -------------------------------------------------
 
@@ -516,7 +529,7 @@ export function totals(project) {
   /* Sheets and board cost come from the same nesting run the Nesting screen
      shows. An area estimate gave a different, lower number for the same
      thing, which is worse than useless when you are buying sheets. */
-  const nest = nestProject(allParts(project));
+  const nest = nestProject(allParts(project), nestCfg(project));
 
   /* Hardware you added yourself. It is not derived from any cabinet, so it
      is counted here once and shows up in costing and in the print pack. */

@@ -349,22 +349,11 @@ function useProjectHistory(project, setProjectRaw) {
 /* --- root ----------------------------------------------------------------- */
 
 export default function App() {
-  const [theme, setTheme] = useState('system');
-  useEffect(() => {
-    if (theme === 'system') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme;
-  }, [theme]);
-  /* Follow the machine while the choice is System. Read once at render and
-     the 3D keeps the colours it started with when the machine changes. */
-  const [systemDark, setSystemDark] = useState(
-    () => matchMedia('(prefers-color-scheme: dark)').matches);
-  useEffect(() => {
-    const mq = matchMedia('(prefers-color-scheme: dark)');
-    const on = (e) => setSystemDark(e.matches);
-    mq.addEventListener('change', on);
-    return () => mq.removeEventListener('change', on);
-  }, []);
-  const resolvedTheme = theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
+  /* Light, always. A workshop is a bright room and a drawing is a drawing:
+     one look, one set of colours, nothing to choose. The dark palette is
+     still in the tokens if it is ever wanted again, it is just not offered. */
+  useEffect(() => { document.documentElement.dataset.theme = 'light'; }, []);
+  const resolvedTheme = 'light';
 
   const [project, setProjectRaw] = useState(null);
   const history = useProjectHistory(project, setProjectRaw);
@@ -451,14 +440,7 @@ export default function App() {
         <header className="topbar">
           <span className="brand">Kitchen cabinet builder</span>
           <span className="ctx">Plan it, price it, cut it.</span>
-          <div className="right">
-            <div className="seg" role="group" aria-label="Theme">
-              {['system', 'light', 'dark'].map((t) => (
-                <button key={t} className="seg__item" aria-pressed={theme === t}
-                        onClick={() => setTheme(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
-              ))}
-            </div>
-          </div>
+          <div className="right" />
         </header>
         <Start
           saved={saved}
@@ -506,7 +488,7 @@ export default function App() {
           : <div className="empty"><div className="empty__text">No cabinets yet. Add one in the planner.</div></div>;
       case 'cutlist': return <CutList project={project} cut={cut} setCut={setCut}
                                       onWorkshop={() => setScreen('workshop')} />;
-      case 'nesting': return <Nesting project={project} />;
+      case 'nesting': return <Nesting project={project} setProject={setProject} />;
       case 'hardware': return <Hardware project={project} setProject={setProject} prices={prices} setPrices={setPrices} />;
       case 'drilling': return <Drilling project={project} />;
       case 'costing': return <Costing project={project} quoted={quoted} setQuoted={setQuoted} />;
@@ -578,12 +560,6 @@ export default function App() {
                   onClick={() => { refreshSaved(); setProject(null); setProjectId(null); }}>
             Projects
           </button>
-          <div className="seg" role="group" aria-label="Theme">
-            {['system', 'light', 'dark'].map((t) => (
-              <button key={t} className="seg__item" aria-pressed={theme === t}
-                      onClick={() => setTheme(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
-            ))}
-          </div>
         </div>
       </header>
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
-import { allParts } from './project.js';
+import { allParts, nestCfg } from './project.js';
 import { nestProject } from './nesting.js';
 import { downloadBlob } from './storage.js';
 import { Oversize } from './Nesting.jsx';
@@ -17,7 +17,7 @@ function csv(rows) {
 
 export default function CutList({ project, cut, setCut, onWorkshop }) {
   const parts = useMemo(() => allParts(project), [project]);
-  const oversize = useMemo(() => nestProject(parts).oversize, [parts]);
+  const oversize = useMemo(() => nestProject(parts, nestCfg(project)).oversize, [parts, project]);
   const [group, setGroup] = useState('cabinet');   // cabinet | material | flat
   const [fCab, setFCab] = useState('all');
   const [fMat, setFMat] = useState('all');

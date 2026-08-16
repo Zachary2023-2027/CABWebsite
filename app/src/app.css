@@ -997,3 +997,25 @@ body {
 .p-warns b { display: block; margin-bottom: 1mm; }
 .p-warns ul { margin: 0; padding-left: 4mm; }
 .p-plan .p-table { font-size: 7.4pt; }
+
+/* ---------------------------------------------------------------------------
+   Hardware.
+
+   Three rows of numbers in a table built for forty. Give the rows room, let
+   the cabinet list wrap onto as many lines as it needs instead of being cut
+   off at six with a plus count, and stop the row height fighting it.
+   --------------------------------------------------------------------------- */
+.hardware-table .table th,
+.hardware-table .table td {
+  height: auto;
+  padding: var(--sp-3) var(--sp-4);
+  vertical-align: middle;
+}
+.hardware-table .table thead th { padding-top: var(--sp-2); padding-bottom: var(--sp-2); }
+.hardware-table .table td.used-in { white-space: normal; line-height: var(--lh-2); max-width: 42ch; }
+.hardware-table .table td:first-child { white-space: normal; min-width: 22ch; }
+.hardware-table .inline-num { width: 110px; }
+.hardware-table .table tfoot td { padding-top: var(--sp-3); padding-bottom: var(--sp-3); }
+
+/* The saw settings sit above the sheets they change. */
+.saw-card { margin-bottom: var(--sp-2); }

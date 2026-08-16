@@ -9,8 +9,13 @@ import { useMemo, useRef, useState } from 'react';
 import { snapX, unitWarnings } from './project.js';
 
 const S = 4;        // hairline, mm at drawing scale
-const FS = 40;      // label text
-const FS_DIM = 46;  // dimension text
+/* Text sizes in millimetres of drawing.
+
+   These were set at a desk. Read at arm's length on a tablet propped against
+   a saw they were too small, and the numbers on this drawing are the whole
+   point of it, so they are bigger than the drawing strictly needs. */
+const FS = 72;      // cabinet number and width
+const FS_DIM = 88;  // dimension line
 
 /* How far the pointer has to travel before a press turns into a drag. Below
    this it is a tap, and a tap selects. In millimetres of drawing, so it
@@ -96,7 +101,7 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
   const L = wall.length;
   const padX = 220;
   const padTop = 140;
-  const padBottom = 320;
+  const padBottom = 380;
 
   const Y = (above) => CEIL - above;   // floor is at CEIL in svg space
 
@@ -294,8 +299,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
       {lay.placed.filter((p) => p.label).map((p) => {
         const isWall = p.where === 'wall';
         const ty = isWall
-          ? Y(p.unit.mountY) + FS + 30
-          : Y(p.unit.mountY + p.unit.height) - 30;
+          ? Y(p.unit.mountY) + FS + 34
+          : Y(p.unit.mountY + p.unit.height) - 34;
         return (
           <text key={`l${p.item.uid}`} x={drawX(p) + p.unit.width / 2} y={ty} textAnchor="middle"
                 fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>
@@ -330,16 +335,16 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
 
       {/* dimension line along the bottom */}
       <g>
-        <line x1="0" y1={CEIL + 180} x2={L} y2={CEIL + 180} stroke="var(--dw-dim)" strokeWidth={S} />
-        <line x1="0" y1={CEIL + 145} x2="0" y2={CEIL + 215} stroke="var(--dw-dim)" strokeWidth={S} />
-        <line x1={L} y1={CEIL + 145} x2={L} y2={CEIL + 215} stroke="var(--dw-dim)" strokeWidth={S} />
-        <text x={L / 2} y={CEIL + 160} textAnchor="middle" fill="var(--dw-dim)"
+        <line x1="0" y1={CEIL + 210} x2={L} y2={CEIL + 210} stroke="var(--dw-dim)" strokeWidth={S} />
+        <line x1="0" y1={CEIL + 170} x2="0" y2={CEIL + 250} stroke="var(--dw-dim)" strokeWidth={S} />
+        <line x1={L} y1={CEIL + 170} x2={L} y2={CEIL + 250} stroke="var(--dw-dim)" strokeWidth={S} />
+        <text x={L / 2} y={CEIL + 182} textAnchor="middle" fill="var(--dw-dim)"
               fontFamily="var(--font-mono)" fontSize={FS_DIM}>{L}</text>
         {lay.baseRun > 0 && lay.baseRun < L && (
           <>
-            <line x1="0" y1={CEIL + 280} x2={lay.baseRun} y2={CEIL + 280}
+            <line x1="0" y1={CEIL + 330} x2={lay.baseRun} y2={CEIL + 330}
                   stroke="var(--dw-dim)" strokeWidth={S} strokeDasharray="20 14" />
-            <text x={lay.baseRun / 2} y={CEIL + 262} textAnchor="middle" fill="var(--dw-dim)"
+            <text x={lay.baseRun / 2} y={CEIL + 306} textAnchor="middle" fill="var(--dw-dim)"
                   fontFamily="var(--font-mono)" fontSize={FS}>base run {Math.round(lay.baseRun)}</text>
           </>
         )}

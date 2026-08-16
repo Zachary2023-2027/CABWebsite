@@ -18,7 +18,7 @@
 
 import { FAMILY, PRICES, boardNames, buildUnit, sheetFor } from './catalog.js';
 import { nestProject } from './nesting.js';
-import { allParts } from './project.js';
+import { allParts, nestCfg } from './project.js';
 
 export const OPT = {
   maxCandidates: 260,     // how many survive the cheap score and get nested
@@ -126,7 +126,8 @@ export function optimiseWall(wall, cfg, locked = new Set()) {
   /* The dialog always shows what you have now, so build it before the early
      return. Without this a wall with nothing to try handed the dialog a
      current with no sheet count in it. */
-  const nowNest = nestProject(wallParts(wall, current, cfg));
+  const saw = nestCfg({ cfg });
+  const nowNest = nestProject(wallParts(wall, current, cfg), saw);
   const now = {
     widths: current, sheets: nowNest.sheets, wastePct: nowNest.wastePct,
     cost: nowNest.cost, leftover: target - runs(wall, current).base,
@@ -144,7 +145,7 @@ export function optimiseWall(wall, cfg, locked = new Set()) {
 
   // Stage three: real nest on the survivors.
   const scored = ranked.map((c) => {
-    const nest = nestProject(wallParts(wall, c.widths, cfg));
+    const nest = nestProject(wallParts(wall, c.widths, cfg), saw);
     return {
       widths: c.widths, leftover: c.leftover,
       sheets: nest.sheets, wastePct: nest.wastePct, cost: nest.cost,
@@ -205,7 +206,7 @@ function score(project, patch, stripOverrides) {
       }))
       : project.walls,
   };
-  const nest = nestProject(allParts(next));
+  const nest = nestProject(allParts(next), nestCfg(next));
   return { sheets: nest.sheets, cost: nest.cost, wastePct: nest.wastePct, groups: nest.groups };
 }
 

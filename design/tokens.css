@@ -131,6 +131,9 @@
   --dw-obstacle: #BFB5A6;
   --dw-selected: var(--accent);
   --dw-ghost: #E5E2DC;
+  /* The sheet under the parts on a nesting drawing. Darker than the parts,
+     so the blade width between them reads as a gap rather than a hairline. */
+  --dw-saw: #C6C0B4;
   --dw-line: #2A2722;
   --dw-dim: #7A736A;
   --dw-hatch: #B4AB9C;
@@ -181,6 +184,7 @@
     --dw-obstacle: #52483C;
     --dw-selected: var(--accent);
     --dw-ghost: #26231F;
+    --dw-saw: #443E36;
     --dw-line: #C9C3B8;
     --dw-dim: #8A8378;
     --dw-hatch: #5A5248;
@@ -226,6 +230,7 @@
   --dw-obstacle: #52483C;
   --dw-selected: var(--accent);
   --dw-ghost: #26231F;
+  --dw-saw: #443E36;
   --dw-line: #C9C3B8;
   --dw-dim: #8A8378;
   --dw-hatch: #5A5248;

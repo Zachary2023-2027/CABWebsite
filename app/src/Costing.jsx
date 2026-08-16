@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import Screen, { Empty, Est } from './Screen.jsx';
-import { allParts, allUnits, money, totals } from './project.js';
+import { allParts, allUnits, money, nestCfg, totals } from './project.js';
 import { nestProject } from './nesting.js';
 import { unitCost } from './catalog.js';
 
 export default function Costing({ project, quoted, setQuoted }) {
   const units = useMemo(() => allUnits(project), [project]);
   const tot = useMemo(() => totals(project), [project]);
-  const nest = useMemo(() => nestProject(allParts(project)), [project]);
+  const nest = useMemo(() => nestProject(allParts(project), nestCfg(project)), [project]);
 
   const rows = useMemo(() => units.map((u) => {
     const c = unitCost(u.unit);

@@ -12,7 +12,7 @@
 import { useMemo, useState } from 'react';
 import {
   allFittings, allParts, allUnits, layoutFor, money, projectExtras, roomOffsets, totals,
-  unitWarnings, wallWarnings,
+  nestCfg, unitWarnings, wallWarnings,
 } from './project.js';
 import Elevation from './Elevation.jsx';
 import { NEST, cutSequence, nestProject } from './nesting.js';
@@ -109,7 +109,7 @@ function PrintPanel({ panel }) {
 function buildPages(project, docs, cut) {
   const pages = [];
   const parts = allParts(project);
-  const nest = nestProject(parts);
+  const nest = nestProject(parts, nestCfg(project));
 
   /* The elevations come first, because they are the pages that say where
      everything goes. A pack of cut sizes with no plan is a pile of board. */
