@@ -1,5 +1,7 @@
 /* Small form primitives shared by the inspector and the advanced dialog. */
 
+import { finish } from './finishes.js';
+
 export function Num({ label, value, unit = 'mm', onChange, placeholder, min, max }) {
   return (
     <div className="field">
@@ -90,5 +92,21 @@ export function Close({ onClick }) {
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"
            strokeLinecap="round"><path d="M4 4l8 8M12 4l-8 8" /></svg>
     </button>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   A finish swatch.
+
+   Small, square, and the colour the board actually is. It goes beside a
+   material name in the cut list and the print pack, so that a two tone
+   kitchen is legible on paper without reading every row.
+   --------------------------------------------------------------------------- */
+
+export function Swatch({ finish: id, title }) {
+  const f = finish(id);
+  return (
+    <span className="swatch-dot" style={{ background: f.hex }}
+          title={title || f.name} aria-label={f.name} role="img" />
   );
 }

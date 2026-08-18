@@ -21,6 +21,7 @@ import {
   baseRuns, benchLength, benchSchedule, endPanelParts, kickParts, usableLength,
 } from './runs.js';
 import { assertMm } from './mm.js';
+import { finishFor, roleOf } from './finishes.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -635,6 +636,7 @@ export function runParts(project) {
     ]) {
       out.push({
         ...part,
+        finish: finishFor(roleOf(part), cfg).id,
         /* Not cabinet parts, so they have no unit. They still need the size
            and position fields every consumer reads, and a zero size keeps
            them out of the 3D view without any of it knowing they exist. */

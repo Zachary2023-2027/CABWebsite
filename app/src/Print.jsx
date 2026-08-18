@@ -19,6 +19,7 @@ import { NEST, cutSequence, nestProject } from './nesting.js';
 import { HOLE_STYLE, drillUnit } from './drilling.js';
 import { PRICES, sheetFor } from './catalog.js';
 import { fmt } from './mm.js';
+import { Swatch } from './Fields.jsx';
 
 const PAGE = {
   a4: { w: 210, h: 297, label: 'A4' },
@@ -225,7 +226,7 @@ function PageBody({ page, project, cut }) {
               <td className="p-code">{p.code}</td>
               <td>{p.name}</td>
               <td className="p-n">{p.L}</td><td className="p-n">{p.W}</td><td className="p-n">{p.T}</td>
-              <td>{p.material}</td>
+              <td><Swatch finish={p.finish} /> {p.material}</td>
               <td>{p.edging || '—'}</td>
             </tr>
           ))}

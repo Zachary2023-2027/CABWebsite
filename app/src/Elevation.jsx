@@ -6,6 +6,7 @@
    =========================================================================== */
 
 import { useMemo, useRef, useState } from 'react';
+import { finish, finishFor } from './finishes.js';
 import { snapX, unitWarnings } from './project.js';
 
 const S = 4;        // hairline, mm at drawing scale
@@ -188,7 +189,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
         .map((p) => (
           <rect key={`k${p.item.uid}`} x={drawX(p) + 20} y={Y(cfg.kick)}
                 width={p.unit.width - 40} height={cfg.kick}
-                fill="var(--dw-kick)" stroke="var(--dw-line)" strokeWidth={S} />
+                fill={finishFor('kick', cfg).hex} fillOpacity={0.75}
+                stroke="var(--dw-line)" strokeWidth={S} />
         ))}
 
       {/* units */}
@@ -246,15 +248,18 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
 
         return (
           <g key={p.item.uid} {...common}>
-            {/* carcass box */}
+            {/* The carcass, in the colour it is actually made of. A drawing
+                that shows every kitchen off white is not showing you the one
+                you are building. */}
             <rect x={x} y={y} width={unit.width} height={unit.height}
-                  fill="var(--dw-carcass)" stroke="var(--dw-line)" strokeWidth={S} />
+                  fill={finishFor('carcass', unit.cfg).hex}
+                  stroke="var(--dw-line)" strokeWidth={S} />
 
             {/* open shelf units show their shelves instead of fronts */}
             {unit.family.fronts === 'open' && unit.parts.filter((q) => q.group === 'shelf').map((q) => (
               <rect key={q.code} x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
                     width={q.size[0]} height={q.size[1]}
-                    fill="var(--dw-door)" stroke="var(--dw-line)" strokeWidth={S} />
+                    fill={finish(q.finish).hex} stroke="var(--dw-line)" strokeWidth={S} />
             ))}
 
             {/* oven cavity */}
@@ -276,7 +281,8 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
                   <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}
                         width={q.size[0]} height={q.size[1]}
                         fill={q.code.endsWith('-BLIND') ? 'url(#hatchTight)'
-                          : drawerNo !== null ? 'var(--dw-drawer)' : 'var(--dw-door)'}
+                          : finish(q.finish).hex}
+                        fillOpacity={drawerNo !== null ? 0.86 : 1}
                         stroke="var(--dw-line)" strokeWidth={S} />
                   {picked && (
                     <rect x={x + q.pos[0]} y={Y(unit.mountY + q.pos[1] + q.size[1])}

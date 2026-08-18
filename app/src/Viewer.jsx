@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { finish } from './finishes.js';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,6 +9,9 @@ import { bounds } from './cabinet.js';
    carcass so the eye separates them without needing the outline to do it.
    These do not follow the theme: white melamine is off white in a dark room
    too. Only the background and the ground follow the theme. */
+/* Kept for the demo cabinet in cabinet.js, which describes its parts by tone
+   rather than by role. Anything built by the catalog carries a finish and
+   reads that instead. */
 const TONES = {
   melamine: { color: '#F1EDE6', roughness: 0.80, metalness: 0 },
   front:    { color: '#DED6C6', roughness: 0.78, metalness: 0 },
@@ -15,6 +19,15 @@ const TONES = {
   ply:      { color: '#D9BD8C', roughness: 0.82, metalness: 0 },
   metal:    { color: '#9AA0A6', roughness: 0.45, metalness: 0.55 },
 };
+
+/** What a part is made of, as three.js wants it. */
+function surfaceFor(p) {
+  if (p.finish) {
+    const f = finish(p.finish);
+    return { color: f.hex, roughness: f.roughness, metalness: f.metalness };
+  }
+  return TONES[p.tone] || TONES[p.material?.tone] || TONES.melamine;
+}
 
 const EDGE = '#2A2722';
 const smoothstep = (t) => t * t * (3 - 2 * t);
@@ -46,7 +59,7 @@ export function cssVar(name, fallback) {
 export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, showLabel, warn }) {
   const { box: geo, edges } = boxGeo(p.size[0], p.size[1], p.size[2]);
 
-  const tone = TONES[p.tone] || TONES[p.material?.tone] || TONES.melamine;
+  const tone = surfaceFor(p);
   const centre = [
     p.pos[0] + p.size[0] / 2 + offset[0],
     p.pos[1] + p.size[1] / 2 + offset[1],

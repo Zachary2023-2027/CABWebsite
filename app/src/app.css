@@ -1138,3 +1138,61 @@ body {
   justify-items: start;
   border-left: 3px solid var(--warn);
 }
+
+/* A finish swatch. The colour the board actually is, beside its name, so a
+   two tone kitchen is legible on paper without reading every row. */
+.swatch-dot {
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+  vertical-align: -1px;
+  margin-right: 0.35em;
+  flex: none;
+}
+@media print {
+  /* Printers drop background colours by default, and a swatch with no colour
+     is a small empty box that means nothing. */
+  .swatch-dot { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
+
+/* Choosing a finish is choosing a colour, so the control is the colours. */
+.finish-roles { display: grid; gap: var(--sp-3); }
+/* The label is a tracked uppercase run, and an aside inside it should not be.
+   "CARCASS FROM THE BOARD NAME" reads as one shouted phrase rather than a
+   name with a note after it. */
+.finish-role .field__label .note {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: var(--fw-regular, 400);
+}
+.finish-role { display: grid; gap: var(--sp-2); }
+.finish-swatches { display: flex; flex-wrap: wrap; gap: var(--sp-3); }
+.finish-run { display: flex; gap: 4px; }
+.finish-chip {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-1);
+  border: 1px solid var(--line);
+  padding: 0;
+  cursor: pointer;
+}
+.finish-chip:hover { transform: scale(1.08); }
+.finish-chip.is-on {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+}
+@media (pointer: coarse) {
+  .finish-chip { width: 34px; height: 34px; }
+}
+
+/* Present to a screen reader, absent to the eye. The finish chips are colour
+   alone, which is no use to anyone who cannot see the colour. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

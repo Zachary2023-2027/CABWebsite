@@ -4,6 +4,7 @@ import { allParts, nestCfg } from './project.js';
 import { nestProject } from './nesting.js';
 import { downloadBlob, safeFileName, toCsv } from './storage.js';
 import { Oversize } from './Nesting.jsx';
+import { Swatch } from './Fields.jsx';
 
 /* The cells carry text a person typed: the project name, a wall name, a board
    species. toCsv neutralises anything a spreadsheet would otherwise open as a
@@ -152,7 +153,7 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
                         <td className="code">{p.code}</td>
                         <td>{p.name}</td>
                         <td className="n">{p.L}</td><td className="n">{p.W}</td><td className="n">{p.T}</td>
-                        <td>{p.material}</td>
+                        <td><Swatch finish={p.finish} /> {p.material}</td>
                         <td className="dim-cell">{p.edging || 'None'}</td>
                       </tr>
                     ))}

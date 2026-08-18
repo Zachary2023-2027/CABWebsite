@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
+import { finishFor } from './finishes.js';
 import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
@@ -37,14 +38,18 @@ const G = {
   filler: <><rect x="10" y="3" width="4" height="18" /></>,
 };
 
-const Glyph = ({ name }) => (
-  <svg className="glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-       strokeWidth="1.3" strokeLinejoin="round" aria-hidden="true">{G[name] || G.door1}</svg>
+/* The glyph is filled with the finish the fronts are actually going to be, so
+   the picker shows you cabinets in your kitchen's colour rather than in the
+   abstract. Faint, because it is an icon and not a swatch. */
+const Glyph = ({ name, tint }) => (
+  <svg className="glyph" viewBox="0 0 24 24" fill={tint || 'none'} fillOpacity={tint ? 0.28 : 0}
+       stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"
+       aria-hidden="true">{G[name] || G.door1}</svg>
 );
 
 /* --- picker --------------------------------------------------------------- */
 
-function Picker({ onAdd }) {
+function Picker({ onAdd, cfg }) {
   const [q, setQ] = useState('');
   const [kind, setKind] = useState('Base');
   const term = q.trim().toLowerCase();
@@ -85,7 +90,7 @@ function Picker({ onAdd }) {
             {term && <span className="field__label picker-group">{g}</span>}
             {glist.map((f) => (
               <button key={f.id} className="pick" onClick={() => onAdd(f.id)} title={f.desc}>
-                <Glyph name={f.glyph} />
+                <Glyph name={f.glyph} tint={finishFor('front', cfg).hex} />
                 <span className="pick-text">
                   <span className="pick-name">{f.name}</span>
                   <span className="pick-desc">{f.desc}</span>
@@ -676,7 +681,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
       <div className={`planner-body arr-${arrangement}`}>
         <aside className="rail">
-          <Picker onAdd={addUnit} />
+          <Picker onAdd={addUnit} cfg={project.cfg} />
         </aside>
 
         <section className="canvas-area">

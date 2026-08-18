@@ -14,6 +14,9 @@ import {
   longestFitting, runnerProfile,
 } from './hardware.js';
 import { JOINT_LIST, REAR_ROWS, SYS32, jointMethod, rearRowX } from './drilling.js';
+import {
+  FINISH_GROUPS, FINISH_LIST, clearFinishes, finish, finishFor, finishKey, isTwoTone, twoTone,
+} from './finishes.js';
 import { fmt, round1 } from './mm.js';
 import { Board, Choice, Close, Num } from './Fields.jsx';
 
@@ -161,6 +164,35 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
                    onChange={(v) => onChange({ hinge3MaxHeight: v ?? 1600 })} />
               <Num label="Four up to" value={cfg.hinge4MaxHeight ?? 2000}
                    onChange={(v) => onChange({ hinge4MaxHeight: v ?? 2000 })} />
+            </div>
+          </section>
+
+          <section className="adv-group">
+            <span className="field__label">Finish</span>
+            <p className="note">
+              What each part is actually going to look like. Left alone, a finish is
+              read off the board species you typed, so Charcoal melamine gives you a
+              charcoal kitchen without setting it twice. Set one and it wins.
+            </p>
+            <div className="finish-roles">
+              {[['carcass', 'Carcass'], ['front', 'Fronts'], ['box', 'Drawer boxes'],
+                ['kick', 'Kickboard'], ['back', 'Backs'], ['panel', 'End panels']].map(([role, label]) => (
+                <FinishField key={role} label={label} role={role} cfg={cfg} onChange={onChange} />
+              ))}
+            </div>
+            <div className="group-foot">
+              <span className="note">
+                {isTwoTone(cfg)
+                  ? `Two tone: ${finishFor('front', cfg).name} fronts on ${article(finishFor('carcass', cfg).name)} carcass.`
+                  : `One tone throughout, in ${finishFor('carcass', cfg).name}.`}
+              </span>
+              {!isTwoTone(cfg) ? (
+                <button className="btn btn--ghost"
+                        onClick={() => onChange(twoTone('navy'))}>Make it two tone</button>
+              ) : (
+                <button className="btn btn--ghost"
+                        onClick={() => onChange(clearFinishes())}>Back to the board names</button>
+              )}
             </div>
           </section>
 
@@ -421,6 +453,49 @@ export function OptimiseResult({ result, project, wall, locked, onApply, onApply
         <div className="dialog__foot">
           <button className="btn btn--secondary" onClick={onClose}>Close</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+/** a or an, so the sentence reads like a sentence. */
+const article = (word) => `${/^[aeiou]/i.test(word) ? 'an' : 'a'} ${word.toLowerCase()}`;
+
+/* ---------------------------------------------------------------------------
+   One role's finish.
+
+   A swatch you click rather than a name you pick off a list, because the
+   thing being chosen is a colour and a list of colour names is a worse way to
+   choose a colour than the colours are.
+   --------------------------------------------------------------------------- */
+
+function FinishField({ label, role, cfg, onChange }) {
+  const current = finishFor(role, cfg);
+  const set = (id) => onChange({ [finishKey(role)]: id });
+  const inherited = !cfg[finishKey(role)];
+
+  return (
+    <div className="finish-role">
+      <span className="field__label">
+        {label}
+        {inherited && <span className="note"> from the board name</span>}
+      </span>
+      <div className="finish-swatches" role="radiogroup" aria-label={`${label} finish`}>
+        {FINISH_GROUPS.map((g) => (
+          <span className="finish-run" key={g}>
+            {FINISH_LIST.filter((f) => f.group === g).map((f) => (
+              <button key={f.id} type="button" role="radio"
+                      aria-checked={f.id === current.id}
+                      className={`finish-chip ${f.id === current.id ? 'is-on' : ''}`}
+                      style={{ background: f.hex }}
+                      title={`${f.name}, ${g.toLowerCase()}`}
+                      onClick={() => set(f.id === cfg[finishKey(role)] ? '' : f.id)}>
+                <span className="sr-only">{f.name}</span>
+              </button>
+            ))}
+          </span>
+        ))}
       </div>
     </div>
   );

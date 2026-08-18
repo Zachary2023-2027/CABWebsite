@@ -11,6 +11,7 @@ import {
   drawerBox, hingeCountFor, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
 } from './hardware.js';
 import { newRow, resolveStack } from './stack.js';
+import { finishFor, roleOf } from './finishes.js';
 
 export const PROJECT = {
   benchHeight: 900,     // finished benchtop height
@@ -115,6 +116,17 @@ export const PROJECT = {
   /* The longest benchtop piece you can buy or carry, so a long run is
      reported with its joins rather than as one impossible slab. */
   benchMaxPiece: 3600,
+
+  /* What each role actually looks like. Empty means it is guessed from the
+     board species you typed, so "Charcoal melamine" gives you a charcoal
+     kitchen without setting the colour separately as well. Setting one wins
+     over the guess. Two tone is simply the fronts differing from the carcass. */
+  carcassFinish: '',
+  frontFinish: '',
+  backFinish: '',
+  boxFinish: '',
+  kickFinish: '',
+  panelFinish: '',
 
   /* The saw. Kerf is the width of the blade, and it is the gap left between
      every part on a sheet so that cutting one does not cut into the next.
@@ -542,6 +554,15 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
 
   const MAT = materialsFor(P);
   const parts = [];
+
+  /* Every part carries the finish of the role it belongs to, resolved once
+     here. The 3D, the elevation, the picker, the cut list and the print pack
+     all read part.finish, so none of them has to know how a finish is chosen
+     and a colour you set is the colour everywhere. */
+  const finished = (list) => {
+    for (const q of list) q.finish = finishFor(roleOf(q), P).id;
+    return list;
+  };
   let drawerOpening = 0;
   /* What the resolved stack had to say, so the inspector and the checks
      screen can report a stack that does not add up. */
@@ -605,7 +626,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         width: runWidth, height: panelH, depth: panelD,
         mountY: above ? P.wallMount + P.wallCabHeight : 0,
         size: [runWidth, panelH, panelD],
-        parts, fittings, hardware: [], cfg: P };
+        parts: finished(parts), fittings, hardware: [], cfg: P };
     }
 
     parts.push(mkPart({
@@ -616,7 +637,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }));
     return { id, familyId, family: fam, name: fam.name, kind, settings: s,
       width: W, height: H, depth: D, mountY: P.kick, size: [W, H, D],
-      parts, fittings, hardware: [], cfg: P };
+      parts: finished(parts), fittings, hardware: [], cfg: P };
   }
 
   const T = P.carcassThk;
@@ -921,7 +942,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   return {
     id, familyId, family: fam, name: fam.name, kind, settings: s,
     width: W, height: H, depth: D, mountY, size: [W, H, D],
-    parts, fittings, hardware: [], cfg: P, drawerOpening,
+    parts: finished(parts), fittings, hardware: [], cfg: P, drawerOpening,
     /* The stack as resolved, with every row's real height and position, and
        anything wrong with it. Null on a cabinet that has no front. */
     stack: stackNotes,
