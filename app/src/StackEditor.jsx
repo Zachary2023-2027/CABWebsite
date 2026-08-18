@@ -11,7 +11,7 @@
    as it stood, so nothing jumps when you change one row.
    =========================================================================== */
 
-import { addRow, makeEqual, moveRow, newRow, removeRow, setRow } from './stack.js';
+import { APPLIANCES, addRow, makeEqual, moveRow, newRow, removeRow, setRow } from './stack.js';
 import { Choice, Num } from './Fields.jsx';
 
 const TYPE_LABEL = {
@@ -23,6 +23,10 @@ const TYPE_LABEL = {
 };
 
 const TYPE_ORDER = ['doors', 'drawer', 'false', 'open', 'bay'];
+
+const APPLIANCE_LABEL = {
+  oven: 'Oven', microwave: 'Microwave', fridge: 'Fridge', other: 'Other',
+};
 
 /** The resolved rows turned back into an editable stack. */
 const toStack = (rows) => rows.map((r) => {
@@ -145,8 +149,7 @@ function RowFields({ row, index, stack, rowCount, onCommit, onSelect }) {
       {row.type === 'bay' && (
         <div className="settings-grid">
           <Choice label="For a" value={row.appliance ?? 'other'}
-                  options={[{ value: 'oven', label: 'Oven' }, { value: 'microwave', label: 'Microwave' },
-                    { value: 'other', label: 'Other' }]}
+                  options={APPLIANCES.map((x) => ({ value: x, label: APPLIANCE_LABEL[x] }))}
                   onChange={(v) => set({ appliance: v })} />
         </div>
       )}

@@ -218,8 +218,13 @@ export const FAMILIES = [
     desc: 'False front over two doors. No shelf, waste clear.',
     widths: [800, 900, 1000, 1200], def: { width: 900, doors: 2, shelves: 0 }, glyph: 'sink' },
 
-  { id: 'base-corner', group: 'Base', name: 'Blind corner', kind: 'base', fronts: 'doors',
-    desc: 'Runs into the corner. One door, blind return.',
+  /* Superseded by base-blind-l, which derives its blind width from the
+     benchtop instead of leaving it to a door that may not clear. Kept so a
+     saved project still opens, hidden from the picker, and offered a one time
+     conversion on the cabinet itself. */
+  { id: 'base-corner', group: 'Base', name: 'Blind corner, old', kind: 'base', fronts: 'doors',
+    retired: true, replacedBy: 'base-blind-l',
+    desc: 'The older corner cabinet. Its blind width was not tied to the benchtop.',
     widths: [900, 1000, 1050], def: { width: 900, doors: 1, shelves: 1 }, glyph: 'corner' },
 
   { id: 'base-blind-l', group: 'Base', name: 'Blind corner, L shape', kind: 'base', fronts: 'blind',
@@ -288,6 +293,88 @@ export const FAMILIES = [
   { id: 'filler', group: 'Filler', name: 'Filler', kind: 'filler', fronts: 'none', cavity: false,
     desc: 'Scribe strip against a wall or appliance.',
     widths: [20, 30, 40, 50, 75, 100], def: { width: 40 }, glyph: 'filler' },
+
+  /* -------------------------------------------------------------------------
+     Presets stated as a front stack.
+
+     Everything below says what its front is as a list of rows rather than as
+     a branch in the builder. A row is a pair of doors, a drawer, a false
+     front, an open bay or an appliance bay, and one row per preset is set to
+     fill so the cabinet works at any height you give it.
+     ------------------------------------------------------------------------- */
+
+  { id: 'base-2drawer', group: 'Base', name: 'Base, 2 drawer', kind: 'base', fronts: 'stack',
+    desc: 'A shallow drawer over a deep one. Pots under cutlery.',
+    widths: [400, 450, 500, 600, 700, 800, 900], def: { width: 600 }, glyph: 'drawer3',
+    stack: (s2) => [
+      { type: 'drawer', height: s2.topDrawerH ?? 180 },
+      { type: 'drawer', height: 'fill' },
+    ] },
+
+  { id: 'base-drawer-door', group: 'Base', name: 'Base, drawer over door', kind: 'base', fronts: 'stack',
+    desc: 'One drawer at the top, doors below. The everyday cabinet with somewhere for the utensils.',
+    widths: [400, 450, 500, 600, 700, 800, 900],
+    def: { width: 600, doors: 1, shelves: 1 }, glyph: 'door1',
+    stack: (s2) => [
+      { type: 'drawer', height: s2.topDrawerH ?? 180 },
+      { type: 'doors', height: 'fill', doors: s2.doors ?? 1,
+        hingeSide: (s2.doors ?? 1) >= 2 ? 'pair' : 'left' },
+    ] },
+
+  { id: 'base-sink-drawer', group: 'Base', name: 'Sink base, drawer under', kind: 'base', fronts: 'stack',
+    desc: 'False front at the top, one drawer below it. The drawer clears the trap.',
+    widths: [800, 900, 1000, 1200], def: { width: 900, shelves: 0 }, glyph: 'sink',
+    stack: (s2) => [
+      { type: 'false', height: s2.falseH ?? 150 },
+      { type: 'drawer', height: 'fill' },
+    ] },
+
+  { id: 'tall-broom', group: 'Tall', name: 'Broom cupboard', kind: 'tall', fronts: 'stack',
+    desc: 'Full height, one shelf high up. Long handled things stand on the floor.',
+    widths: [400, 450, 500, 600], def: { width: 450, shelves: 1 }, glyph: 'pantry',
+    stack: (s2) => [
+      { type: 'doors', height: 'fill', doors: s2.doors ?? 1,
+        hingeSide: (s2.doors ?? 1) >= 2 ? 'pair' : 'left' },
+    ] },
+
+  { id: 'tall-fridge-surround', group: 'Tall', name: 'Fridge surround', kind: 'tall', fronts: 'stack',
+    desc: 'A cupboard over the fridge, with the fridge space left open below it.',
+    widths: [900, 1000, 1100, 1200], def: { width: 1000, shelves: 0, fridgeH: 1800 },
+    glyph: 'fridge',
+    stack: (s2, H, P, R) => [
+      { type: 'doors', height: Math.max(150, H - (s2.fridgeH ?? 1800) - R),
+        doors: s2.doors ?? 2, hingeSide: 'pair' },
+      { type: 'bay', height: s2.fridgeH ?? 1800, appliance: 'fridge' },
+    ] },
+
+  { id: 'wall-microwave', group: 'Wall', name: 'Wall, microwave under', kind: 'wall', fronts: 'stack',
+    desc: 'A cupboard with the microwave sitting in an open bay underneath it.',
+    widths: [600, 700, 800, 900], def: { width: 800, shelves: 1, microH: 380 },
+    glyph: 'micro',
+    stack: (s2) => [
+      { type: 'doors', height: 'fill', doors: s2.doors ?? 2, hingeSide: 'pair' },
+      { type: 'bay', height: s2.microH ?? 380, appliance: 'microwave' },
+    ] },
+
+  { id: 'island', group: 'Base', name: 'Island', kind: 'base', fronts: 'stack',
+    desc: 'A base cabinet finished on the back, so it can stand away from a wall.',
+    widths: [600, 700, 800, 900, 1000, 1200],
+    def: { width: 900, doors: 2, shelves: 1 }, glyph: 'door2',
+    finishedBack: true,
+    stack: (s2) => [
+      { type: 'doors', height: 'fill', doors: s2.doors ?? 2,
+        hingeSide: (s2.doors ?? 1) >= 2 ? 'pair' : 'left' },
+    ] },
+
+  { id: 'end-panel', group: 'Filler', name: 'End panel', kind: 'filler', fronts: 'none',
+    panel: true,
+    desc: 'A finished panel on the end of a run, the full depth of the cabinet beside it.',
+    widths: [16, 18, 25], def: { width: 18 }, glyph: 'filler' },
+
+  { id: 'bulkhead', group: 'Filler', name: 'Bulkhead', kind: 'filler', fronts: 'none',
+    panel: true, above: 'wall',
+    desc: 'Closes the gap between the wall cabinets and the ceiling.',
+    widths: [300, 450, 600, 800, 900, 1000], def: { width: 900 }, glyph: 'bridge' },
 ];
 
 export const FAMILY = Object.fromEntries(FAMILIES.map((f) => [f.id, f]));
@@ -304,6 +391,15 @@ export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
 
 export function defaultStackFor(fam, s, H, P) {
   const R = Number(P.reveal) || 0;
+
+  /* A preset can state its front as data. That is what a preset is now: a
+     carcass size and a list of rows, which is why adding a cabinet type is
+     adding a record rather than adding a branch. The presets below the switch
+     predate this and keep their arithmetic, because a byte level comparison
+     of every one of them at every width it offers is what proves the front
+     stack did not change anything when it was introduced. */
+  if (typeof fam.stack === 'function') return fam.stack(s, H, P, R);
+  if (Array.isArray(fam.stack)) return fam.stack;
 
   switch (fam.fronts) {
     case 'doors': {
@@ -455,6 +551,44 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
   }
 
   if (kind === 'filler') {
+    /* An end panel is not a filler on its side. A filler is a strip across
+       the front of a gap, and its width is how wide the gap is. An end panel
+       stands on edge at the end of a run: the width you set is how thick it
+       is, and the part is the full height by the full depth of the cabinet it
+       is finishing. Building it through the filler path made a stick 18mm
+       wide and 720 long, which is not a panel and does not close anything. */
+    if (fam.panel) {
+      const above = fam.above === 'wall';
+      /* A bulkhead fills what is left between the top of the wall cabinets
+         and the ceiling, so its height is that gap and not a carcass height.
+         If the ceiling is lower than the cabinets reach there is nothing to
+         fill, and it collapses to a minimum rather than going negative. */
+      const panelH = above
+        ? Math.max(20, P.ceiling - (P.wallMount + P.wallCabHeight))
+        : (s.height ?? carcassHeightFor('base', P) + P.kick);
+      const panelD = above ? P.wallDepth : (s.depth ?? P.baseDepth);
+      const thk = above ? P.frontThk : W;
+      const runWidth = above ? W : thk;
+
+      parts.push(mkPart(above ? {
+        code: code('BULK'), name: 'Bulkhead panel', group: 'filler', material: MAT.front,
+        L: W, W: panelH, T: thk,
+        size: [W, panelH, thk], pos: [0, 0, panelD - thk], explode: [0, 0, 200],
+        edging: 'Bottom edge',
+      } : {
+        code: code('END'), name: 'End panel', group: 'filler', material: MAT.front,
+        L: panelH, W: panelD, T: thk,
+        size: [thk, panelH, panelD], pos: [0, 0, 0], explode: [-200, 0, 0],
+        edging: 'Front edge',
+      }));
+
+      return { id, familyId, family: fam, name: fam.name, kind, settings: s,
+        width: runWidth, height: panelH, depth: panelD,
+        mountY: above ? P.wallMount + P.wallCabHeight : 0,
+        size: [runWidth, panelH, panelD],
+        parts, fittings, hardware: [], cfg: P };
+    }
+
     parts.push(mkPart({
       code: code('FILL'), name: 'Filler strip', group: 'filler', material: MAT.front,
       L: H, W, T: P.frontThk,
@@ -516,10 +650,16 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       size: [internalW, RH, T], pos: [T, H - T - RH, 0], explode: [0, 0, -280],
     }));
   } else {
+    /* An island is seen from behind, so its back is the carcass board with a
+       finished edge rather than a sheet of 6mm hardboard nobody was ever
+       meant to look at. */
+    const finished = !!fam.finishedBack;
     parts.push(mkPart({
-      code: code('BACK'), name: 'Back', group: 'back', material: MAT.back,
-      L: internalW, W: H - T, T: BT,
-      size: [internalW, H - T, BT], pos: [T, T, 0], explode: [0, 0, -280],
+      code: code('BACK'), name: finished ? 'Back, finished' : 'Back', group: 'back',
+      material: finished ? MAT.carcass : MAT.back,
+      L: internalW, W: H - T, T: finished ? T : BT,
+      size: [internalW, H - T, finished ? T : BT], pos: [T, T, 0], explode: [0, 0, -280],
+      ...(finished ? { edging: 'All four edges' } : {}),
     }));
   }
 

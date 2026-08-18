@@ -175,11 +175,21 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
         </g>
       ))}
 
-      {/* kickboard, one strip under each floor standing unit */}
-      {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
-        <rect key={`k${p.item.uid}`} x={drawX(p) + 20} y={Y(cfg.kick)} width={p.unit.width - 40} height={cfg.kick}
-              fill="var(--dw-kick)" stroke="var(--dw-line)" strokeWidth={S} />
-      ))}
+      {/* Kickboard, one strip under each floor standing unit.
+
+          The strip is set back 20mm each side, which quietly assumed every
+          cabinet is wider than 40mm. An end panel is 18mm wide, so the strip
+          came out 22mm wide the wrong way and the browser refused to draw it.
+          A unit that reaches the floor has no kick under it either, so those
+          are left out rather than clamped to nothing. */}
+      {lay.placed
+        .filter((p) => p.where !== 'wall' && !p.unit.cavity
+          && p.unit.mountY > 0 && p.unit.width > 40)
+        .map((p) => (
+          <rect key={`k${p.item.uid}`} x={drawX(p) + 20} y={Y(cfg.kick)}
+                width={p.unit.width - 40} height={cfg.kick}
+                fill="var(--dw-kick)" stroke="var(--dw-line)" strokeWidth={S} />
+        ))}
 
       {/* units */}
       {lay.placed.map((p) => {

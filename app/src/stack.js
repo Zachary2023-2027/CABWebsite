@@ -39,6 +39,9 @@ import { round1 } from './mm.js';
 
 export const ROW_TYPES = ['doors', 'drawer', 'false', 'open', 'bay'];
 
+/** What an appliance bay can be left for. A bay emits no part either way. */
+export const APPLIANCES = ['oven', 'microwave', 'fridge', 'other'];
+
 /** A row with nothing set, for the row you have just added. */
 export const newRow = (type = 'doors', height = 'fill') => {
   const row = { type, height };
@@ -228,7 +231,7 @@ export function cleanStack(stack) {
         }
       }
       if (r.type === 'bay') {
-        row.appliance = ['oven', 'microwave', 'other'].includes(r.appliance) ? r.appliance : 'other';
+        row.appliance = APPLIANCES.includes(r.appliance) ? r.appliance : 'other';
       }
       return row;
     });

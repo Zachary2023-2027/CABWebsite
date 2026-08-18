@@ -46,13 +46,24 @@ const Glyph = ({ name }) => (
 
 function Picker({ onAdd }) {
   const [q, setQ] = useState('');
+  const [kind, setKind] = useState('Base');
   const term = q.trim().toLowerCase();
   const match = (f) =>
     !term || f.name.toLowerCase().includes(term) || f.desc.toLowerCase().includes(term) ||
     f.group.toLowerCase().includes(term);
 
-  const groups = GROUPS.map((g) => [g, FAMILIES.filter((f) => f.group === g && match(f))])
-    .filter(([, list]) => list.length);
+  /* Kind first. There are enough presets now that one long list is a scroll
+     rather than a choice: you know whether you are putting in a base, a wall
+     or a tall cabinet before you know which one, so that is the first thing
+     asked. A search still looks across all of them, because when you know the
+     name you should not have to know the kind. */
+  const shown = FAMILIES.filter((f) => !f.retired && match(f));
+  const kinds = GROUPS.filter((g) => shown.some((f) => f.group === g));
+  const activeKind = kinds.includes(kind) ? kind : kinds[0];
+  const list = term ? shown : shown.filter((f) => f.group === activeKind);
+  const groups = term
+    ? kinds.map((g) => [g, shown.filter((f) => f.group === g)]).filter(([, l]) => l.length)
+    : [[activeKind, list]];
 
   return (
     <div className="picker">
@@ -60,11 +71,19 @@ function Picker({ onAdd }) {
         <input type="text" value={q} placeholder="Search cabinets"
                aria-label="Search cabinets" onChange={(e) => setQ(e.target.value)} />
       </div>
+      {!term && (
+        <div className="seg picker-kinds" role="group" aria-label="Kind of cabinet">
+          {kinds.map((g) => (
+            <button key={g} className="seg__item" aria-pressed={g === activeKind}
+                    onClick={() => setKind(g)}>{g}</button>
+          ))}
+        </div>
+      )}
       <div className="picker-list">
-        {groups.map(([g, list]) => (
+        {groups.map(([g, glist]) => (
           <section key={g}>
-            <span className="field__label picker-group">{g}</span>
-            {list.map((f) => (
+            {term && <span className="field__label picker-group">{g}</span>}
+            {glist.map((f) => (
               <button key={f.id} className="pick" onClick={() => onAdd(f.id)} title={f.desc}>
                 <Glyph name={f.glyph} />
                 <span className="pick-text">
@@ -85,7 +104,7 @@ function Picker({ onAdd }) {
 /* --- inspector ------------------------------------------------------------ */
 
 function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
-                    onChange, onOverride, onRemove, onMove, onDrop, onUnpin,
+                    onChange, onConvert, onOverride, onRemove, onMove, onDrop, onUnpin,
                     onOpen3D, onClose }) {
   if (!placed) {
     return (
@@ -115,6 +134,21 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
       </div>
 
       <div className="inspector-body">
+        {fam.retired && FAMILY[fam.replacedBy] && (
+          <div className="sub retired-row">
+            <p className="note">
+              This is the older corner cabinet. Its blind width was a number you
+              typed, so widening the benchtop left the door with nothing to swing
+              clear of. The one that replaces it works the blind out from the
+              benchtop depth, so it follows.
+            </p>
+            <button className="btn btn--secondary"
+                    onClick={() => onConvert(item.uid, fam.replacedBy)}>
+              Change it to {FAMILY[fam.replacedBy].name}
+            </button>
+          </div>
+        )}
+
         {placed.pinned && (
           <div className="sub-head pin-row">
             <span className="note">Placed by hand. Its neighbours will not push it.</span>
@@ -465,6 +499,22 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const it = w.units.find((x) => x.uid === u);
       if (it) it.settings = { ...it.settings, ...patch };
     });
+  /* Swap a cabinet onto a different preset, keeping the settings that still
+     mean something. Used by the one time offer to move an old blind corner
+     onto the one that derives its blind width from the benchtop. */
+  const convertUnit = (u, toFamilyId) => mutate((w) => {
+    const it = w.units.find((x) => x.uid === u);
+    if (!it || !FAMILY[toFamilyId]) return;
+    const keep = { ...it.settings };
+    /* The stack belonged to the old preset's front, and the old blind width
+       was an absolute number. Both are dropped so the new preset resolves its
+       own, rather than carrying a front that no longer describes the cabinet. */
+    delete keep.stack;
+    delete keep.blindWidth;
+    it.familyId = toFamilyId;
+    it.settings = keep;
+  });
+
   const removeUnit = (u) => {
     mutate((w) => { w.units = w.units.filter((x) => x.uid !== u); });
     setSelected(null);
@@ -687,7 +737,8 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                      selDrawer={selDrawer} setSelDrawer={setSelDrawer}
                      locked={placedSel ? locked.includes(placedSel.item.uid) : false}
                      onLock={toggleLock} onOverride={setOverride}
-                     onChange={changeUnit} onRemove={removeUnit} onMove={moveUnit}
+                     onChange={changeUnit} onConvert={convertUnit}
+                     onRemove={removeUnit} onMove={moveUnit}
                      onOpen3D={onOpen3D} onClose={() => pickUnit(null)} />
         </aside>
       </div>

@@ -1119,3 +1119,19 @@ body {
 .hole-schedule .num { text-align: right; font-variant-numeric: tabular-nums; }
 .hole-schedule tr:last-child td { border-bottom: 0; }
 .hole-schedule .legend-dot { margin-right: var(--sp-2); }
+
+/* The picker asks which kind first, so the list under it is a choice rather
+   than a scroll. */
+.picker-kinds {
+  margin: 0 var(--sp-3) var(--sp-2);
+  width: calc(100% - var(--sp-3) * 2);
+}
+.picker-kinds .seg__item { flex: 1; padding-inline: var(--sp-2); }
+
+/* The offer to move an old cabinet onto the preset that replaced it. */
+.retired-row {
+  display: grid;
+  gap: var(--sp-2);
+  justify-items: start;
+  border-left: 3px solid var(--warn);
+}
