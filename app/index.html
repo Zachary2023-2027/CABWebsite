@@ -5,6 +5,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- There is no server and no back end. The app talks to nobody, loads nothing
+     from anywhere else, and has no inline script in the build, so it can state
+     all of that and have the browser enforce it. If an injection ever did land
+     in the page, this is what stops it fetching a payload or calling home.
+
+     GitHub Pages cannot set response headers, so the policy is declared here.
+     style-src allows inline because React writes style attributes.
+
+     frame-ancestors is deliberately absent: a browser ignores it in a meta
+     tag, so putting it here would look like protection without being any.
+     Stopping the page being framed needs a real response header, which needs
+     a host that can set one. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  font-src 'self';
+  connect-src 'self';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Kitchen cabinet builder</title>
 <meta name="color-scheme" content="light">
 </head>

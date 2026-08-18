@@ -3,6 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Static page, no back end, no third party anything. Declared here because
+     GitHub Pages cannot set response headers. The favicon is a data: URI, so
+     img-src has to allow that one scheme. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  font-src 'self';
+  connect-src 'self';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <title>Kitchen Cabinet Builder</title>
 <meta name="description" content="Lay out a wall of kitchen cabinets, choose door style, finish and hardware, and get a live to-scale elevation with a running price estimate.">
 <link rel="stylesheet" href="assets/styles.css">

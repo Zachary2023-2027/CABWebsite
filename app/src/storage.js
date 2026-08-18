@@ -176,8 +176,12 @@ export function hydrate(raw) {
       activeWall: walls.some((w) => w.id === p.activeWall) ? p.activeWall : walls[0].id,
   };
 
+  /* The id becomes a key in the browser store, so it has to be a plain
+     string and it cannot be the name of something every object has. */
+  const id = String(raw.id ?? '');
+
   return {
-    id: raw.id || newId(),
+    id: (id && safeKey(id)) ? id : newId(),
     name: String(raw.name || p.name || 'Untitled kitchen'),
     savedAt: Number(raw.savedAt) || Date.now(),
     project,
@@ -194,6 +198,29 @@ export function hydrate(raw) {
   };
 }
 
+/* ---------------------------------------------------------------------------
+   Reading keys off an object that came from a file.
+
+   Object.entries hands back whatever keys the file put there, including the
+   names of things every object already has. A check written as PROJECT[k]
+   walks the prototype chain, so "toString" looks like a known key with a
+   function behind it and sails through a validator that was only ever meant
+   to pass the thicknesses and board names in PROJECT.
+
+   The result is a config object whose toString is the string "pwned", and
+   anything that later coerces that object to text throws instead of
+   rendering. A project file is something people send each other, so it is
+   attacker controlled input and it gets checked like it.
+   --------------------------------------------------------------------------- */
+
+const RESERVED = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** True when a key is really this object's own, and not a built in name. */
+const ownKey = (obj, k) => !RESERVED.has(k) && Object.hasOwn(obj, k);
+
+/** True when a key is safe to write onto an object we are building. */
+const safeKey = (k) => !RESERVED.has(k) && !Object.hasOwn(Object.prototype, k);
+
 /**
  * The project config, checked against the shape of PROJECT.
  *
@@ -208,6 +235,9 @@ function cleanCfg(cfg) {
   const out = {};
 
   for (const [k, v] of Object.entries(cfg)) {
+    // Not a key PROJECT actually has, or a name every object has. Either way
+    // it is not a setting and it does not get written.
+    if (!ownKey(PROJECT, k)) continue;
     const fallback = PROJECT[k];
 
     /* Null means follow the runner profile, and zero is a real deduction, so
@@ -230,7 +260,7 @@ function cleanCfg(cfg) {
       if (typeof v === 'string') out[k] = v;
       continue;
     }
-    if (fallback === undefined) continue;   // not a key this app knows
+    // Booleans and anything else PROJECT holds, taken as it is.
     out[k] = v;
   }
   return out;
@@ -244,6 +274,9 @@ function cleanSettings(s) {
   if (!s || typeof s !== 'object') return {};
   const out = {};
   for (const [k, v] of Object.entries(s)) {
+    /* Free form, so there is no list to check against. What can be checked is
+       that the key is not the name of something every object already has. */
+    if (!safeKey(k)) continue;
     if (k === 'runnerDeduction') {
       /* Null means follow the profile. Zero is a real value, so it cannot be
          filtered out with a falsy test. */
@@ -275,6 +308,7 @@ function cleanSettings(s) {
       if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
       const cfg = {};
       for (const [ck, cv] of Object.entries(v)) {
+        if (!safeKey(ck)) continue;
         if (Number.isFinite(Number(cv)) && cv !== '' && cv !== null) cfg[ck] = Number(cv);
         else if (typeof cv === 'string' && cv.length <= 60) cfg[ck] = cv;
       }
@@ -319,6 +353,7 @@ function mergePrices(incoming) {
   const base = structuredClone(PRICE_SEED);
   if (!incoming || typeof incoming !== 'object') return base;
   for (const [k, v] of Object.entries(incoming)) {
+    if (!safeKey(k)) continue;
     if (k === 'sheets' && v && typeof v === 'object') {
       /* The saved stock list replaces the seeded one rather than being laid
          over it. Otherwise a sheet you deleted comes back every time you
@@ -326,6 +361,7 @@ function mergePrices(incoming) {
          seed, because a project with no sheets cannot be nested. */
       const sheets = {};
       for (const [name, sh] of Object.entries(v)) {
+        if (!safeKey(name)) continue;
         if (sh && Array.isArray(sh.size) && sh.size.length === 2
             && sh.size.every((x) => Number(x) > 0) && Number.isFinite(Number(sh.cost))) {
           sheets[name] = { size: sh.size.map(Number), cost: Number(sh.cost) };
@@ -343,8 +379,44 @@ function mergePrices(incoming) {
 
 /* --- files ---------------------------------------------------------------- */
 
-const fileName = (name) =>
-  `${String(name).trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}.kcb.json`;
+
+/* ---------------------------------------------------------------------------
+   CSV.
+
+   A spreadsheet does not treat a .csv as data. Any cell that starts with =, +,
+   - or @ is read as a formula the moment the file is opened, and the formula
+   language reaches outside the sheet: =cmd|'/c calc'!A1 is a DDE call, and
+   =HYPERLINK or WEBSERVICE will quietly post the contents of the sheet
+   somewhere. The cells in a cut list carry text that came from a person: the
+   project name, a wall name, a board species you typed, all of which arrive
+   wholesale in a project file someone else sent you.
+
+   So a cell that could be read as a formula is prefixed with an apostrophe,
+   which every spreadsheet treats as "the rest of this is text". The apostrophe
+   is not shown in the cell and does not become part of the value.
+   --------------------------------------------------------------------------- */
+
+const FORMULA_START = /^[=+\-@\t\r]/;
+
+export function csvCell(value) {
+  let text = String(value ?? '');
+  if (FORMULA_START.test(text)) text = `'${text}`;
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/** Rows of cells to a CSV document. Every cell goes through csvCell. */
+export const toCsv = (rows) =>
+  rows.map((r) => r.map(csvCell).join(',')).join('\n');
+
+/**
+ * A name safe to hand to the browser as a download.
+ *
+ * Anything that is not a letter, a number, a space or a dash is dropped, so a
+ * project called ../../../etc/passwd or one with a newline in it cannot steer
+ * where the file lands or what it claims to be called.
+ */
+export const safeFileName = (name, suffix) =>
+  `${String(name ?? '').trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}${suffix}`;
 
 /**
  * Hand the browser a file. The anchor has to be in the document and the
@@ -365,7 +437,7 @@ export function downloadBlob(blob, name) {
 export function exportFile(snap) {
   downloadBlob(
     new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' }),
-    fileName(snap.name),
+    safeFileName(snap.name, '.kcb.json'),
   );
 }
 

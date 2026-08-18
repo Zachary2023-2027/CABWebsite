@@ -19,8 +19,13 @@ const L = (x1, y1, x2, y2, a = '') =>
 const C = (cx, cy, r, a = '') =>
   `<circle cx="${r3(cx)}" cy="${r3(cy)}" r="${r3(r)}" ${a}/>`;
 
+/* Every attribute in this app is written with double quotes, so escaping the
+   single quote is not needed today. It is escaped anyway: the day someone
+   writes an attribute with single quotes around it, the escaper should already
+   be right rather than being one edit away from an injection. */
 export const esc = (s) =>
-  String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  String(s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 const label = (x, y, t, size = 2.6) =>
   `<text x="${r3(x)}" y="${r3(y)}" text-anchor="middle" font-size="${size}" fill="var(--sv-dim)" letter-spacing="0.25">${esc(t)}</text>`;

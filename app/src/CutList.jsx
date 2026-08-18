@@ -2,17 +2,18 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { allParts, nestCfg } from './project.js';
 import { nestProject } from './nesting.js';
-import { downloadBlob } from './storage.js';
+import { downloadBlob, safeFileName, toCsv } from './storage.js';
 import { Oversize } from './Nesting.jsx';
 
+/* The cells carry text a person typed: the project name, a wall name, a board
+   species. toCsv neutralises anything a spreadsheet would otherwise open as a
+   formula, which is the difference between a cut list and a payload. */
 function csv(rows) {
   const head = ['Part code', 'Cabinet', 'Wall', 'Name', 'Length', 'Width', 'Thickness', 'Material', 'Edging'];
   const body = rows.map((p) => [
     p.code, p.unitLabel ?? '', p.wallName, p.name, p.L, p.W, p.T, p.material, p.edging ?? '',
   ]);
-  return [head, ...body]
-    .map((r) => r.map((c) => (/[",\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : c)).join(','))
-    .join('\n');
+  return toCsv([head, ...body]);
 }
 
 export default function CutList({ project, cut, setCut, onWorkshop }) {
@@ -69,7 +70,7 @@ export default function CutList({ project, cut, setCut, onWorkshop }) {
 
   const download = () => downloadBlob(
     new Blob([csv(rows)], { type: 'text/csv;charset=utf-8' }),
-    `${project.name.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}-cut-list.csv`,
+    safeFileName(project.name, '-cut-list.csv'),
   );
 
   const action = (
