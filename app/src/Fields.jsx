@@ -1,5 +1,6 @@
 /* Small form primitives shared by the inspector and the advanced dialog. */
 
+import { useState } from 'react';
 import { finish } from './finishes.js';
 
 export function Num({ label, value, unit = 'mm', onChange, placeholder, min, max }) {
@@ -108,5 +109,37 @@ export function Swatch({ finish: id, title }) {
   return (
     <span className="swatch-dot" style={{ background: f.hex }}
           title={title || f.name} aria-label={f.name} role="img" />
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   A collapsible section.
+
+   The inspector is one long column, and most of it is settings you touch
+   once. Ordered by how often you actually reach for them, with the deep ones
+   folded away, it becomes a panel you can read rather than one you scroll.
+
+   Open state lives here rather than in the parent, because it is about the
+   panel and not about the cabinet: folding a section shut should not be
+   something a project remembers or an undo can reach.
+   --------------------------------------------------------------------------- */
+
+export function Section({ title, children, defaultOpen = true, action }) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <section className={`sub sub--fold ${open ? 'is-open' : ''}`}>
+      <div className="sub-head">
+        <button className="sub-toggle" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 4l4 4-4 4" />
+          </svg>
+          <span className="field__label">{title}</span>
+        </button>
+        {open && action}
+      </div>
+      {open && children}
+    </section>
   );
 }

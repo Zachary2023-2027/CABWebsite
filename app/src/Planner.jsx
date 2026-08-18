@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
 import { finishFor } from './finishes.js';
 import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
-import { Board, Choice, Close, Num, Pick, Warn } from './Fields.jsx';
+import { Board, Choice, Close, Num, Pick, Section, Warn } from './Fields.jsx';
+import { RUNNERS } from './hardware.js';
+import { round1 } from './mm.js';
 import StackEditor from './StackEditor.jsx';
 import {
   ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
@@ -106,10 +108,15 @@ function Picker({ onAdd, cfg }) {
   );
 }
 
+/* The overrides that live in the drawer box section, so it can tell whether
+   this cabinet has departed from the project in there. */
+const BOX_KEYS = ['boxBoard', 'boxSideThk', 'boxBaseBoard', 'boxBaseThk', 'boxHeight',
+  'runnerDeduction', 'runnerLength', 'boxSetback', 'baseGroove', 'reveal'];
+
 /* --- inspector ------------------------------------------------------------ */
 
 function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
-                    onChange, onConvert, onOverride, onRemove, onMove, onDrop, onUnpin,
+                    onChange, onConvert, onDuplicate, onOverride, onRemove, onMove, onDrop, onUnpin,
                     onOpen3D, onClose }) {
   if (!placed) {
     return (
@@ -128,6 +135,16 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
   const editable = !unit.cavity && unit.kind !== 'filler';
 
   const boards = boardNames();
+
+  /* The stored figure is what the runner takes off the opening. The gap each
+     side is the same fact the way you measure it, and it is what the field
+     shows, exactly as the project panel does. The old field here edited
+     runnerClearance, which the geometry stopped reading when runners became
+     profiles, so it looked live and changed nothing. */
+  const effDeduction = over.runnerDeduction !== undefined
+    ? over.runnerDeduction : cfg.runnerDeduction;
+  const gapEachSide = round1(((effDeduction ?? RUNNERS['tandem-563h'].insideDeduction)
+    - 2 * (over.boxSideThk ?? cfg.boxSideThk)) / 2);
   const fronts = unit.parts.filter((q) => q.code.includes('DRWR-F'));
 
   return (
@@ -219,25 +236,19 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
             )}
 
             {unit.stack && unit.stack.rows.length > 0 && (
-              <section className="sub">
-                <div className="sub-head">
-                  <span className="field__label">Front layout</span>
-                </div>
+              <Section title="Front layout">
                 <StackEditor unit={unit} cfg={cfg} selRow={selDrawer} setSelRow={setSelDrawer}
                              onStack={(stack) => set({ stack, drawerHeights: undefined })} />
                 {unit.stack.errors.map((e, i) => <Warn key={`e${i}`} level="error">{e}</Warn>)}
                 {unit.stack.warnings.map((w, i) => <Warn key={`w${i}`}>{w}</Warn>)}
-              </section>
+              </Section>
             )}
 
-            <section className="sub">
-              <div className="sub-head">
-                <span className="field__label">This cabinet only</span>
-                {Object.keys(over).length > 0 && (
-                  <button className="btn btn--ghost"
-                          onClick={() => onOverride(item.uid, null)}>Match project</button>
-                )}
-              </div>
+            <Section title="Boards, this cabinet only" defaultOpen={Object.keys(over).length > 0}
+                     action={Object.keys(over).length > 0 ? (
+                       <button className="btn btn--ghost"
+                               onClick={() => onOverride(item.uid, null)}>Match project</button>
+                     ) : null}>
               <div className="settings-grid">
                 <Choice label="Back" value={eff('backType') || 'full'}
                         options={[{ value: 'full', label: 'Full panel' }, { value: 'rail', label: 'Rail only' }]}
@@ -262,13 +273,14 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                 <Num label="Back thickness" value={eff('backThk')}
                      onChange={(v) => onOverride(item.uid, { backThk: v ?? cfg.backThk })} />
               </div>
-            </section>
+            </Section>
 
             {fronts.length > 0 && (
-              <section className="sub">
-                <div className="sub-head">
-                  <span className="field__label">Drawer boxes, this cabinet</span>
-                </div>
+              <Section title="Drawer boxes, this cabinet"
+                       /* Folded unless this cabinet already departs from the
+                          project in here, in which case it opens showing you
+                          what. */
+                       defaultOpen={BOX_KEYS.some((k) => over[k] !== undefined)}>
                 <p className="note">
                   The box is what holds the load, so it is worth being able to build it
                   out of something other than the carcass. Every panel here is its own
@@ -286,8 +298,10 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                        onChange={(v) => onOverride(item.uid, { boxBaseThk: v ?? cfg.boxBaseThk })} />
                   <Num label="Box side height" value={eff('boxHeight')}
                        onChange={(v) => onOverride(item.uid, { boxHeight: v ?? cfg.boxHeight })} />
-                  <Num label="Carcass to box, each side" value={eff('runnerClearance')}
-                       onChange={(v) => onOverride(item.uid, { runnerClearance: v ?? cfg.runnerClearance })} />
+                  <Num label="Gap each side" value={gapEachSide}
+                       onChange={(v) => onOverride(item.uid, {
+                         runnerDeduction: v === null ? null : 2 * (v + eff('boxSideThk')),
+                       })} />
                   <Num label="Runner length" value={eff('runnerLength')}
                        onChange={(v) => onOverride(item.uid, { runnerLength: v ?? cfg.runnerLength })} />
                   <Num label="Box behind the front" value={eff('boxSetback')}
@@ -297,7 +311,7 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                   <Num label="Gap between fronts" value={eff('reveal')}
                        onChange={(v) => onOverride(item.uid, { reveal: v ?? cfg.reveal })} />
                 </div>
-              </section>
+              </Section>
             )}
           </>
         )}
@@ -329,6 +343,7 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
         {editable && (
           <button className="btn btn--secondary" onClick={() => onOpen3D(item.uid)}>Open in 3D</button>
         )}
+        <button className="btn btn--secondary" onClick={() => onDuplicate(item.uid)}>Duplicate</button>
         <button className="btn btn--danger" onClick={() => onRemove(item.uid)}>Delete</button>
       </div>
     </div>
@@ -352,6 +367,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
      boxes: opening it is how you see whether the drawers clear the handles
      and whether a door can be used at all. */
   const [open, setOpen] = useState(0);
+  const [keysOpen, setKeysOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
@@ -527,6 +543,35 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     it.settings = keep;
   });
 
+  /* Duplicate a cabinet, dropped in straight after the one it came from.
+
+     Everything about it comes along: its width, its front stack, its own
+     board overrides. What does not come along is its position, because two
+     cabinets pinned to the same millimetre are one cabinet drawn twice. The
+     copy flows after the original instead. */
+  const duplicateUnit = (u) => {
+    let made = null;
+    mutate((w) => {
+      const i = w.units.findIndex((x) => x.uid === u);
+      if (i < 0) return;
+      const src = w.units[i];
+      const settings = structuredClone(src.settings || {});
+      delete settings.x;
+      made = { uid: uid(), familyId: src.familyId, settings };
+      w.units.splice(i + 1, 0, made);
+    });
+    if (made) setSelected(made.uid);
+  };
+
+  /* Move a cabinet along its wall by a step. Nudging pins it, the same as
+     dragging does, because putting something at a millimetre you chose is
+     what pinning means. */
+  const nudge = (u, dx) => {
+    const at = lay.placed.find((q) => q.item.uid === u);
+    if (!at) return;
+    dropUnit(u, Math.max(0, Math.round(at.x + dx)));
+  };
+
   const removeUnit = (u) => {
     mutate((w) => { w.units = w.units.filter((x) => x.uid !== u); });
     setSelected(null);
@@ -613,6 +658,73 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   };
 
   const pickUnit = (u, drawer = null) => { setSelected(u); setSelDrawer(drawer); };
+
+  /* ---------------------------------------------------------------------------
+     Keyboard.
+
+     What you do over and over while laying out a kitchen: pick a cabinet,
+     nudge it, copy it, get rid of it. Doing that with the mouse alone means
+     crossing to the inspector and back for every one.
+
+     A shortcut never fires while you are typing. A field's own keys belong to
+     the field, and Delete inside a width box has to delete a digit and not the
+     cabinet the box belongs to.
+     --------------------------------------------------------------------------- */
+  useEffect(() => {
+    const typing = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'
+      || el.isContentEditable);
+
+    const onKey = (e) => {
+      if (typing(e.target)) return;
+      if (e.altKey) return;
+
+      const step = e.shiftKey ? 50 : 10;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd') {
+        if (!selected) return;
+        e.preventDefault();
+        duplicateUnit(selected);
+        return;
+      }
+      if (e.metaKey || e.ctrlKey) return;
+
+      switch (e.key) {
+        case 'Escape':
+          setSelected(null); setSelDrawer(null);
+          break;
+        case 'Delete':
+        case 'Backspace':
+          if (!selected) return;
+          e.preventDefault();
+          removeUnit(selected);
+          break;
+        case 'ArrowLeft':
+          if (!selected) return;
+          e.preventDefault();
+          nudge(selected, -step);
+          break;
+        case 'ArrowRight':
+          if (!selected) return;
+          e.preventDefault();
+          nudge(selected, step);
+          break;
+        case '[':
+          if (selected) moveUnit(selected, -1);
+          break;
+        case ']':
+          if (selected) moveUnit(selected, 1);
+          break;
+        case '?':
+          setKeysOpen((k) => !k);
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   const view3d = (
     <div className="three-wrap">
@@ -767,6 +879,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                      locked={placedSel ? locked.includes(placedSel.item.uid) : false}
                      onLock={toggleLock} onOverride={setOverride}
                      onChange={changeUnit} onConvert={convertUnit}
+                     onDuplicate={duplicateUnit}
                      onRemove={removeUnit} onMove={moveUnit}
                      onOpen3D={onOpen3D} onClose={() => pickUnit(null)} />
         </aside>
@@ -777,11 +890,56 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                   onRoom={setRoom} onWallLength={setLengthOf}
                   onClose={() => setAdvOpen(false)} />
       )}
+      {keysOpen && <Shortcuts onClose={() => setKeysOpen(false)} />}
       {opt && (
         <OptimiseResult result={opt} project={project} wall={wall} locked={locked}
                         onApply={applyOptimise} onApplyPlan={applyPlan}
                         onClose={() => setOpt(null)} />
       )}
+    </div>
+  );
+}
+
+
+/* ---------------------------------------------------------------------------
+   The shortcuts, written down.
+
+   A shortcut nobody knows about is not a shortcut. Press ? to see them, which
+   is itself one of them, so the list says so first.
+   --------------------------------------------------------------------------- */
+
+const KEYS = [
+  ['?', 'Show this list'],
+  ['Esc', 'Nothing selected'],
+  ['Left and Right', 'Nudge the selected cabinet 10mm'],
+  ['Shift and Left or Right', 'Nudge it 50mm'],
+  ['[ and ]', 'Move it earlier or later in the run'],
+  ['Ctrl D, or Cmd D', 'Duplicate it'],
+  ['Delete', 'Remove it'],
+  ['Ctrl Z, or Cmd Z', 'Undo. Add Shift to redo'],
+];
+
+function Shortcuts({ onClose }) {
+  return (
+    <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="dialog keys-dialog" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts">
+        <div className="adv-head">
+          <div>
+            <span className="dialog__title">Keyboard</span>
+            <p className="note">These work on the planner, whenever you are not typing in a field.</p>
+          </div>
+          <Close onClick={onClose} />
+        </div>
+        <div className="adv-body">
+          <table className="keys-table">
+            <tbody>
+              {KEYS.map(([key, what]) => (
+                <tr key={key}><th scope="row"><kbd>{key}</kbd></th><td>{what}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

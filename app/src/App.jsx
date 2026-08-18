@@ -21,31 +21,69 @@ import { HOLE_STYLE } from './drilling.js';
 
 /* --- rail ----------------------------------------------------------------- */
 
+/* The screens, in the order you actually work through them.
+
+   Eleven items in one flat column asked you to remember which of eleven
+   things you wanted before you could look for it. They are the same eleven,
+   grouped by what you are doing:
+
+     Design   deciding what the kitchen is
+     Make     turning that into board, holes and hardware
+     Money    what it costs
+     Paper    what you carry to the bench or the supplier
+
+   Settings is none of those. It sits on its own at the bottom, because it is
+   somewhere you go once and then leave alone. */
 const NAV = [
-  ['planner', 'Planner', 'M2 12h20M6 12V6h5v6M13 12V8h5v4'],
-  ['cabinet', 'Cabinet', 'M5 3h14v18H5zM5 9h14M12 3v18'],
-  ['cutlist', 'Cut list', 'M4 6h16M4 12h16M4 18h10'],
-  ['nesting', 'Nesting', 'M3 4h18v16H3zM3 11h18M11 4v7M15 11v9'],
-  ['drilling', 'Drilling', 'M5 3h14v18H5zM9 7v.01M9 12v.01M9 17v.01M15 7v.01M15 12v.01M15 17v.01'],
-  ['hardware', 'Hardware', 'M4 9h10a3 3 0 1 1 0 6H4zM4 6v12'],
-  ['costing', 'Costing', 'M4 20V10M10 20V4M16 20v-8M22 20H2'],
-  ['reference', 'Reference', 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'],
-  ['workshop', 'Workshop', 'M4 4h16v6H4zM4 14h16v6H4zM9 7h6M9 17h6'],
-  ['print', 'Print', 'M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z'],
-  ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'],
+  ['Design', [
+    ['planner', 'Planner', 'M2 12h20M6 12V6h5v6M13 12V8h5v4'],
+    ['cabinet', 'Cabinet', 'M5 3h14v18H5zM5 9h14M12 3v18'],
+    ['reference', 'Reference', 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'],
+  ]],
+  ['Make', [
+    ['cutlist', 'Cut list', 'M4 6h16M4 12h16M4 18h10'],
+    ['nesting', 'Nesting', 'M3 4h18v16H3zM3 11h18M11 4v7M15 11v9'],
+    ['drilling', 'Drilling', 'M5 3h14v18H5zM9 7v.01M9 12v.01M9 17v.01M15 7v.01M15 12v.01M15 17v.01'],
+    ['hardware', 'Hardware', 'M4 9h10a3 3 0 1 1 0 6H4zM4 6v12'],
+    ['workshop', 'Workshop', 'M4 4h16v6H4zM4 14h16v6H4zM9 7h6M9 17h6'],
+  ]],
+  ['Money', [
+    ['costing', 'Costing', 'M4 20V10M10 20V4M16 20v-8M22 20H2'],
+  ]],
+  ['Paper', [
+    ['print', 'Print', 'M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z'],
+  ]],
 ];
+
+const SETTINGS_ITEM = ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'];
+
+/** Every screen id, flat, for the keyboard shortcuts and anything else. */
+export const SCREEN_IDS = [...NAV.flatMap(([, items]) => items.map(([id]) => id)), 'settings'];
+
+const RailItem = ({ id, label, d, screen, setScreen }) => (
+  <button className="rail-item" aria-current={screen === id} title={label}
+          onClick={() => setScreen(id)}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
+    <span>{label}</span>
+  </button>
+);
 
 function Rail({ screen, setScreen }) {
   return (
     <nav className="rail-nav" aria-label="Screens">
-      {NAV.map(([id, label, d]) => (
-        <button key={id} className="rail-item" aria-current={screen === id} title={label}
-                onClick={() => setScreen(id)}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"
-               strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
-          <span>{label}</span>
-        </button>
+      {NAV.map(([group, items]) => (
+        <div className="rail-group" key={group} role="group" aria-label={group}>
+          <span className="rail-group__label">{group}</span>
+          {items.map(([id, label, d]) => (
+            <RailItem key={id} id={id} label={label} d={d} screen={screen} setScreen={setScreen} />
+          ))}
+        </div>
       ))}
+      <div className="rail-group rail-group--foot">
+        <RailItem id={SETTINGS_ITEM[0]} label={SETTINGS_ITEM[1]} d={SETTINGS_ITEM[2]}
+                  screen={screen} setScreen={setScreen} />
+      </div>
     </nav>
   );
 }

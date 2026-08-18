@@ -1212,3 +1212,46 @@ body {
 .open-control > * { pointer-events: auto; }
 .open-control input[type="range"] { width: 120px; accent-color: var(--accent); }
 .open-control .num { min-width: 3.2em; text-align: right; }
+
+/* The rail, grouped by what you are doing rather than as one flat column. */
+.rail-group { display: flex; flex-direction: column; }
+.rail-group + .rail-group { margin-top: var(--sp-3); }
+.rail-group__label {
+  font-size: var(--fs-1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3, var(--text-2));
+  padding: 0 var(--sp-3) var(--sp-1);
+}
+.rail-group--foot { margin-top: auto; padding-top: var(--sp-3); }
+
+/* The shortcuts sheet. */
+.keys-dialog { max-width: 480px; }
+.keys-table { width: 100%; border-collapse: collapse; }
+.keys-table th, .keys-table td {
+  padding: var(--sp-2) 0;
+  text-align: left;
+  vertical-align: baseline;
+  border-bottom: 1px solid var(--line-weak, var(--border));
+}
+.keys-table th { width: 45%; font-weight: 400; }
+.keys-table tr:last-child th, .keys-table tr:last-child td { border-bottom: 0; }
+kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-2);
+  background: var(--sunken);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-1);
+  padding: 1px 6px;
+}
+
+/* A collapsible inspector section. */
+.sub--fold .sub-head { align-items: center; }
+.sub-toggle {
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: inherit; text-align: left; flex: 1;
+}
+.sub-toggle svg { transition: transform 120ms ease; flex: none; color: var(--text-2); }
+.sub--fold.is-open .sub-toggle svg { transform: rotate(90deg); }
+@media (pointer: coarse) { .sub-toggle { min-height: var(--touch-min); } }
