@@ -344,7 +344,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [preset, setPreset] = useState('Iso');
   const [nonce, setNonce] = useState(0);
   const [eye, setEye] = useState(false);
-  const [show, setShow] = useState({ walls: true, bench: true, wallCabs: true, appliances: true });
+  const [show, setShow] = useState({
+    walls: true, bench: true, wallCabs: true, appliances: true,
+    arcs: false, person: false,
+  });
+  /* How far the fronts are open, 0 to 1. A kitchen drawn shut is a wall of
+     boxes: opening it is how you see whether the drawers clear the handles
+     and whether a door can be used at all. */
+  const [open, setOpen] = useState(0);
   const [advOpen, setAdvOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
@@ -611,7 +618,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     <div className="three-wrap">
       <Kitchen3D lay={lay} room={room} cfg={project.cfg} selected={selected} setSelected={(u) => pickUnit(u)}
                  setHovered={setHovered} show={show} preset={preset} nonce={nonce}
-                 eye={eye} reduced={reduced} />
+                 eye={eye} reduced={reduced} open={open} silhouette={show.person} />
       <div className="vp-toolbar float-tl">
         <div className="seg" role="group" aria-label="Camera">
           {['Front', 'Left', 'Right', 'Top', 'Iso'].map((v) => (
@@ -624,10 +631,27 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                 onClick={() => { setEye((e) => !e); setNonce((n) => n + 1); }}
                 title="Stand in the room at 1600. Walk with W A S D">Eye</button>
         <span className="vp-toolbar__sep" />
-        {[['walls', 'Walls'], ['bench', 'Benchtop'], ['wallCabs', 'Wall cabs'], ['appliances', 'Appliances']].map(([k, label]) => (
+        {[['walls', 'Walls'], ['bench', 'Benchtop'], ['wallCabs', 'Wall cabs'], ['appliances', 'Appliances'],
+          ['arcs', 'Door swing'], ['person', 'Person']].map(([k, label]) => (
           <button key={k} className="seg__item" aria-pressed={show[k]}
                   onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}>{label}</button>
         ))}
+        <span className="vp-toolbar__sep" />
+        <button className="seg__item" disabled={!selected}
+                onClick={() => { setEye(false); setPreset('Frame'); setNonce((n) => n + 1); }}
+                title="Move the camera to the selected cabinet">Frame</button>
+      </div>
+
+      <div className="vp-toolbar float-bl open-control">
+        <label className="field__label" htmlFor="open-fronts">Open</label>
+        <input id="open-fronts" type="range" min="0" max="100" step="1"
+               value={Math.round(open * 100)}
+               onChange={(e) => setOpen(Number(e.target.value) / 100)} />
+        <span className="num">{Math.round(open * 100)}%</span>
+        <button className="btn btn--ghost"
+                onClick={() => setOpen((o) => (o > 0 ? 0 : 1))}>
+          {open > 0 ? 'Shut' : 'Open'}
+        </button>
       </div>
       {eye && <div className="eye-hint">W A S D to walk. Drag to look.</div>}
       {hov && (

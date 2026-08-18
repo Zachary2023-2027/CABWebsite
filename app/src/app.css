@@ -1196,3 +1196,19 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* The open control, bottom left of the 3D view.
+
+   float-bl spans the width and turns pointer events off so a drag across the
+   viewport reaches the canvas underneath. The controls themselves have to
+   turn them back on, the same way .controls does, or the slider is painted
+   over the canvas and the canvas keeps the clicks. */
+.open-control {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: max-content;
+}
+.open-control > * { pointer-events: auto; }
+.open-control input[type="range"] { width: 120px; accent-color: var(--accent); }
+.open-control .num { min-width: 3.2em; text-align: right; }

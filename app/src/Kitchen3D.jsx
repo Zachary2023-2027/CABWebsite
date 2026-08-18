@@ -10,8 +10,67 @@ import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { Part, cssVar } from './Viewer.jsx';
 import { unitWarnings } from './project.js';
+import { FULL_SWING, doorSwing, drawerSlide, largestSwing, swingSector, arcPoint, degrees } from './motion.js';
 
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+/* ---------------------------------------------------------------------------
+   A cabinet whose fronts move.
+
+   Shut, this is what it always was. Opened, the doors turn about their hinge
+   edge and the drawers come out on their runners, carrying their boxes with
+   them, because a drawer box that stays behind while its front slides away is
+   a worse drawing than one that does not move at all.
+   --------------------------------------------------------------------------- */
+
+function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected }) {
+  const { unit, x } = p;
+  const travel = unit.cfg?.runnerLength ?? 500;
+
+  const partProps = {
+    offset: [0, 0, 0], selected: sel, ghosted: ghost, hidden: false, warn,
+    onHover: (pp) => setHovered(pp ? p : null),
+    onSelect: () => setSelected(sel ? null : p.item.uid),
+    clip: [], showLabel: false,
+  };
+
+  /* Three kinds of part: doors, which turn, anything belonging to a drawer,
+     which slides, and the carcass, which does neither. */
+  const doors = unit.parts.filter((q) => q.group === 'front' && q.code.includes('DOOR'));
+  const drawers = new Map();
+  for (const q of unit.parts) {
+    if (q.drawer == null) continue;
+    if (!drawers.has(q.drawer)) drawers.set(q.drawer, []);
+    drawers.get(q.drawer).push(q);
+  }
+  const moving = new Set([...doors, ...[...drawers.values()].flat()]);
+  const still = unit.parts.filter((q) => !moving.has(q));
+
+  return (
+    <group position={[x, unit.mountY, 0]}>
+      {still.map((q) => <Part key={q.code} p={q} {...partProps} />)}
+
+      {doors.map((q) => {
+        const swing = doorSwing(q, open);
+        return (
+          <group key={q.code} position={swing.pivot} rotation={[0, swing.angle, 0]}>
+            {/* The part is drawn in cabinet space, so inside the pivot group it
+                has to be moved back to where the pivot is. */}
+            <group position={[-swing.pivot[0], -swing.pivot[1], -swing.pivot[2]]}>
+              <Part p={q} {...partProps} />
+            </group>
+          </group>
+        );
+      })}
+
+      {[...drawers.entries()].map(([n, parts]) => (
+        <group key={`d${n}`} position={[0, 0, drawerSlide(parts[0], open, travel).z]}>
+          {parts.map((q) => <Part key={q.code} p={q} {...partProps} />)}
+        </group>
+      ))}
+    </group>
+  );
+}
 
 const VIEWS = {
   Iso: [0.55, 0.55, 0.63],
@@ -24,7 +83,7 @@ const VIEWS = {
 /* --- camera, shared behaviour with the single cabinet viewer -------------- */
 
 function Rig({ preset, nonce, target, distance, eye, run }) {
-  const { camera, controls } = useThree();
+  const { camera, controls, invalidate } = useThree();
   const move = useRef(null);
   const keys = useRef({});
 
@@ -58,6 +117,12 @@ function Rig({ preset, nonce, target, distance, eye, run }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset, nonce, eye, controls]);
 
+  /* The canvas only draws when something asks it to. A tween and a walk are
+     both changes over time with nothing else to trigger them, so they ask for
+     the next frame themselves. Without this the camera moves one frame and
+     stops, which looks exactly like a broken camera. */
+  useEffect(() => { invalidate(); }, [preset, nonce, eye, target, distance, invalidate]);
+
   useFrame((_, dt) => {
     if (!controls) return;
     const m = move.current;
@@ -68,9 +133,11 @@ function Rig({ preset, nonce, target, distance, eye, run }) {
       controls.target.lerpVectors(m.fromTgt, m.toTgt, e);
       controls.update();
       if (k >= 1) move.current = null;
+      invalidate();
       return;
     }
     if (!eye) return;
+    if (Object.values(keys.current).some(Boolean)) invalidate();
 
     /* Walk. W and S along the view direction, A and D across it. */
     const k = keys.current;
@@ -174,7 +241,7 @@ function CooktopOven({ unit, colour, ghost, benchHeight, ...evt }) {
    turns the whole group, so a return wall needs no special cases here.
    ------------------------------------------------------------------------ */
 
-function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap }) {
+function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, open = 0 }) {
   /* Benchtop segments, same rule as the elevation. */
   const bench = useMemo(() => {
     const segs = [];
@@ -237,15 +304,8 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap })
         }
 
         return (
-          <group key={p.item.uid} position={[x, unit.mountY, 0]}>
-            {unit.parts.map((q) => (
-              <Part key={q.code} p={q} offset={[0, 0, 0]}
-                    selected={sel} ghosted={ghost} hidden={false} warn={warn}
-                    onHover={(pp) => setHovered(pp ? p : null)}
-                    onSelect={() => setSelected(sel ? null : p.item.uid)}
-                    clip={[]} showLabel={false} />
-            ))}
-          </group>
+          <Cabinet key={p.item.uid} p={p} open={open} sel={sel} ghost={ghost} warn={warn}
+                   setHovered={setHovered} setSelected={setSelected} />
         );
       })}
 
@@ -274,7 +334,7 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap })
 /* --- scene --------------------------------------------------------------- */
 
 function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset, nonce,
-                eye, reduced, warnMap }) {
+                eye, reduced, warnMap, open = 0, silhouette }) {
   const wallCol = cssVar('--sunken', '#EAE7E1');
 
   /* One wall, or the joined run of an L or a U. Each entry carries where its
@@ -283,6 +343,31 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
   const runs = room && room.length
     ? room.map((r) => ({ lay: r.lay, origin: r.origin, rot: r.rot }))
     : [{ lay, origin: [0, 0], rot: 0 }];
+
+  /* Where the selected cabinet is in room coordinates, so Frame can point the
+     camera at the thing you are working on rather than at the middle of the
+     kitchen. The wall it is on may be turned, so its position has to come
+     back through that rotation. */
+  const framed = useMemo(() => {
+    if (!selected) return null;
+    for (const r of runs) {
+      const hit = r.lay.placed.find((q) => q.item.uid === selected);
+      if (!hit) continue;
+      const cx = hit.x + hit.unit.width / 2;
+      const cz = hit.unit.depth / 2;
+      const cos = Math.cos(r.rot);
+      const sin = Math.sin(r.rot);
+      return {
+        target: [
+          r.origin[0] + cx * cos + cz * sin,
+          hit.unit.mountY + hit.unit.height / 2,
+          r.origin[1] - cx * sin + cz * cos,
+        ],
+        size: Math.max(hit.unit.width, hit.unit.height, hit.unit.depth),
+      };
+    }
+    return null;
+  }, [selected, runs]);
 
   /* The room's footprint, so the floor, the back wall and the camera all
      cover the whole thing rather than the first wall. */
@@ -316,7 +401,13 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
         maxPolarAngle={Math.PI / 2 - 0.015}
         target={target}
       />
-      <Rig preset={preset} nonce={nonce} target={target} distance={distance} eye={eye} run={span.x} />
+      {/* Frame points the camera at the selected cabinet and pulls in close
+          enough to see it. Everything else keeps the whole room in view. */}
+      <Rig preset={preset === 'Frame' && framed ? 'Iso' : preset} nonce={nonce}
+           target={framed && preset === 'Frame' ? framed.target : target}
+           distance={framed && preset === 'Frame'
+             ? Math.max(1400, framed.size * 3.2) : distance}
+           eye={eye} run={span.x} />
 
       {/* floor */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[span.x / 2, 0, span.z / 2 + 300]}>
@@ -349,9 +440,14 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
         <group key={r.lay.wall.id ?? i}
                position={[r.origin[0], 0, r.origin[1]]} rotation={[0, r.rot, 0]}>
           <WallRun lay={r.lay} cfg={cfg} selected={selected} setSelected={setSelected}
-                   setHovered={setHovered} show={show} warnMap={warnMap} />
+                   setHovered={setHovered} show={show} warnMap={warnMap} open={open} />
+          {show.arcs && (
+            <SwingArcs lay={r.lay} cfg={cfg} selected={selected} />
+          )}
         </group>
       ))}
+
+      {silhouette && <Person x={span.x / 2} z={Math.max(900, span.z * 0.55)} />}
     </>
   );
 }
@@ -384,6 +480,10 @@ export default function Kitchen3D(props) {
 
   return (
     <Canvas
+      /* Draw when something changes, not sixty times a second at rest. A
+         kitchen sitting still is the normal state of this view, and rendering
+         it over and over is heat and battery for an identical picture. */
+      frameloop="demand"
       dpr={props.reduced ? 1 : [1, 2]}
       camera={{ position: [2600, 2600, 3600], fov: 35, near: 10, far: 60000 }}
       gl={{ antialias: !props.reduced }}
@@ -392,5 +492,113 @@ export default function Kitchen3D(props) {
     >
       <Room {...props} warnMap={warnMap} />
     </Canvas>
+  );
+}
+
+
+/* ---------------------------------------------------------------------------
+   Swing arcs.
+
+   The quarter circle a door's free corner travels, drawn on the floor. Green
+   where the door opens all the way, amber where something stops it short, and
+   the angle it actually reaches written beside it, because "this door only
+   opens 40 degrees" is the useful sentence and "this door fouls" is not.
+   --------------------------------------------------------------------------- */
+
+function SwingArcs({ lay, cfg, selected }) {
+  const arcs = useMemo(() => {
+    const placed = lay.placed.filter((q) => !q.unit.cavity && q.unit.kind !== 'filler');
+    const out = [];
+
+    for (const p of placed) {
+      if (selected && p.item.uid !== selected) continue;
+      const doors = p.unit.parts.filter(
+        (q) => q.group === 'front' && q.code.includes('DOOR'));
+      if (!doors.length) continue;
+
+      /* Everything else standing in the plan, as a box seen from above. The
+         cabinet whose door it is cannot foul itself. */
+      const others = placed
+        .filter((q) => q.item.uid !== p.item.uid)
+        .map((q) => ({
+          x0: q.x, x1: q.x + q.unit.width,
+          z0: 0, z1: q.unit.depth,
+          y0: q.unit.mountY, y1: q.unit.mountY + q.unit.height,
+          label: q.unit.family.name,
+        }));
+
+      for (const door of doors) {
+        const reach = largestSwing(door, p.x, others, FULL_SWING, 22, p.unit.mountY);
+        const sector = swingSector(door, p.x, Math.max(reach, 0.08), p.unit.mountY);
+        out.push({
+          key: `${p.item.uid}-${door.code}`,
+          sector,
+          reach,
+          blocked: reach < FULL_SWING - 0.01,
+        });
+      }
+    }
+    return out;
+  }, [lay, selected]);
+
+  return arcs.map((a) => <Arc key={a.key} {...a} />);
+}
+
+function Arc({ sector, reach, blocked }) {
+  const points = useMemo(() => {
+    /* A filled fan rather than a line, because a line on the floor at a
+       shallow camera angle is almost invisible and the point of this is to be
+       seen without hunting for it. */
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);
+    for (let i = 0; i <= 24; i++) {
+      const [px, pz] = arcPoint(sector, i / 24);
+      shape.lineTo(px - sector.cx, pz - sector.cz);
+    }
+    shape.lineTo(0, 0);
+    return shape;
+  }, [sector]);
+
+  return (
+    /* Rotating +90 about X takes the shape's own y to the room's +z. The other
+       way round, which is how a floor plane is usually laid flat, sends the
+       arc backwards into the wall where nothing can see it. */
+    <group position={[sector.cx, 4, sector.cz]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh>
+        <shapeGeometry args={[points]} />
+        <meshBasicMaterial color={blocked ? '#C8892F' : '#4E8C63'}
+                           transparent opacity={0.22} side={THREE.DoubleSide}
+                           depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Somebody standing in the room.
+
+   1700mm tall, which is about average for an adult in Australia. Not a model,
+   just a shape: a kitchen drawn with nothing human in it gives no sense of
+   whether the wall cabinets are out of reach or the walkway is wide enough to
+   pass someone in.
+   --------------------------------------------------------------------------- */
+
+const PERSON_HEIGHT = 1700;
+
+function Person({ x, z }) {
+  const grey = '#8B8B88';
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, PERSON_HEIGHT * 0.46, 0]}>
+        <capsuleGeometry args={[150, PERSON_HEIGHT * 0.52, 4, 12]} />
+        <meshStandardMaterial color={grey} roughness={0.9}
+                              transparent opacity={0.42} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, PERSON_HEIGHT * 0.9, 0]}>
+        <sphereGeometry args={[105, 16, 12]} />
+        <meshStandardMaterial color={grey} roughness={0.9}
+                              transparent opacity={0.42} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
