@@ -97,6 +97,25 @@ export const PROJECT = {
      follow or the door stops clearing. This is only the extra past it. */
   blindClearance: 50,
 
+  /* The kickboard is a real part now, cut from board and nested with
+     everything else, rather than a price per metre that never reached the
+     saw. Left empty the species follows the carcass. */
+  kickBoard: '',
+  kickThk: 16,
+
+  /* A finished panel on an end of a run that is out in the open. Off by
+     default: whether an end is worth finishing is a decision about the room,
+     not something the geometry can settle on its own. */
+  endPanelAuto: false,
+  endPanelBoard: '',
+  endPanelThk: 18,
+
+  /* How far the benchtop hangs past an open end of a run. */
+  benchOverhang: 20,
+  /* The longest benchtop piece you can buy or carry, so a long run is
+     reported with its joins rather than as one impossible slab. */
+  benchMaxPiece: 3600,
+
   /* The saw. Kerf is the width of the blade, and it is the gap left between
      every part on a sheet so that cutting one does not cut into the next.
      Trim is what comes off each edge of the sheet before anything else, to

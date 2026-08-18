@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allParts, allUnits, layoutFor, nestCfg, snapX, starterProject, totals,
+  allParts, allUnits, benchPieces, layoutFor, nestCfg, runParts, snapX,
+  starterProject, totals,
 } from '../project.js';
 import { nestProject } from '../nesting.js';
 import { PRICES } from '../catalog.js';
@@ -50,10 +51,13 @@ describe('numbers computed two independent ways agree', () => {
     expect(t.boardCost).toBeCloseTo(nest.cost, 6);
   });
 
-  it('part count from the project list matches the sum over cabinets', () => {
+  it('part count matches the cabinets plus the parts that belong to a run', () => {
     const fromParts = allParts(project).length;
     const fromUnits = allUnits(project).reduce((a, u) => a + u.unit.parts.length, 0);
-    expect(fromParts).toBe(fromUnits);
+    // A kickboard belongs to a run of cabinets, not to any one of them, so it
+    // is counted separately and the two have to add up.
+    expect(fromParts).toBe(fromUnits + runParts(project).length);
+    expect(runParts(project).length).toBeGreaterThan(0);
   });
 
   it('cabinet count from totals matches the walls', () => {

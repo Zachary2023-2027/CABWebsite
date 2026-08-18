@@ -698,6 +698,9 @@ body {
 .p-panel { width: 100%; height: auto; max-height: 92mm; }
 .p-panel-fig figcaption { font-size: 7.6pt; text-align: center; }
 .p-notes { margin-top: 3mm; }
+/* An aside inside a print line, for saying where a cost has gone rather than
+   leaving a row that looks like it was forgotten. */
+.p-note { color: var(--text-2); font-size: 0.9em; }
 
 /* shopping page */
 .p-shop { display: grid; gap: 2mm; }

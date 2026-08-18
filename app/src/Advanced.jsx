@@ -165,6 +165,38 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
           </section>
 
           <section className="adv-group">
+            <span className="field__label">Kickboard, benchtop and end panels</span>
+            <p className="note">
+              These belong to a run of cabinets rather than to any one cabinet, so
+              they are worked out from what is actually standing next to what. The
+              kickboard is cut from board and nested with everything else. The
+              benchtop is bought by the metre, so it gets a schedule instead of
+              being nested against your sheets.
+            </p>
+            <div className="settings-grid">
+              <Board label="Kickboard" value={cfg.kickBoard || ''} options={boards}
+                     placeholder={cfg.carcassBoard} onChange={(v) => onChange({ kickBoard: v })} />
+              <Num label="Kickboard thickness" value={cfg.kickThk ?? 16}
+                   onChange={(v) => onChange({ kickThk: v ?? 16 })} />
+              <Num label="Benchtop past an open end" value={cfg.benchOverhang ?? 20}
+                   onChange={(v) => onChange({ benchOverhang: v ?? 20 })} />
+              <Num label="Longest benchtop piece" value={cfg.benchMaxPiece ?? 3600}
+                   onChange={(v) => onChange({ benchMaxPiece: v ?? 3600 })} />
+            </div>
+            <div className="settings-grid">
+              <Choice label="Panel an open end of a run"
+                      value={cfg.endPanelAuto ? 'yes' : 'no'}
+                      options={[{ value: 'no', label: 'Only where I add one' },
+                        { value: 'yes', label: 'Everywhere one is exposed' }]}
+                      onChange={(v) => onChange({ endPanelAuto: v === 'yes' })} />
+              {cfg.endPanelAuto && (
+                <Num label="End panel thickness" value={cfg.endPanelThk ?? 18}
+                     onChange={(v) => onChange({ endPanelThk: v ?? 18 })} />
+              )}
+            </div>
+          </section>
+
+          <section className="adv-group">
             <span className="field__label">Drilling</span>
             <p className="note">
               Where the back row of shelf pin holes goes, and how the carcass is

@@ -15,8 +15,11 @@
    change what it is made of.
    =========================================================================== */
 
-import { FAMILY, PRICES, PROJECT, buildUnit, unitCost } from './catalog.js';
+import { FAMILY, PRICES, PROJECT, buildUnit, sheetFor, unitCost } from './catalog.js';
 import { NEST, nestProject } from './nesting.js';
+import {
+  baseRuns, benchLength, benchSchedule, endPanelParts, kickParts, usableLength,
+} from './runs.js';
 import { assertMm } from './mm.js';
 
 let seq = 0;
@@ -492,7 +495,7 @@ export function wallWarnings(lay, project) {
 export function totals(project) {
   const cfg = project.cfg;
   let cabinets = 0, doors = 0, drawers = 0, cost = 0;
-  let benchMm = 0, kickMm = 0;
+  let benchMm = 0;
 
   const offsets = roomOffsets(project);
   for (const wall of project.walls) {
@@ -513,10 +516,9 @@ export function totals(project) {
          left out of the cabinet count, the door and drawer counts, and the
          hardware cost. */
       if (unit.kind === 'tall') {
-        benchMm += benchRun; benchRun = 0; kickMm += unit.width;
+        benchMm += benchRun; benchRun = 0;
       } else if (unit.kind === 'base' || unit.kind === 'filler') {
         benchRun += unit.width;
-        kickMm += unit.width;
       }
       if (unit.kind === 'filler') continue;
 
@@ -541,13 +543,34 @@ export function totals(project) {
 
   /* The benchtop can be left out of the total. The metres and the rate are
      still reported, so the number you are not counting is still visible. */
+  /* The benchtop is billed from the schedule the print pack shows, including
+     the overhang at an open end. benchMm is the raw run of cabinets, which is
+     a different and slightly shorter number: billing one while printing the
+     other is how a quote and a delivery end up disagreeing. */
+  const schedule = benchPieces(project);
+  const benchMetres = benchLength(schedule) / 1000;
+
+  /* The kick metres are measured off the kickboard actually cut, not off the
+     cabinets it runs past. Those are different numbers: the run stops either
+     side of a dishwasher and a tall cabinet carries its own, so counting
+     cabinet widths reported more kick than anybody cuts. */
+  const kickMm = runParts(project)
+    .filter((x) => x.group === 'kick')
+    .reduce((a, x) => a + x.L, 0);
+
   const benchIncluded = PRICES.includeBench !== false;
-  const bench = (benchMm / 1000) * PRICES.benchPerMetre;
-  const kick = (kickMm / 1000) * PRICES.kickPerMetre;
+  const bench = benchMetres * PRICES.benchPerMetre;
+  /* The kickboard is cut from board now, so the nest above has already paid
+     for it. Charging the old per metre rate on top would bill it twice. The
+     metres are still reported, because knowing how much kick you are running
+     is useful even when it is not its own line on the bill. */
+  const kick = 0;
 
   return {
     cabinets, doors, drawers,
-    benchMetres: benchMm / 1000,
+    benchMetres,
+    benchPieces: schedule,
+    benchRunMetres: benchMm / 1000,
     kickMetres: kickMm / 1000,
     sheets: nest.sheets,
     wastePct: nest.wastePct,
@@ -585,6 +608,58 @@ export const money = (n) =>
  * piece of board without saying so. The key is built from the cabinet's own
  * id, which never changes, so a tick stays on the part you actually cut.
  */
+/**
+ * The parts that belong to a run rather than to any one cabinet: kickboard,
+ * and the end panels when they are generated automatically.
+ *
+ * Keyed by the wall and the run, because that is what they belong to. The key
+ * has to be stable for the same reason a cabinet part's key does: a tick on a
+ * cut list has to stay on the piece you actually cut.
+ */
+export function runParts(project) {
+  const out = [];
+  const offsets = roomOffsets(project);
+  const cfg = project.cfg;
+
+  for (const wall of project.walls) {
+    const lay = layoutFor(project, wall, offsets);
+    const runs = baseRuns(lay, 'kick', cfg);
+    /* A kickboard piece has to come off a real sheet with the trim already
+       taken off it, or it is cut to a length that fits nowhere and lands on
+       the oversize list. */
+    const kickMat = `${cfg.kickBoard || cfg.carcassBoard || 'White melamine'} ${cfg.kickThk ?? cfg.carcassThk}mm`;
+    const maxPiece = usableLength(sheetFor(kickMat), cfg);
+    for (const part of [
+      ...kickParts(runs, cfg, wall.id, maxPiece),
+      ...endPanelParts(runs, cfg, wall.id),
+    ]) {
+      out.push({
+        ...part,
+        /* Not cabinet parts, so they have no unit. They still need the size
+           and position fields every consumer reads, and a zero size keeps
+           them out of the 3D view without any of it knowing they exist. */
+        size: [0, 0, 0], pos: [0, 0, 0],
+        key: `${wall.id}/${part.code.slice(wall.id.length + 1)}`,
+        unitId: null, unitLabel: '', wallId: wall.id, wallName: wall.name,
+      });
+    }
+  }
+  return out;
+}
+
+/** The benchtop, as a list of pieces with real lengths. Never nested. */
+export function benchPieces(project) {
+  const offsets = roomOffsets(project);
+  const out = [];
+  for (const wall of project.walls) {
+    const runs = baseRuns(layoutFor(project, wall, offsets), 'bench', project.cfg);
+    for (const piece of benchSchedule(runs, project.cfg)) {
+      out.push({ ...piece, wallId: wall.id, wallName: wall.name });
+    }
+  }
+  return out;
+}
+
 export function allParts(project) {
   const out = [];
   const offsets = roomOffsets(project);
@@ -600,6 +675,7 @@ export function allParts(project) {
       }
     }
   }
+  out.push(...runParts(project));
   return out;
 }
 

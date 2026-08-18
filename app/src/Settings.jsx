@@ -20,7 +20,6 @@ const PRICE_FIELDS = [
   ['handle', 'Handle', 'each'],
   ['binRunner', 'Bin runner', 'each'],
   ['benchPerMetre', 'Benchtop', 'per m'],
-  ['kickPerMetre', 'Kickboard', 'per m'],
   ['edgeTapePerMetre', 'Edge tape', 'per m'],
 ];
 

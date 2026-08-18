@@ -18,6 +18,7 @@ import Elevation from './Elevation.jsx';
 import { NEST, cutSequence, nestProject } from './nesting.js';
 import { HOLE_STYLE, drillUnit } from './drilling.js';
 import { PRICES, sheetFor } from './catalog.js';
+import { fmt } from './mm.js';
 
 const PAGE = {
   a4: { w: 210, h: 297, label: 'A4' },
@@ -368,6 +369,35 @@ function PageBody({ page, project, cut }) {
           </tbody>
         </table>
 
+        {tot.benchPieces.length > 0 && (
+          <>
+            <b>Benchtop schedule</b>
+            <table className="p-table">
+              <thead>
+                <tr><th>Where</th><th className="p-n">Length</th><th className="p-n">Depth</th>
+                  <th className="p-n">Thickness</th><th>Cut from</th></tr>
+              </thead>
+              <tbody>
+                {tot.benchPieces.map((b2, i) => (
+                  <tr key={i}>
+                    <td>{b2.wallName}, run {b2.index}
+                      {b2.overhangs > 0 && (
+                        <span className="p-note"> with {b2.overhangs === 2 ? 'both ends' : 'one end'} overhanging</span>
+                      )}
+                    </td>
+                    <td className="p-n">{fmt(b2.length)}</td>
+                    <td className="p-n">{fmt(b2.depth)}</td>
+                    <td className="p-n">{fmt(b2.thickness)}</td>
+                    <td>{b2.pieces.length === 1
+                      ? 'one piece'
+                      : `${b2.pieces.length} pieces, ${b2.pieces.map(fmt).join(' + ')}`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+
         <b>Also needed</b>
         <table className="p-table">
           <tbody>
@@ -376,7 +406,11 @@ function PageBody({ page, project, cut }) {
               <td className="p-n">{tot.benchMetres.toFixed(2)} m</td>
               <td className="p-n">{money(tot.benchCost)}</td>
             </tr>
-            <tr><td>Kickboard</td><td className="p-n">{tot.kickMetres.toFixed(2)} m</td><td className="p-n">{money(tot.kickMetres * PRICES.kickPerMetre)}</td></tr>
+            <tr>
+              <td>Kickboard<span className="p-note"> cut from board, in the sheets above</span></td>
+              <td className="p-n">{tot.kickMetres.toFixed(2)} m</td>
+              <td className="p-n">included</td>
+            </tr>
           </tbody>
         </table>
 
