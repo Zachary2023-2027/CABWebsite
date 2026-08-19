@@ -9,6 +9,7 @@ import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
 import Checks from './Checks.jsx';
+import Purchase from './Purchase.jsx';
 import Workshop from './Workshop.jsx';
 import Print from './Print.jsx';
 import { PRICES } from './catalog.js';
@@ -51,6 +52,7 @@ const NAV = [
   ]],
   ['Money', [
     ['costing', 'Costing', 'M4 20V10M10 20V4M16 20v-8M22 20H2'],
+    ['purchase', 'Order list', 'M6 6h15l-1.5 9h-12zM6 6L5 3H2M9 20a1 1 0 100-2 1 1 0 000 2zM17 20a1 1 0 100-2 1 1 0 000 2z'],
   ]],
   ['Paper', [
     ['print', 'Print', 'M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z'],
@@ -555,6 +557,9 @@ export default function App() {
       case 'settings': return <Settings project={project} setProject={setProject}
                                         prices={prices} setPrices={setPrices} />;
       case 'checks': return <Checks project={project} onCfg={(patch) => setProject((p) => ({
+        ...p, cfg: { ...p.cfg, ...patch },
+      }))} />;
+      case 'purchase': return <Purchase project={project} onCfg={(patch) => setProject((p) => ({
         ...p, cfg: { ...p.cfg, ...patch },
       }))} />;
       case 'reference': return <Reference />;

@@ -1317,3 +1317,20 @@ kbd {
   color: var(--text-2);
 }
 .badge--ok { background: var(--ok-weak); color: var(--ok); }
+
+/* The order list. */
+.order-note {
+  display: block;
+  font-size: var(--fs-1);
+  color: var(--text-2);
+  margin-top: 2px;
+}
+.is-spare { color: var(--warn); }
+.order-total { display: grid; gap: var(--sp-2); }
+.order-total__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: var(--fs-3);
+  font-weight: var(--fw-semibold);
+}

@@ -145,6 +145,22 @@ export const PROJECT = {
   doorMinWidth: 200,
   doorMinSwing: 75,
 
+  /* How things are sold. Your supplier's box is not mine, so these are
+     settings. A pack of 1 means sold singly, which is true of a benchtop and
+     false of a hinge. */
+  hingePack: 20,
+  runnerPack: 1,
+  handlePack: 1,
+  binRunnerPack: 1,
+  edgeTapeRoll: 50,
+  screwPack: 200,
+  dowelPack: 100,
+
+  /* Extra board to buy, for the sheet you ruin. Not the same as nesting
+     waste, which is the offcut the layout leaves and is already inside the
+     sheet count. Zero is a legitimate setting. */
+  sheetWastePct: 0,
+
   /* The saw. Kerf is the width of the blade, and it is the gap left between
      every part on a sheet so that cutting one does not cut into the next.
      Trim is what comes off each edge of the sheet before anything else, to
@@ -176,6 +192,9 @@ export const PRICES = {
      worked out and still shown, they just stop being added up. */
   includeBench: true,
   edgeTapePerMetre: 0.6,
+  /* A box of screws is a few dollars and guessing it wrong is worse than
+     leaving it for you to fill in. The count is the useful part. */
+  fixingEach: 0,
 };
 
 /* The seeded numbers, kept aside. PRICES itself is edited in place so the
