@@ -75,13 +75,28 @@ export function Choice({ label, value, options, onChange }) {
   );
 }
 
+/* Three levels, and the third is not a quieter warning.
+
+   A note is something true about the cabinet that you need while you build
+   it: the waste pipe comes out inside this one. Drawing it as a warning
+   teaches you that warnings are noise, which is how the real ones get
+   ignored, so it gets its own mark and its own colour. */
 export function Warn({ children, level = 'warn' }) {
+  const cls = level === 'error' ? 'warn-inline--error'
+    : level === 'note' ? 'warn-inline--note' : '';
   return (
-    <div className={`warn-inline ${level === 'error' ? 'warn-inline--error' : ''}`}>
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M8 2.5l6 11H2z" strokeLinejoin="round" />
-        <path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
-      </svg>
+    <div className={`warn-inline ${cls}`}>
+      {level === 'note' ? (
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <circle cx="8" cy="8" r="6" />
+          <path d="M8 7.4v4M8 5v.1" strokeLinecap="round" />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
+          <path d="M8 2.5l6 11H2z" strokeLinejoin="round" />
+          <path d="M8 6.5v3.2M8 11.6v.1" strokeLinecap="round" />
+        </svg>
+      )}
       <span>{children}</span>
     </div>
   );

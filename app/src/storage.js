@@ -18,6 +18,7 @@ import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
 import { ROOM_SHAPES, allParts } from './project.js';
 import { migrateRunnerClearance } from './hardware.js';
 import { cleanStack } from './stack.js';
+import { cleanObstacle } from './obstacles.js';
 
 const KEY = 'kcb.store.v2';
 /* 3 added the front stack. A cabinet with no stack of its own still resolves
@@ -122,9 +123,12 @@ export function hydrate(raw) {
     id: String(w.id ?? `W${i}`),
     name: String(w.name ?? `Wall ${i + 1}`),
     length: Number(w.length) > 0 ? Number(w.length) : 3600,
-    obstacles: Array.isArray(w.obstacles) ? w.obstacles.filter(
-      (o) => o && ['x', 'y', 'w', 'h'].every((k) => Number.isFinite(Number(o[k]))),
-    ) : [],
+    /* Cleaned rather than filtered. The old test threw away anything with a
+       bad number in it, which quietly deleted a window because its height
+       arrived as a string. Replacing the bad value from the kind keeps the
+       obstacle and keeps the drawing honest. */
+    obstacles: Array.isArray(w.obstacles)
+      ? w.obstacles.map(cleanObstacle).filter(Boolean) : [],
     units: Array.isArray(w.units) ? w.units.filter((u) => u && FAMILY[u.familyId]).map((u) => ({
       uid: String(u.uid || newId()),
       familyId: u.familyId,

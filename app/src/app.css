@@ -1255,3 +1255,45 @@ kbd {
 .sub-toggle svg { transition: transform 120ms ease; flex: none; color: var(--text-2); }
 .sub--fold.is-open .sub-toggle svg { transform: rotate(90deg); }
 @media (pointer: coarse) { .sub-toggle { min-height: var(--touch-min); } }
+
+/* What is already on the wall, under the cabinet picker. */
+.obstacles {
+  border-top: var(--bw) solid var(--border);
+  padding: var(--sp-3);
+  display: grid;
+  gap: var(--sp-2);
+}
+.obstacles-head { width: 100%; }
+.obstacles .sub-toggle svg { transition: transform 120ms ease; }
+.obstacles.is-open .sub-toggle svg { transform: rotate(90deg); }
+
+.obstacle-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.obstacle-row {
+  display: flex; align-items: center; gap: var(--sp-2);
+  width: 100%; padding: var(--sp-2);
+  background: none; border: 0; border-radius: var(--r-1);
+  cursor: pointer; text-align: left; color: inherit;
+}
+.obstacle-row:hover { background: var(--sunken); }
+.obstacle-row.is-sel { background: var(--accent-weak, var(--sunken)); }
+.obstacle-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.obstacle-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.obstacle-dot--blocks { background: var(--danger, var(--warn)); }
+.obstacle-dot--service { background: var(--warn); }
+.obstacle-dot--note { background: var(--text-2); }
+
+.obstacle-fields { display: grid; gap: var(--sp-2); }
+.obstacle-add { display: flex; flex-wrap: wrap; gap: 4px; }
+.obstacle-add .btn { padding-inline: var(--sp-2); }
+
+.elevation .obstacle { cursor: pointer; }
+@media (pointer: coarse) { .obstacle-row { min-height: var(--touch-min); } }
+
+/* A note is not a quieter warning. It is something true you need while you
+   build, so it reads as information rather than as a problem. */
+.warn-inline--note {
+  color: var(--text);
+  background: var(--sunken);
+  border-color: var(--border);
+}
+.warn-inline--note svg { color: var(--accent); }

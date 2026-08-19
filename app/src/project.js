@@ -22,6 +22,7 @@ import {
 } from './runs.js';
 import { assertMm } from './mm.js';
 import { finishFor, roleOf } from './finishes.js';
+import { obstacleNote, overlaps } from './obstacles.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -437,13 +438,32 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
     }
   }
 
+  /* What is already on the wall. A window behind a cabinet is a mistake; a
+     waste pipe inside a sink base is the reason the sink base is there. The
+     obstacle says which it is rather than everything being an obstruction. */
   for (const o of lay.wall.obstacles || []) {
-    const top = unit.mountY + unit.height;
-    const overlapX = x < o.x + o.w && x + unit.width > o.x;
-    const overlapY = unit.mountY < o.y + o.h && top > o.y;
-    if (overlapX && overlapY) out.push(`Runs into ${o.label.toLowerCase()}`);
+    if (!overlaps(o, x, unit.mountY, unit.width, unit.height)) continue;
+    const note = obstacleNote(o, unit.family.name);
+    if (note && note.level === 'error') out.push(note.text);
   }
 
+  return out;
+}
+
+/**
+ * The services that come out inside a cabinet, so it can be built around them.
+ *
+ * Not a warning. A waste pipe inside a sink base is the point, and calling it
+ * a problem trains you to ignore the problems.
+ */
+export function unitServices(placed, lay) {
+  const { unit, x } = placed;
+  const out = [];
+  for (const o of lay.wall.obstacles || []) {
+    if (!overlaps(o, x, unit.mountY, unit.width, unit.height)) continue;
+    const note = obstacleNote(o, unit.family.name);
+    if (note && note.level === 'note') out.push(note.text);
+  }
   return out;
 }
 

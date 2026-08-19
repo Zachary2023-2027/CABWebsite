@@ -7,11 +7,12 @@ import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
 import { Board, Choice, Close, Num, Pick, Section, Warn } from './Fields.jsx';
 import { RUNNERS } from './hardware.js';
+import { OBSTACLE_LIST, natureOf, newObstacle, obstacleKind } from './obstacles.js';
 import { round1 } from './mm.js';
 import StackEditor from './StackEditor.jsx';
 import {
   ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
-  unitWarnings, wallWarnings,
+  unitServices, unitWarnings, wallWarnings,
 } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
@@ -128,6 +129,9 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
   const { unit, item } = placed;
   const fam = FAMILY[item.familyId];
   const warns = unitWarnings(placed, lay, cfg);
+  /* Not warnings. A waste pipe inside a sink base is the reason the sink base
+     is there, and calling it a problem trains you to ignore the problems. */
+  const services = unitServices(placed, lay);
   const cost = unit.cavity ? null : unitCost(unit);
   const set = (patch) => onChange(item.uid, patch);
   const over = item.settings?.cfg || {};
@@ -234,6 +238,8 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                 The return cabinets start {unit.cornerReturn}mm along the next wall.
               </p>
             )}
+
+            {services.map((t, i) => <Warn key={`s${i}`} level="note">{t}</Warn>)}
 
             {unit.stack && unit.stack.rows.length > 0 && (
               <Section title="Front layout">
@@ -368,6 +374,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
      and whether a door can be used at all. */
   const [open, setOpen] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
+  const [selObstacle, setSelObstacle] = useState(null);
   const [advOpen, setAdvOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
@@ -549,18 +556,21 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
      board overrides. What does not come along is its position, because two
      cabinets pinned to the same millimetre are one cabinet drawn twice. The
      copy flows after the original instead. */
+  /* mutate is a functional setState, so its recipe runs when React gets round
+     to it and not on this line. Anything made inside it is still null when the
+     next statement reads it. The id is decided out here instead, where it is
+     known now, and the recipe uses it. */
   const duplicateUnit = (u) => {
-    let made = null;
+    const newUid = uid();
     mutate((w) => {
       const i = w.units.findIndex((x) => x.uid === u);
       if (i < 0) return;
       const src = w.units[i];
       const settings = structuredClone(src.settings || {});
       delete settings.x;
-      made = { uid: uid(), familyId: src.familyId, settings };
-      w.units.splice(i + 1, 0, made);
+      w.units.splice(i + 1, 0, { uid: newUid, familyId: src.familyId, settings });
     });
-    if (made) setSelected(made.uid);
+    setSelected(newUid);
   };
 
   /* Move a cabinet along its wall by a step. Nudging pins it, the same as
@@ -584,6 +594,24 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     w.units.splice(j, 0, it);
   });
   const setWallLength = (v) => mutate((w) => { w.length = v; });
+
+  /* --- what is already on the wall ---------------------------------------- */
+
+  const addObstacle = (kindId) => {
+    // Made out here for the same reason the duplicate's id is.
+    const made = newObstacle(kindId, Math.round((wall.length || 3600) / 2));
+    mutate((w) => { w.obstacles = [...(w.obstacles || []), made]; });
+    setSelObstacle(made.id);
+  };
+
+  const changeObstacle = (id, patch) => mutate((w) => {
+    w.obstacles = (w.obstacles || []).map((o) => (o.id === id ? { ...o, ...patch } : o));
+  });
+
+  const removeObstacle = (id) => {
+    mutate((w) => { w.obstacles = (w.obstacles || []).filter((o) => o.id !== id); });
+    setSelObstacle(null);
+  };
 
   /* Per cabinet overrides live on the unit as settings.cfg. buildUnit layers
      them over the project config, so the cut list, drilling, nest, costing
@@ -779,7 +807,8 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const elevation = (
     <div className="elev-wrap" onClick={() => pickUnit(null)}>
       <Elevation lay={lay} cfg={project.cfg} selected={selected} selDrawer={selDrawer}
-                 onSelect={pickUnit} onHover={setHovered} onDrag={dropUnit} />
+                 onSelect={pickUnit} onHover={setHovered} onDrag={dropUnit}
+                 onObstacle={(id) => { setSelObstacle(id); setSelected(null); }} />
     </div>
   );
 
@@ -818,6 +847,8 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       <div className={`planner-body arr-${arrangement}`}>
         <aside className="rail">
           <Picker onAdd={addUnit} cfg={project.cfg} />
+          <Obstacles wall={wall} selected={selObstacle} onSelect={setSelObstacle}
+                     onAdd={addObstacle} onChange={changeObstacle} onRemove={removeObstacle} />
         </aside>
 
         <section className="canvas-area">
@@ -941,5 +972,87 @@ function Shortcuts({ onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+
+/* ---------------------------------------------------------------------------
+   What is already on the wall.
+
+   A kitchen is not drawn on an empty wall. The window, the waste pipe, the
+   meter box: each of them changes what you can build, and until now none of
+   them could be said out loud unless you edited the source.
+   --------------------------------------------------------------------------- */
+
+function Obstacles({ wall, selected, onSelect, onAdd, onChange, onRemove }) {
+  const [open, setOpen] = useState(false);
+  const list = wall.obstacles || [];
+  const current = list.find((o) => o.id === selected) || null;
+
+  return (
+    <section className={`obstacles ${open || list.length ? 'is-open' : ''}`}>
+      <button className="sub-toggle obstacles-head" aria-expanded={open || list.length > 0}
+              onClick={() => setOpen((o) => !o)}>
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor"
+             strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6 4l4 4-4 4" />
+        </svg>
+        <span className="field__label">On this wall</span>
+        {list.length > 0 && <span className="badge badge--neutral badge--num">{list.length}</span>}
+      </button>
+
+      {(open || list.length > 0) && (
+        <>
+          {list.length > 0 && (
+            <ul className="obstacle-list">
+              {list.map((o) => (
+                <li key={o.id}>
+                  <button className={`obstacle-row ${o.id === selected ? 'is-sel' : ''}`}
+                          onClick={() => onSelect(o.id === selected ? null : o.id)}>
+                    <span className={`obstacle-dot obstacle-dot--${natureOf(o)}`} />
+                    <span className="obstacle-name">{o.label}</span>
+                    <span className="num">{Math.round(o.x)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {current && (
+            <div className="obstacle-fields">
+              <p className="note">{obstacleKind(current.kind).note}</p>
+              <div className="settings-grid">
+                <Board label="What it is" value={current.label} options={OBSTACLE_LIST.map((k) => k.name)}
+                       onChange={(v) => onChange(current.id, { label: v })} />
+                <Choice label="Treat it as" value={natureOf(current)}
+                        options={[{ value: 'blocks', label: 'In the way' },
+                          { value: 'service', label: 'Build around it' },
+                          { value: 'note', label: 'Just a note' }]}
+                        onChange={(v) => onChange(current.id, { nature: v })} />
+              </div>
+              <div className="settings-grid">
+                <Num label="Along the wall" value={Math.round(current.x)} min={0} max={12000}
+                     onChange={(v) => onChange(current.id, { x: v ?? current.x })} />
+                <Num label="Off the floor" value={Math.round(current.y)} min={0} max={3000}
+                     onChange={(v) => onChange(current.id, { y: v ?? current.y })} />
+                <Num label="Wide" value={Math.round(current.w)} min={1} max={6000}
+                     onChange={(v) => onChange(current.id, { w: v ?? current.w })} />
+                <Num label="Tall" value={Math.round(current.h)} min={1} max={3000}
+                     onChange={(v) => onChange(current.id, { h: v ?? current.h })} />
+              </div>
+              <button className="btn btn--danger"
+                      onClick={() => onRemove(current.id)}>Remove it</button>
+            </div>
+          )}
+
+          <div className="obstacle-add">
+            {OBSTACLE_LIST.map((k) => (
+              <button key={k.id} className="btn btn--ghost" title={k.note}
+                      onClick={() => onAdd(k.id)}>{k.name}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
   );
 }

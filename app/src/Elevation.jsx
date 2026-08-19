@@ -7,6 +7,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { finish, finishFor } from './finishes.js';
+import { natureOf, obstacleKind } from './obstacles.js';
 import { snapX, unitWarnings } from './project.js';
 
 const S = 4;        // hairline, mm at drawing scale
@@ -23,7 +24,8 @@ const FS_DIM = 88;  // dimension line
    scales with the zoom rather than being a fixed number of pixels. */
 const DRAG_START = 40;
 
-export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover, onDrag }) {
+export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover, onDrag,
+                                   onObstacle }) {
   /* The drag is held here and committed on release. Writing every pointer
      move into the project would re-derive the whole kitchen, and the nest
      with it, sixty times a second. */
@@ -167,14 +169,35 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
                      stroke="var(--dw-line)" strokeWidth={S} opacity="0.45" />;
       })}
 
-      {/* obstacles sit behind the cabinets */}
-      {(wall.obstacles || []).map((o, i) => (
-        <g key={i}>
-          {rect(o.x, Y(o.y + o.h), o.w, o.h, 'url(#hatch)')}
-          <text x={o.x + o.w / 2} y={Y(o.y + o.h) - 24} textAnchor="middle"
-                fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>{o.label}</text>
-        </g>
-      ))}
+      {/* What is already on the wall, behind the cabinets.
+
+          Drawn by what it is. A window is an opening, so it is outlined and
+          left clear. A service is a small thing you have to build around, so
+          it is a solid marker you can actually see at 100mm across, rather
+          than a hatched rectangle the size of a postage stamp. */}
+      {(wall.obstacles || []).map((o, i) => {
+        const kind = obstacleKind(o.kind);
+        const service = natureOf(o) === 'service';
+        const label = o.label || kind.name;
+        return (
+          <g key={o.id ?? i} className="obstacle"
+             onClick={onObstacle ? (e) => { e.stopPropagation(); onObstacle(o.id); } : undefined}>
+            {service ? (
+              <>
+                <rect x={o.x} y={Y(o.y + o.h)} width={Math.max(o.w, 60)} height={Math.max(o.h, 60)}
+                      fill="var(--warn-weak, var(--sunken))" stroke="var(--warn)"
+                      strokeWidth={S * 1.5} />
+                <circle cx={o.x + Math.max(o.w, 60) / 2} cy={Y(o.y + o.h) + Math.max(o.h, 60) / 2}
+                        r={Math.min(o.w, o.h, 60) / 4} fill="var(--warn)" />
+              </>
+            ) : (
+              rect(o.x, Y(o.y + o.h), o.w, o.h, 'url(#hatch)')
+            )}
+            <text x={o.x + Math.max(o.w, 60) / 2} y={Y(o.y + o.h) - 24} textAnchor="middle"
+                  fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>{label}</text>
+          </g>
+        );
+      })}
 
       {/* Kickboard, one strip under each floor standing unit.
 
