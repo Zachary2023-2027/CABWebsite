@@ -128,6 +128,23 @@ export const PROJECT = {
   kickFinish: '',
   panelFinish: '',
 
+  /* The clearances the checks screen measures against. Every one is a
+     starting point rather than a rule this app is asserting: they vary by
+     appliance, by who is cooking, and some of them are regulated and the
+     regulation changes. Nothing here is a code compliance check.
+
+     VERIFY BEFORE BUILDING: check anything that matters to you against your
+     appliance's installation instructions and the current standard. */
+  walkwayMin: 1000,
+  walkwayComfortable: 1200,
+  splashbackMin: 450,
+  hoodAboveCooktop: 650,
+  cooktopToWall: 200,
+  sinkToCooktop: 400,
+  reachHeight: 1800,
+  doorMinWidth: 200,
+  doorMinSwing: 75,
+
   /* The saw. Kerf is the width of the blade, and it is the gap left between
      every part on a sheet so that cutting one does not cut into the next.
      Trim is what comes off each edge of the sheet before anything else, to

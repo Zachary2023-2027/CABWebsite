@@ -8,6 +8,7 @@ import Drilling from './Drilling.jsx';
 import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
+import Checks from './Checks.jsx';
 import Workshop from './Workshop.jsx';
 import Print from './Print.jsx';
 import { PRICES } from './catalog.js';
@@ -38,6 +39,7 @@ const NAV = [
   ['Design', [
     ['planner', 'Planner', 'M2 12h20M6 12V6h5v6M13 12V8h5v4'],
     ['cabinet', 'Cabinet', 'M5 3h14v18H5zM5 9h14M12 3v18'],
+    ['checks', 'Checks', 'M3 12l5 5L21 5'],
     ['reference', 'Reference', 'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'],
   ]],
   ['Make', [
@@ -552,6 +554,9 @@ export default function App() {
       case 'costing': return <Costing project={project} quoted={quoted} setQuoted={setQuoted} />;
       case 'settings': return <Settings project={project} setProject={setProject}
                                         prices={prices} setPrices={setPrices} />;
+      case 'checks': return <Checks project={project} onCfg={(patch) => setProject((p) => ({
+        ...p, cfg: { ...p.cfg, ...patch },
+      }))} />;
       case 'reference': return <Reference />;
       case 'print': return <Print project={project} cut={cut} />;
       default: return null;

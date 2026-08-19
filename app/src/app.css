@@ -1297,3 +1297,23 @@ kbd {
   border-color: var(--border);
 }
 .warn-inline--note svg { color: var(--accent); }
+
+/* The checks screen. */
+.checks-settings { display: grid; gap: var(--sp-3); }
+.check-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.check-list li { display: flex; gap: var(--sp-3); align-items: baseline; }
+.check-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex: none; transform: translateY(-1px);
+}
+.check-dot--error { background: var(--danger, var(--warn)); }
+.check-dot--warn { background: var(--warn); }
+.check-dot--note { background: var(--accent); }
+.check-text { display: flex; flex-direction: column; gap: 2px; }
+.check-where {
+  font-size: var(--fs-1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+.badge--ok { background: var(--ok-weak); color: var(--ok); }
