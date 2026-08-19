@@ -10,6 +10,8 @@ import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
 import Checks from './Checks.jsx';
 import Purchase from './Purchase.jsx';
+import { readShared, shareUrl } from './share.js';
+import { Close } from './Fields.jsx';
 import Workshop from './Workshop.jsx';
 import Print from './Print.jsx';
 import { PRICES } from './catalog.js';
@@ -17,7 +19,8 @@ import { allUnits, layoutWall, money, starterProject, totals } from './project.j
 import { cutSize } from './cabinet.js';
 import { drillUnit } from './drilling.js';
 import {
-  exportFile, importFile, listSaved, loadSnapshot, removeSnapshot, saveSnapshot, snapshot,
+  exportFile, hydrate, importFile, listSaved, loadSnapshot, removeSnapshot, saveSnapshot,
+  snapshot,
 } from './storage.js';
 import { HOLE_STYLE } from './drilling.js';
 
@@ -426,6 +429,7 @@ export default function App() {
   const [saved, setSaved] = useState([]);
   const [saveState, setSaveState] = useState({ at: null, error: null });
   const [startError, setStartError] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
   /* Set when an older file is opened and something in it had to be
      reinterpreted. Shown once, dismissed by the user, never repeated. */
   const [notice, setNotice] = useState(null);
@@ -470,6 +474,28 @@ export default function App() {
   };
 
   const startNew = (p) => openSnapshot(snapshot({ name: p.name, project: p, cut: new Set(), prices, quoted: '' }));
+
+  /* A shared link, opened.
+
+     Read once, on the way in, and the hash is cleared straight afterwards so
+     that reloading does not keep reopening the same shared copy over the top
+     of whatever you have done to it since. It arrives as a new project with a
+     new id, because it is a copy and not the sender's kitchen. */
+  useEffect(() => {
+    const shared = readShared();
+    if (!shared) return;
+    const snap = hydrate({
+      schema: 3, id: null, name: shared.name, savedAt: Date.now(),
+      project: shared.project, cut: [], prices: {}, quoted: '',
+    });
+    /* window.history, spelled out. There is a local called history in this
+       component, which is the undo stack, and calling replaceState on that
+       throws rather than clearing the URL. */
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    if (snap) openSnapshot(snap);
+    else setStartError('That link is not a kitchen, or it was cut short on the way.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const key = (e) => {
@@ -624,6 +650,10 @@ export default function App() {
                   onClick={() => exportFile(snapshot({ id: projectId, name: project.name, project, cut, prices, quoted }))}>
             Export file
           </button>
+          <button className="btn btn--ghost" title="A link with the whole kitchen in it"
+                  onClick={() => setShareOpen(true)}>
+            Share a link
+          </button>
           <button className="btn btn--ghost" title="Close this kitchen and go back to the start screen"
                   onClick={() => { refreshSaved(); setProject(null); setProjectId(null); }}>
             Projects
@@ -646,6 +676,75 @@ export default function App() {
       <div className="app-body">
         <Rail screen={screen} setScreen={setScreen} />
         <main className="app-main">{body()}</main>
+      </div>
+
+      {shareOpen && <ShareLink project={project} onClose={() => setShareOpen(false)} />}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   A kitchen in a link.
+
+   There is no server, so a link is the only way to send someone a design
+   without sending them a file. The whole thing is encoded after the hash,
+   which never leaves the browser.
+
+   The length is shown rather than hidden, because a link that is too long
+   does not fail: it gets truncated somewhere along the way and arrives
+   looking fine.
+   --------------------------------------------------------------------------- */
+
+function ShareLink({ project, onClose }) {
+  const link = useMemo(() => shareUrl(project), [project]);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* Clipboard denied, which happens without a secure context. The field
+         below is selectable, so there is still a way to get the link out. */
+    }
+  };
+
+  return (
+    <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="dialog share-dialog" role="dialog" aria-modal="true" aria-label="Share a link">
+        <div className="adv-head">
+          <div>
+            <span className="dialog__title">Share a link</span>
+            <p className="note">
+              The whole kitchen is in the link itself, after the hash, so it never
+              reaches a server. Anyone who opens it gets your design to work on.
+              It is a copy: their changes do not come back to you.
+            </p>
+          </div>
+          <Close onClick={onClose} />
+        </div>
+
+        <div className="adv-body">
+          <div className="input-shell">
+            <input type="text" readOnly value={link.url} aria-label="Link"
+                   onFocus={(e) => e.target.select()} />
+          </div>
+
+          <div className="share-foot">
+            <button className="btn btn--primary" onClick={copy}>
+              {copied ? 'Copied' : 'Copy the link'}
+            </button>
+            <span className={`note ${link.fits ? '' : 'is-warn'}`}>
+              {link.length} characters.
+              {link.fits
+                ? ' Short enough to paste anywhere.'
+                : link.risky
+                  ? ' Long enough that mail and chat apps will cut it in half. Send a project file instead.'
+                  : ' Fine in a browser, but some mail and chat apps shorten links this long. Check it arrives whole.'}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );

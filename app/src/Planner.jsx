@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
 import { finishFor } from './finishes.js';
@@ -9,6 +9,7 @@ import { Board, Choice, Close, Num, Pick, Section, Warn } from './Fields.jsx';
 import { RUNNERS } from './hardware.js';
 import { OBSTACLE_LIST, natureOf, newObstacle, obstacleKind } from './obstacles.js';
 import { round1 } from './mm.js';
+import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
   ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
@@ -375,6 +376,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [open, setOpen] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
   const [selObstacle, setSelObstacle] = useState(null);
+  const elevRef = useRef(null);
   const [advOpen, setAdvOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
@@ -805,10 +807,19 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   );
 
   const elevation = (
-    <div className="elev-wrap" onClick={() => pickUnit(null)}>
+    <div className="elev-wrap" ref={elevRef} onClick={() => pickUnit(null)}>
       <Elevation lay={lay} cfg={project.cfg} selected={selected} selDrawer={selDrawer}
                  onSelect={pickUnit} onHover={setHovered} onDrag={dropUnit}
                  onObstacle={(id) => { setSelObstacle(id); setSelected(null); }} />
+      <button className="btn btn--ghost elev-svg no-print"
+              title="Save this elevation as an SVG you can open anywhere"
+              onClick={(e) => {
+                e.stopPropagation();
+                const svg = elevRef.current?.querySelector('svg');
+                downloadSvg(svg, safeFileName(`${project.name} ${wall.name}`, '.svg'));
+              }}>
+        SVG
+      </button>
     </div>
   );
 

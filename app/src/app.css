@@ -1334,3 +1334,56 @@ kbd {
   font-size: var(--fs-3);
   font-weight: var(--fw-semibold);
 }
+
+/* Sharing a link. */
+.share-dialog { max-width: 620px; }
+.share-dialog .adv-body { display: grid; gap: var(--sp-3); }
+.share-dialog input { font-family: var(--font-mono); font-size: var(--fs-2); }
+.share-foot {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+}
+.note.is-warn { color: var(--warn); }
+
+/* The run of parts sharing one saw setting. */
+.ws-run {
+  margin-top: var(--sp-4);
+  padding: var(--sp-3);
+  border-radius: var(--r-1);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: var(--fs-3);
+}
+.ws-top-btns { display: flex; gap: var(--sp-2); }
+
+/* Labels. Cut them up and stick one on each panel. */
+.p-labels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2mm;
+}
+.p-label {
+  border: 0.3mm dashed #999;
+  padding: 2.5mm;
+  display: grid;
+  gap: 0.6mm;
+  break-inside: avoid;
+  min-height: 26mm;
+  align-content: start;
+}
+.p-label__top { display: flex; justify-content: space-between; align-items: center; }
+.p-label__top b { font-family: var(--font-mono); font-size: 8pt; }
+.p-label__size {
+  font-family: var(--font-mono);
+  font-size: 15pt;
+  font-weight: 600;
+  line-height: 1.05;
+}
+.p-label__name { font-size: 8pt; }
+.p-label__meta {
+  display: flex; justify-content: space-between; gap: 2mm;
+  font-size: 7pt; color: #555;
+}
+.p-label__edge { font-size: 7pt; font-weight: 600; }
+
+/* Saving a drawing as it stands. */
+.elev-svg { position: absolute; right: var(--sp-3); bottom: var(--sp-3); z-index: 4; }
+.elev-wrap { position: relative; }

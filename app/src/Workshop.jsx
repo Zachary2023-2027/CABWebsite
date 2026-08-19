@@ -11,18 +11,68 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { allParts } from './project.js';
+import { cutOrder, sameNext } from './workshop.js';
+import { fmt } from './mm.js';
+
+/* ---------------------------------------------------------------------------
+   Keeping the screen on.
+
+   A phone propped against a saw sleeps in thirty seconds, and you wake it with
+   sawdust on your fingers, every time. The wake lock is released the moment
+   you leave, because holding a phone awake in someone's pocket is rude.
+
+   Not every browser has it and the lock drops whenever the page is hidden, so
+   it is re-taken when you come back. Nothing here fails loudly: a browser
+   without it simply behaves as it did before.
+   --------------------------------------------------------------------------- */
+function useWakeLock(active) {
+  useEffect(() => {
+    if (!active || typeof navigator === 'undefined' || !navigator.wakeLock) return undefined;
+
+    let lock = null;
+    let dropped = false;
+
+    const take = async () => {
+      try {
+        lock = await navigator.wakeLock.request('screen');
+      } catch {
+        /* Denied, or the battery is too low for the browser to allow it.
+           Nothing to say about it: the screen sleeping is the old behaviour. */
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !dropped) take();
+    };
+
+    take();
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      dropped = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      if (lock) lock.release().catch(() => {});
+    };
+  }, [active]);
+}
 
 export default function Workshop({ project, cut, setCut, onExit }) {
   const all = useMemo(() => allParts(project), [project]);
   const [onlyRemaining, setOnlyRemaining] = useState(true);
+  const [bySetting, setBySetting] = useState(true);
   const [i, setI] = useState(0);
   const [swipe, setSwipe] = useState(0);
   const touch = useRef(null);
 
-  const list = useMemo(
-    () => (onlyRemaining ? all.filter((p) => !cut.has(p.key)) : all),
-    [all, cut, onlyRemaining],
-  );
+  useWakeLock(true);
+
+  /* Ordered by what the saw is set to rather than by cabinet. Moving the
+     fence takes longer than the cut, so everything at one setting comes
+     together whatever cabinet it belongs to. */
+  const list = useMemo(() => {
+    const base = onlyRemaining ? all.filter((p) => !cut.has(p.key)) : all;
+    return bySetting ? cutOrder(base) : base;
+  }, [all, cut, onlyRemaining, bySetting]);
 
   const idx = Math.min(i, Math.max(0, list.length - 1));
   const part = list[idx];
@@ -103,6 +153,7 @@ export default function Workshop({ project, cut, setCut, onExit }) {
   }
 
   const isCut = cut.has(part.key);
+  const run = sameNext(list, idx);
 
   return (
     <div className="ws" onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}>
@@ -112,10 +163,17 @@ export default function Workshop({ project, cut, setCut, onExit }) {
           {idx + 1} / {list.length}
           <span className="ws-progress-sub">{doneCount} of {all.length} cut</span>
         </span>
-        <button className="ws-filter" aria-pressed={onlyRemaining}
-                onClick={() => { setOnlyRemaining((v) => !v); setI(0); }}>
-          {onlyRemaining ? 'To cut' : 'All'}
-        </button>
+        <div className="ws-top-btns">
+          <button className="ws-filter" aria-pressed={bySetting}
+                  onClick={() => { setBySetting((v) => !v); setI(0); }}
+                  title="Order by what the saw is set to, rather than by cabinet">
+            {bySetting ? 'By setting' : 'By cabinet'}
+          </button>
+          <button className="ws-filter" aria-pressed={onlyRemaining}
+                  onClick={() => { setOnlyRemaining((v) => !v); setI(0); }}>
+            {onlyRemaining ? 'To cut' : 'All'}
+          </button>
+        </div>
       </header>
 
       <div className="ws-card" style={{ transform: `translateX(${swipe * 0.35}px)` }}>
@@ -126,15 +184,23 @@ export default function Workshop({ project, cut, setCut, onExit }) {
         </div>
 
         <dl className="ws-dims">
-          <div><dt>Length</dt><dd>{part.L}</dd></div>
-          <div><dt>Width</dt><dd>{part.W}</dd></div>
-          <div><dt>Thick</dt><dd>{part.T}</dd></div>
+          <div><dt>Length</dt><dd>{fmt(part.L)}</dd></div>
+          <div><dt>Width</dt><dd>{fmt(part.W)}</dd></div>
+          <div><dt>Thick</dt><dd>{fmt(part.T)}</dd></div>
         </dl>
 
         <div className="ws-meta">
           <div><span>Material</span><b>{part.material}</b></div>
           <div><span>Edging</span><b>{part.edging || 'None'}</b></div>
         </div>
+
+        {/* The reason this order exists. Cut all of these before you touch
+            the fence, and the job takes a fraction of the time. */}
+        {bySetting && run.count > 0 && (
+          <p className="ws-run">
+            <b>{run.count} more</b> at {fmt(part.W)} wide. Cut them before you move the fence.
+          </p>
+        )}
       </div>
 
       <div className="ws-actions">

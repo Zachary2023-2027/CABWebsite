@@ -20,6 +20,7 @@ import { HOLE_STYLE, drillUnit } from './drilling.js';
 import { PRICES, sheetFor } from './catalog.js';
 import { fmt } from './mm.js';
 import { Swatch } from './Fields.jsx';
+import { partLabel } from './workshop.js';
 
 const PAGE = {
   a4: { w: 210, h: 297, label: 'A4' },
@@ -28,6 +29,9 @@ const PAGE = {
 
 const ROWS_PER_PAGE = 40;
 const PANELS_PER_PAGE = 4;
+/* Three across, eight down. Big enough to read on a panel leaning against a
+   wall, small enough that a kitchen is a few pages. */
+const LABELS_PER_PAGE = 24;
 
 const chunk = (arr, n) => {
   const out = [];
@@ -151,10 +155,48 @@ function buildPages(project, docs, cut) {
     pages.push({ doc: 'Shopping list', kind: 'shopping', nest, parts });
   }
 
+  /* Labels last, because they are the only pages you cut up. Forty white
+     panels leaving a saw look identical, and a sticker is the one thing that
+     tells them apart before they are in a cabinet. */
+  if (docs.labels && parts.length) {
+    for (const rows of chunk(parts, LABELS_PER_PAGE)) {
+      pages.push({ doc: 'Labels', kind: 'labels', rows });
+    }
+  }
+
   return pages;
 }
 
+function Labels({ rows }) {
+  return (
+    <div className="p-labels">
+      {rows.map((p) => {
+        const l = partLabel(p);
+        return (
+          <div className="p-label" key={p.key}>
+            <div className="p-label__top">
+              <b>{l.code}</b>
+              <Swatch finish={l.finish} />
+            </div>
+            <div className="p-label__size">{l.size}</div>
+            <div className="p-label__name">{l.name}</div>
+            <div className="p-label__meta">
+              <span>{l.cabinet || l.wall}</span>
+              <span>{l.thickness}mm</span>
+            </div>
+            <div className="p-label__meta">
+              <span>{l.material}</span>
+            </div>
+            {l.edging !== 'None' && <div className="p-label__edge">Tape: {l.edging}</div>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PageBody({ page, project, cut }) {
+  if (page.kind === 'labels') return <Labels rows={page.rows} />;
   if (page.kind === 'plan') {
     const { lay, wall } = page;
     const rows = lay.placed.filter((p) => p.label);
@@ -432,6 +474,7 @@ function PageBody({ page, project, cut }) {
 export default function Print({ project, cut }) {
   const [docs, setDocs] = useState({
     plan: true, cutlist: true, sheets: true, drilling: false, shopping: true,
+    labels: false,
   });
   const [size, setSize] = useState('a4');
 
@@ -460,7 +503,8 @@ export default function Print({ project, cut }) {
 
       <div className="print-controls no-print">
         {[['plan', 'Elevations'], ['cutlist', 'Cut list'], ['sheets', 'Sheet layouts'],
-          ['drilling', 'Drilling schedule'], ['shopping', 'Shopping list']].map(([k, label]) => (
+          ['drilling', 'Drilling schedule'], ['shopping', 'Shopping list'],
+          ['labels', 'Labels']].map(([k, label]) => (
           <label className="check" key={k}>
             <input type="checkbox" checked={docs[k]} onChange={() => toggle(k)} />
             <span className="check__box">

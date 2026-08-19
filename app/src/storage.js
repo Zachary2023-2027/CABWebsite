@@ -422,6 +422,85 @@ export const toCsv = (rows) =>
 export const safeFileName = (name, suffix) =>
   `${String(name ?? '').trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'kitchen'}${suffix}`;
 
+/* ---------------------------------------------------------------------------
+   SVG.
+
+   The drawings on screen are already SVG. Exporting them means handing over
+   the element that is there rather than drawing it a second time, which is
+   the only way the file and the screen cannot disagree.
+
+   Two things have to be fixed on the way out. The colours are CSS variables,
+   which mean nothing in a file opened outside this page, so they are resolved
+   to the values they currently have. And the element needs the xmlns
+   attributes, which the browser supplies in a document and does not in a
+   string.
+   --------------------------------------------------------------------------- */
+
+const CSS_VAR = /var\(\s*(--[\w-]+)\s*(?:,\s*([^)]*))?\)/g;
+
+/** A copy of an SVG element that stands up on its own. */
+export function standaloneSvg(node) {
+  if (!node) return null;
+
+  const clone = node.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+  /* Whatever the page currently resolves a variable to. Read from the live
+     element rather than the clone, because the clone is not in the document
+     and has no computed style. */
+  const styles = getComputedStyle(node);
+  const resolve = (value) => String(value).replace(CSS_VAR, (whole, name, fallback) => {
+    const found = styles.getPropertyValue(name).trim();
+    return found || (fallback ? fallback.trim() : 'currentColor');
+  });
+
+  for (const el of [clone, ...clone.querySelectorAll('*')]) {
+    for (const attr of [...el.attributes]) {
+      if (attr.value.includes('var(')) el.setAttribute(attr.name, resolve(attr.value));
+    }
+    if (el.style && el.style.cssText.includes('var(')) {
+      el.style.cssText = resolve(el.style.cssText);
+    }
+  }
+
+  /* A background, because an SVG with no fill behind it opens transparent and
+     prints as whatever is underneath it.
+
+     The colour is usually on the element around the drawing rather than on
+     the drawing itself, so the parents are walked until something opaque is
+     found. Without this the file comes out see through, which looks fine in a
+     browser and wrong everywhere else. */
+  const opaque = (value) => value && value !== 'rgba(0, 0, 0, 0)' && value !== 'transparent';
+  let bg = styles.getPropertyValue('background-color').trim();
+  for (let el = node.parentElement; el && !opaque(bg); el = el.parentElement) {
+    bg = getComputedStyle(el).getPropertyValue('background-color').trim();
+  }
+  if (!opaque(bg)) bg = '#ffffff';
+
+  if (opaque(bg)) {
+    const rect = clone.ownerDocument.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const box = clone.getAttribute('viewBox');
+    if (box) {
+      const [x, y, w, h] = box.split(/[\s,]+/).map(Number);
+      rect.setAttribute('x', x); rect.setAttribute('y', y);
+      rect.setAttribute('width', w); rect.setAttribute('height', h);
+      rect.setAttribute('fill', bg);
+      clone.insertBefore(rect, clone.firstChild);
+    }
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}`;
+}
+
+/** Save an SVG element as a file. */
+export function downloadSvg(node, name) {
+  const text = standaloneSvg(node);
+  if (!text) return false;
+  downloadBlob(new Blob([text], { type: 'image/svg+xml;charset=utf-8' }), name);
+  return true;
+}
+
 /**
  * Hand the browser a file. The anchor has to be in the document and the
  * object URL has to outlive the click, or the download is cancelled before
