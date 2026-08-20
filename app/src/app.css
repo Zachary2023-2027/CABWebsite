@@ -319,14 +319,15 @@ body {
   overflow-y: auto;
 }
 .rail-item {
-  display: grid; justify-items: center; gap: 2px;
-  padding: var(--sp-2) 2px;
+  display: grid; justify-items: center; gap: 3px;
+  padding: var(--sp-2) 4px;
   border: 0; border-radius: var(--r-1); background: none; cursor: pointer;
   color: var(--text-2); font-family: var(--font-sans);
-  font-size: 9.5px; line-height: 1.1; letter-spacing: .01em;
+  font-size: 11px; line-height: 1.15; letter-spacing: .01em;
+  text-align: center;
   transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
 }
-.rail-item svg { width: 20px; height: 20px; }
+.rail-item svg { width: 22px; height: 22px; }
 .rail-item:hover { background: var(--sunken); color: var(--text); }
 .rail-item[aria-current="true"] { background: var(--accent-weak); color: var(--accent); }
 
@@ -476,7 +477,9 @@ body {
     width: 100%; flex-direction: row; overflow-x: auto;
     border-right: 0; border-bottom: var(--bw) solid var(--border);
   }
-  .rail-item { flex: none; min-width: 64px; }
+  .rail-item { flex: none; min-width: 72px; }
+
+
   .app-body { flex-direction: column; }
   .screen-body { padding: var(--sp-3) var(--sp-4) var(--sp-10); }
   .detail-main { flex-direction: column; }
@@ -1125,11 +1128,28 @@ body {
 
 /* The picker asks which kind first, so the list under it is a choice rather
    than a scroll. */
+/* Five kinds in a narrow rail.
+
+   A .seg is one strip with overflow hidden, which is right for two or three
+   options and wrong for five: Appliance is a long word, the others squeeze to
+   make room for it, and Filler falls off the end where you cannot see or
+   click it. So this one wraps to a second line instead of clipping, and every
+   button keeps enough width to read its own name. */
 .picker-kinds {
   margin: 0 var(--sp-3) var(--sp-2);
   width: calc(100% - var(--sp-3) * 2);
+  height: auto;
+  flex-wrap: wrap;
+  overflow: visible;
+  gap: 1px;
+  background: var(--border-strong);
 }
-.picker-kinds .seg__item { flex: 1; padding-inline: var(--sp-2); }
+.picker-kinds .seg__item {
+  flex: 1 1 auto;
+  min-width: 4.6em;
+  height: var(--ctl-h);
+  padding-inline: var(--sp-2);
+}
 
 /* The offer to move an old cabinet onto the preset that replaced it. */
 .retired-row {
@@ -1224,6 +1244,29 @@ body {
   padding: 0 var(--sp-3) var(--sp-1);
 }
 .rail-group--foot { margin-top: auto; padding-top: var(--sp-3); }
+
+/* On a narrow screen the rail lies on its side, so the groups have to lie
+   down with it. Left as columns they stacked four deep and the rail took a
+   third of a phone screen for a row of buttons.
+
+   The headings go too. They earn their place in a tall column you read down;
+   across the top of a phone they are four more things between you and the
+   button you want.
+
+   This has to come after the rules it overrides. It lived up with the other
+   narrow screen rules, which are earlier in the file than .rail-group is, so
+   at equal specificity the column won and nothing changed. */
+@media (max-width: 900px) {
+  .rail-group { flex-direction: row; }
+  .rail-group + .rail-group {
+    margin-top: 0;
+    border-left: var(--bw) solid var(--border);
+    margin-left: var(--sp-2);
+    padding-left: var(--sp-2);
+  }
+  .rail-group--foot { margin-top: 0; padding-top: 0; }
+  .rail-group__label { display: none; }
+}
 
 /* The shortcuts sheet. */
 .keys-dialog { max-width: 480px; }

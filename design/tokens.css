@@ -350,7 +350,10 @@
 
 :root {
   --max-content: 1280px;
-  --rail-w: 56px;
+  /* Wide enough for the longest screen name at a readable size. At 56 the
+     labels had to be 9.5px and "Order list" still wrapped awkwardly, which
+     made the rail something you aimed at rather than read. */
+  --rail-w: 84px;
   --panel-w: 340px;
   --topbar-h: 52px;
   --tabbar-h: 56px;
