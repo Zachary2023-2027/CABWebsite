@@ -2,21 +2,48 @@
 
 import { useState } from 'react';
 import { finish } from './finishes.js';
+import { settleNumber, typeNumber } from './numfield.js';
 
-export function Num({ label, value, unit = 'mm', onChange, placeholder, min, max }) {
+/* A typed number.
+
+   What you type is held here as you type it, exactly as typed, and the range
+   is only applied when you leave the field. That is what lets a number be
+   cleared to nothing and started again, which the old field would not allow:
+   it clamped every keystroke, so backspacing 600 toward 800 was fought all
+   the way down. What a keystroke and a blur each mean is in numfield.js,
+   where it can be tested without a browser. */
+export function Num({
+  label, value, unit = 'mm', onChange, placeholder, min, max,
+  /* What an empty field means. Undefined for a setting with a default the
+     caller puts back, zero for a price, which is a real answer. */
+  whenEmpty,
+  hideLabel = false,
+  compact = false,
+}) {
+  const [draft, setDraft] = useState(null);
+  const range = { min, max, whenEmpty };
+
+  const type = (text) => {
+    const step = typeNumber(text, range);
+    setDraft(step.draft);
+    if (step.value !== undefined) onChange(step.value);
+  };
+
+  const settle = () => {
+    const done = settleNumber(draft, range);
+    setDraft(null);
+    if (done.touched) onChange(done.value);
+  };
+
   return (
     <div className="field">
-      <span className="field__label">{label}</span>
-      <div className="input-shell num-input">
+      <span className={`field__label ${hideLabel ? 'is-hidden' : ''}`}>{label}</span>
+      <div className={`input-shell num-input ${compact ? 'inline-num' : ''}`}>
         <input className="num-input__input" type="text" inputMode="decimal"
-               value={value ?? ''} aria-label={label} placeholder={placeholder}
-               onChange={(e) => {
-                 const raw = e.target.value.replace(/[^0-9.]/g, '');
-                 if (raw === '') return onChange(undefined);
-                 const v = parseFloat(raw);
-                 if (!Number.isFinite(v)) return;
-                 onChange(Math.min(max ?? Infinity, Math.max(min ?? 0, v)));
-               }} />
+               value={draft ?? value ?? ''} aria-label={label} placeholder={placeholder}
+               onChange={(e) => type(e.target.value)}
+               onBlur={settle}
+               onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} />
         <span className="num-input__unit">{unit}</span>
       </div>
     </div>

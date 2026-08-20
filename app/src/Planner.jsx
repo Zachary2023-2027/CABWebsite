@@ -306,9 +306,9 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                        onChange={(v) => onOverride(item.uid, { boxBaseThk: v ?? cfg.boxBaseThk })} />
                   <Num label="Box side height" value={eff('boxHeight')}
                        onChange={(v) => onOverride(item.uid, { boxHeight: v ?? cfg.boxHeight })} />
-                  <Num label="Gap each side" value={gapEachSide}
+                  <Num label="Gap each side" value={gapEachSide} min={0} max={30}
                        onChange={(v) => onOverride(item.uid, {
-                         runnerDeduction: v === null ? null : 2 * (v + eff('boxSideThk')),
+                         runnerDeduction: v == null ? null : 2 * (v + eff('boxSideThk')),
                        })} />
                   <Num label="Runner length" value={eff('runnerLength')}
                        onChange={(v) => onOverride(item.uid, { runnerLength: v ?? cfg.runnerLength })} />
@@ -459,12 +459,12 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
        so this is always the front there and the setting is never written. */
     const wantSide = lay.island && side === 'back' ? 'back' : 'front';
 
-    const place = (targetWall, targetLay, at = 'front') => {
+    const place = (targetLay, at = 'front') => {
       if (probe.corner) {
         const left = (probe.settings?.blindSide || 'right') === 'left';
         return {
           x: left ? targetLay.startOffset
-            : Math.max(targetLay.startOffset, targetWall.length - probe.width),
+            : Math.max(targetLay.startOffset, targetLay.limit - probe.width),
           side: at,
         };
       }
@@ -473,7 +473,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       return placeOnRun(targetLay, probe, probe.width, at);
     };
 
-    const landed = place(wall, lay, wantSide);
+    const landed = place(lay, wantSide);
     let x = landed.x;
     let targetId = wall.id;
     const landedSide = landed.side;
@@ -485,7 +485,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const nextWall = nextId ? project.walls.find((w) => w.id === nextId) : null;
       if (nextWall) {
         const nextLay = layoutFor(project, nextWall);
-        const nx = place(nextWall, nextLay).x;
+        const nx = place(nextLay).x;
         if (nx !== null) { x = nx; targetId = nextId; }
       }
     }
@@ -535,7 +535,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const target = project.walls.find((q) => q.id === id);
       if (!target) return false;
       const tLay = layoutFor(project, target);
-      const nx = dir > 0 ? tLay.startOffset : Math.max(0, target.length - w);
+      const nx = dir > 0 ? tLay.startOffset : Math.max(0, tLay.limit - w);
       setProject((prev) => {
         const next = structuredClone(prev);
         const from = next.walls.find((q) => q.id === wall.id);
@@ -551,7 +551,9 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       return true;
     };
 
-    if (x > wall.length - w / 2 && hop(1)) return;
+    /* Past the far end, which stops at the corner cabinet on the next wall
+       when that is where the corner was built from. */
+    if (x > lay.limit - w / 2 && hop(1)) return;
     if (x + w < lay.startOffset + w / 2 && i > 0 && hop(-1)) return;
 
     setNotice(null);
@@ -1292,8 +1294,10 @@ function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSe
             <p className="note">
               The first {shape.walls} wall{shape.walls === 1 ? '' : 's'} join at a corner.
               An L turns at the right hand end of the first wall. A U comes back down
-              the other side. Put a blind corner cabinet at the end of each wall that
-              turns, so the next run starts clear of it.
+              the other side. Every corner needs a blind corner cabinet in it, standing
+              on either leg: at the end of the wall running in, or at the start of the
+              wall running out with its corner set to the left. Whichever you pick, the
+              other wall stops at its side.
             </p>
           </section>
 

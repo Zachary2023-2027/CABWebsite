@@ -91,9 +91,11 @@ export function Advanced({ cfg, onChange, onReset, onClose }) {
               is worked out from it.
             </p>
             <div className="settings-grid">
-              <Num label="Gap each side" value={clearEachSide}
+              {/* Cleared means back to what the runner is made for, which is
+                  null here and not a gap of nothing. */}
+              <Num label="Gap each side" value={clearEachSide} min={0} max={30}
                    onChange={(v) => onChange({
-                     runnerDeduction: v === null ? null : 2 * (v + cfg.boxSideThk),
+                     runnerDeduction: v == null ? null : 2 * (v + cfg.boxSideThk),
                    })} />
               <Choice label="Runner length" value={String(cfg.runnerLength ?? 500)}
                       options={legalLengths.map((L) => ({ value: String(L), label: `${L}` }))}

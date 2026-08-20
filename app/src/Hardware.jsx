@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty, Est } from './Screen.jsx';
 import { allFittings, money, projectExtras } from './project.js';
 import { newId } from './storage.js';
+import { Num } from './Fields.jsx';
 
 const LABEL = {
   hinge: 'Hinge, 110 degree, full overlay',
@@ -24,7 +25,6 @@ function Extras({ project, setProject }) {
     ...p, extras: (p.extras || []).filter((e) => e.id !== id),
   }));
   const total = rows.reduce((a, e) => a + (Number(e.qty) || 0) * (Number(e.cost) || 0), 0);
-  const num = (v) => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };
 
   return (
     <section className="card settings-card extras">
@@ -54,17 +54,12 @@ function Extras({ project, setProject }) {
                    aria-label="Item name"
                    onChange={(ev) => edit(e.id, { name: ev.target.value })} />
           </div>
-          <div className="input-shell num-input inline-num">
-            <input className="num-input__input" type="text" inputMode="numeric" value={e.qty}
-                   aria-label={`Quantity of ${e.name || 'item'}`}
-                   onChange={(ev) => edit(e.id, { qty: num(ev.target.value) })} />
-          </div>
-          <div className="input-shell num-input inline-num">
-            <input className="num-input__input" type="text" inputMode="decimal" value={e.cost}
-                   aria-label={`Unit cost of ${e.name || 'item'}`}
-                   onChange={(ev) => edit(e.id, { cost: num(ev.target.value) })} />
-            <span className="num-input__unit">AUD</span>
-          </div>
+          <Num label={`Quantity of ${e.name || 'item'}`} hideLabel compact unit=""
+               value={e.qty} whenEmpty={0}
+               onChange={(v) => edit(e.id, { qty: v ?? 0 })} />
+          <Num label={`Unit cost of ${e.name || 'item'}`} hideLabel compact unit="AUD"
+               value={e.cost} whenEmpty={0}
+               onChange={(v) => edit(e.id, { cost: v ?? 0 })} />
           <span className="n extra-total">{money((Number(e.qty) || 0) * (Number(e.cost) || 0))}</span>
           <button className="btn btn--ghost" onClick={() => remove(e.id)}
                   aria-label={`Remove ${e.name || 'item'}`}>Remove</button>
@@ -138,16 +133,9 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
                 <td>{r.label}</td>
                 <td className="n">{r.qty}</td>
                 <td className="n">
-                  <div className="input-shell num-input inline-num">
-                    <input className="num-input__input" type="text" inputMode="decimal"
-                           value={r.unitCost}
-                           aria-label={`Unit cost for ${r.label}`}
-                           onChange={(e) => {
-                             const v = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                             setPrices((p) => ({ ...p, [r.type]: Number.isFinite(v) ? v : 0 }));
-                           }} />
-                    <span className="num-input__unit">AUD</span>
-                  </div>
+                  <Num label={`Unit cost for ${r.label}`} hideLabel compact unit="AUD"
+                       value={r.unitCost} whenEmpty={0}
+                       onChange={(v) => setPrices((p) => ({ ...p, [r.type]: v ?? 0 }))} />
                 </td>
                 <td className="n">{money(r.total)}</td>
                 <td className="dim-cell used-in">{r.units.join(', ')}</td>

@@ -889,6 +889,11 @@ body {
   align-items: center;
 }
 .extra-row .input-shell { min-width: 0; }
+/* Qty and cost come from the shared number field now, so the grid item is the
+   field and the shell sits inside it. Take the column rather than a fixed
+   width that overflows a 90px one. */
+.extra-row .field { min-width: 0; }
+.extra-row .inline-num { width: 100%; margin-left: 0; }
 .extra-total { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .sheet-row {
   grid-template-columns: minmax(180px, 2fr) 1fr 1fr 1fr auto;

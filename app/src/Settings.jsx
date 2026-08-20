@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import Screen from './Screen.jsx';
 import { PRICE_SEED } from './catalog.js';
+import { Num } from './Fields.jsx';
 
 const PRICE_FIELDS = [
   ['hinge', 'Hinge', 'each'],
@@ -22,25 +23,6 @@ const PRICE_FIELDS = [
   ['benchPerMetre', 'Benchtop', 'per m'],
   ['edgeTapePerMetre', 'Edge tape', 'per m'],
 ];
-
-const num = (v) => {
-  const n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-};
-
-function Num({ value, onChange, unit, label, hideLabel }) {
-  return (
-    <div className="field">
-      <span className={`field__label ${hideLabel ? 'is-hidden' : ''}`}>{label}</span>
-      <div className="input-shell num-input">
-        <input className="num-input__input" type="text" inputMode="decimal"
-               value={value} aria-label={label}
-               onChange={(e) => onChange(num(e.target.value))} />
-        <span className="num-input__unit">{unit}</span>
-      </div>
-    </div>
-  );
-}
 
 /* Renaming a sheet rekeys it, which remounts the row, which would take the
    keyboard away mid-word. So the name is held locally and committed when you
@@ -117,11 +99,11 @@ function Sheets({ prices, setPrices }) {
       {rows.map(([name, s], i) => (
         <div className="sheet-row" key={name}>
           <Name label="Material" hideLabel={i > 0} value={name} onCommit={(v) => rename(name, v)} />
-          <Num label="Width" unit="mm" hideLabel={i > 0} value={s.size[0]}
+          <Num label="Width" unit="mm" hideLabel={i > 0} value={s.size[0]} whenEmpty={0}
                onChange={(v) => edit(name, { size: [v, s.size[1]] })} />
-          <Num label="Length" unit="mm" hideLabel={i > 0} value={s.size[1]}
+          <Num label="Length" unit="mm" hideLabel={i > 0} value={s.size[1]} whenEmpty={0}
                onChange={(v) => edit(name, { size: [s.size[0], v] })} />
-          <Num label="Cost" unit="AUD" hideLabel={i > 0} value={s.cost}
+          <Num label="Cost" unit="AUD" hideLabel={i > 0} value={s.cost} whenEmpty={0}
                onChange={(v) => edit(name, { cost: v })} />
           <button className="btn btn--ghost sheet-del" onClick={() => remove(name)}
                   aria-label={`Remove ${name}`}>Remove</button>
@@ -150,7 +132,7 @@ export default function Settings({ prices, setPrices }) {
         <div className="settings-grid">
           {PRICE_FIELDS.map(([k, label, unit]) => (
             <Num key={k} label={`${label}, ${unit}`} unit="AUD" value={prices[k] ?? 0}
-                 onChange={(v) => setPrices((p) => ({ ...p, [k]: v }))} />
+                 whenEmpty={0} onChange={(v) => setPrices((p) => ({ ...p, [k]: v }))} />
           ))}
         </div>
         <div className="group-foot">

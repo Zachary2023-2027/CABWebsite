@@ -190,13 +190,19 @@ export function floorPlan(project) {
  * Resolve a wall into placed units with real x positions.
  * Two cursors: the base run along the floor and the wall run above it.
  */
-export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
+export function layoutWall(wall, cfg = PROJECT, startOffset = 0, endReserve = 0) {
   /* A run does not always start at zero. In an L or a U the second wall
      starts clear of the corner cabinet on the wall before it, because that
      cabinet's carcass is already occupying the first few hundred
-     millimetres of this wall. */
+     millimetres of this wall.
+
+     It does not always finish at the wall's length either. A corner is built
+     from one leg of the L or the other, and when it is built from the next
+     wall the cabinet reaches back into this one, so this wall has to stop
+     short by the same amount. */
   assertMm(wall.length, `${wall.id} length`);
   assertMm(startOffset, `${wall.id} start offset`);
+  assertMm(endReserve, `${wall.id} end reserve`);
 
   const island = isIsland(wall);
 
@@ -255,9 +261,15 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
   const baseRun = Math.max(cursors.front.base, cursors.back.base);
   const wallRun = Math.max(cursors.front.wall, cursors.back.wall);
 
+  /* The last millimetre a cabinet on this wall may reach. Everything that
+     places, snaps, gaps or complains measures against this rather than the
+     wall's length, so the corner cabinet standing on the next wall is a
+     boundary the whole app can see rather than one only the drawing knows. */
+  const limit = Math.max(startOffset, wall.length - endReserve);
+
   return {
     placed, baseRun, wallRun, run: Math.max(baseRun, wallRun),
-    wall, startOffset, island,
+    wall, startOffset, endReserve, limit, island,
     /* The two sides, for anything that draws them separately. A wall has an
        empty back, which every consumer can ignore without knowing why. */
     front: placed.filter((p) => p.side !== 'back'),
@@ -308,7 +320,8 @@ export function roomLayout(project) {
   for (const [i, id] of ids.entries()) {
     const wall = project.walls.find((w) => w.id === id);
     if (!wall) continue;
-    const lay = layoutWall(wall, project.cfg, offsets[id] || 0);
+    const o = offsets[id] || {};
+    const lay = layoutWall(wall, project.cfg, o.start || 0, o.end || 0);
 
     /* Where this wall sits in the room, and how far it is turned. The first
        wall is the back wall. The second turns at its right hand end. The
@@ -335,35 +348,86 @@ export function roomLayout(project) {
 export const cornerUnit = (lay) =>
   lay.placed.find((p) => p.where !== 'wall' && p.unit.corner) || null;
 
+/**
+ * Which end of its own wall a blind corner runs into.
+ *
+ * A corner is built from one leg of the L or the other, and the blind side
+ * setting is what says which. Blind on the right means the dead part of the
+ * front is at the right hand end, so the cabinet sits at the end of its wall
+ * and reaches forward into the next one. Blind on the left means it sits at
+ * the start and reaches back into the wall before it.
+ */
+export const cornerSide = (p) =>
+  ((p.unit.settings?.blindSide || 'right') === 'left' ? 'start' : 'end');
+
+/** The corner cabinet reaching forward off the end of this wall, if any. */
+export const cornerAtEnd = (lay) => {
+  const c = cornerUnit(lay);
+  return c && cornerSide(c) === 'end' ? c : null;
+};
+
+/** The corner cabinet standing at the start of this wall, reaching back. */
+export const cornerAtStart = (lay) => {
+  const c = cornerUnit(lay);
+  return c && cornerSide(c) === 'start' ? c : null;
+};
+
 /** True when the corner cabinet is the last thing in the base run. */
 export function cornerIsLast(lay) {
   const run = lay.placed.filter((p) => p.where !== 'wall');
   return run.length > 0 && !!run[run.length - 1].unit.corner;
 }
 
+/** True when the corner cabinet is the first thing in the base run. */
+export function cornerIsFirst(lay) {
+  const run = lay.placed.filter((p) => p.where !== 'wall');
+  return run.length > 0 && !!run[0].unit.corner;
+}
+
 /**
- * Every wall's corner offset in one pass. The list builders take this once
+ * Every wall's corner offsets in one pass. The list builders take this once
  * and reuse it, rather than resolving the room for each wall in turn.
+ *
+ * Two passes, because a corner has two legs and the cabinet can stand on
+ * either. Forward is what a wall inherits from the corner cabinet at the end
+ * of the wall before it. Backward is what a wall gives up at its own far end
+ * to a corner cabinet standing at the start of the wall after it. Only the
+ * forward half used to exist, so building the corner from the second leg
+ * drew the two runs straight through each other.
+ *
+ * @returns {Object<string, {start:number, end:number}>}
  */
 export function roomOffsets(project) {
   const cfg = project.cfg;
-  const ids = roomWallIds(project);
+  const walls = roomWallIds(project)
+    .map((id) => project.walls.find((w) => w.id === id))
+    .filter(Boolean);
+
+  const lays = [];
+  let start = 0;
+  for (const wall of walls) {
+    const lay = layoutWall(wall, cfg, start);
+    lays.push(lay);
+    const corner = cornerAtEnd(lay);
+    start = corner ? corner.unit.cornerReturn : 0;
+  }
+
   const out = {};
-  let offset = 0;
-  for (const id of ids) {
-    const wall = project.walls.find((w) => w.id === id);
-    if (!wall) continue;
-    out[id] = offset;
-    const lay = layoutWall(wall, cfg, offset);
-    const corner = cornerUnit(lay);
-    offset = corner ? corner.unit.cornerReturn : 0;
+  for (const [i, wall] of walls.entries()) {
+    const next = i < walls.length - 1 ? cornerAtStart(lays[i + 1]) : null;
+    out[wall.id] = {
+      start: lays[i].startOffset,
+      end: next ? next.unit.cornerReturn : 0,
+    };
   }
   return out;
 }
 
-/** Lay out a wall with whatever corner offset the room gives it. */
-export const layoutFor = (project, wall, offsets) =>
-  layoutWall(wall, project.cfg, (offsets || roomOffsets(project))[wall.id] || 0);
+/** Lay out a wall with whatever corner offsets the room gives it. */
+export const layoutFor = (project, wall, offsets) => {
+  const o = (offsets || roomOffsets(project))[wall.id] || {};
+  return layoutWall(wall, project.cfg, o.start || 0, o.end || 0);
+};
 
 /** Walls that are not part of the joined run, so the island and any spares. */
 export const looseWalls = (project) => {
@@ -372,7 +436,7 @@ export const looseWalls = (project) => {
 };
 
 /** The corner offset a wall inherits, or zero when it is not in the run. */
-export const wallOffset = (project, wallId) => roomOffsets(project)[wallId] || 0;
+export const wallOffset = (project, wallId) => roomOffsets(project)[wallId]?.start || 0;
 
 /**
  * The saw settings for a project, for anything that nests.
@@ -417,7 +481,17 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
   };
 
   add(lay.startOffset, 'start', 'start of the wall');
-  add(lay.wall.length - w, 'end', 'end of the wall');
+
+  /* The far end, which is not always the end of the wall. When the corner is
+     built from the next wall, that cabinet reaches back to here, and butting
+     against its side is the join that closes the L. It gets a corner's pull
+     rather than a plain end's: it is the one position in that whole stretch
+     that works, and the next wall's drawing is where you can see why. */
+  if (lay.endReserve > 0) {
+    add(lay.limit - w, 'corner', 'the corner cabinet on the next wall', opts.cornerPull);
+  } else {
+    add(lay.wall.length - w, 'end', 'end of the wall');
+  }
 
   /* Only what is beside it. On an island the other side occupies the same
      stretch of x, so without this a cabinet on the back snaps to the edges of
@@ -437,7 +511,7 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
      puts it exactly in the corner, which is the only place it works. */
   if (unit.corner) {
     const left = (unit.settings?.blindSide || 'right') === 'left';
-    add(left ? lay.startOffset : lay.wall.length - w, 'corner', 'the corner', opts.cornerPull);
+    add(left ? lay.startOffset : lay.limit - w, 'corner', 'the corner', opts.cornerPull);
   }
 
   return out;
@@ -485,7 +559,7 @@ export function firstFreeX(lay, unit, width, side = 'front') {
     if (a - cursor >= width) return cursor;
     cursor = Math.max(cursor, b);
   }
-  return cursor + width <= lay.wall.length + 0.5 ? cursor : null;
+  return cursor + width <= lay.limit + 0.5 ? cursor : null;
 }
 
 /**
@@ -529,7 +603,9 @@ export function runGaps(lay, which = 'base') {
     if (a - cursor > 5) gaps.push({ x: cursor, w: a - cursor });
     cursor = Math.max(cursor, b);
   }
-  if (lay.wall.length - cursor > 5) gaps.push({ x: cursor, w: lay.wall.length - cursor, trailing: true });
+  /* Against the limit, not the wall. The stretch a corner cabinet on the next
+     wall is standing in is not a gap you can fill: it is already full. */
+  if (lay.limit - cursor > 5) gaps.push({ x: cursor, w: lay.limit - cursor, trailing: true });
   return gaps;
 }
 
@@ -540,8 +616,11 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
   const { unit, x } = p;
   const s = unit.settings;
 
-  if (x + unit.width > lay.wall.length + 0.5) {
-    out.push(`Past the end of the wall by ${Math.round(x + unit.width - lay.wall.length)}mm`);
+  if (x + unit.width > lay.limit + 0.5) {
+    const over = Math.round(x + unit.width - lay.limit);
+    out.push(lay.endReserve > 0
+      ? `Runs ${over}mm into the corner cabinet on the next wall`
+      : `Past the end of the wall by ${over}mm`);
   }
 
   /* Two cabinets in the same run cannot occupy the same millimetres. Before
@@ -628,23 +707,39 @@ export function wallWarnings(lay, project) {
   if (lay.startOffset > 0) {
     out.push({ level: 'note', text: `First ${Math.round(lay.startOffset)}mm of this wall is the corner cabinet on the wall before it. Cabinets here start after it.` });
   }
+  if (lay.endReserve > 0) {
+    out.push({ level: 'note', text: `Last ${Math.round(lay.endReserve)}mm of this wall is the corner cabinet on the next wall. Cabinets here stop before it, and the last one snaps to its side.` });
+  }
 
-  /* In an L or a U, the wall that runs into a corner needs a corner cabinet
-     at its far end. Without one the two runs are drawn on top of each other. */
+  /* In an L or a U the corner has to be filled by a blind corner cabinet, or
+     the two runs are drawn through each other. It can stand on either leg:
+     at the end of this wall reaching forward, or at the start of the next one
+     reaching back. Both is a mistake, and so is neither. */
   if (project) {
     const ids = roomWallIds(project);
     const i = ids.indexOf(lay.wall.id);
     if (i >= 0 && i < ids.length - 1) {
-      if (!cornerUnit(lay)) {
-        out.push({ level: 'warn', text: 'This wall turns a corner but has no blind corner cabinet on it. The next wall will run into whatever is at the end of this one.' });
+      const mine = cornerAtEnd(lay);
+      const theirs = lay.endReserve > 0;
+      if (mine && theirs) {
+        out.push({ level: 'error', text: 'Two blind corners in the one corner: one at the end of this wall and one at the start of the next. Keep whichever leg you want to build it from and delete the other.' });
+      } else if (theirs) {
+        // The next wall carries it. Nothing is wrong with this one.
+      } else if (!cornerUnit(lay)) {
+        out.push({ level: 'warn', text: 'This wall turns a corner but there is no blind corner cabinet in it, on this wall or at the start of the next. The next wall will run into whatever is at the end of this one.' });
+      } else if (!mine) {
+        out.push({ level: 'warn', text: 'The blind corner on this wall is set to sit at its start, so it reaches back rather than into the corner this wall turns. Set the corner to the other side, or move it to the next wall.' });
       } else if (!cornerIsLast(lay)) {
         out.push({ level: 'warn', text: 'The blind corner is not the last cabinet on this wall. It has to sit in the corner, so move it to the end of the run.' });
       }
     }
   }
 
-  if (lay.baseRun > lay.wall.length + 0.5) {
-    out.push({ level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm against a ${lay.wall.length}mm wall. Reduce by ${Math.round(lay.baseRun - lay.wall.length)}mm.` });
+  if (lay.baseRun > lay.limit + 0.5) {
+    const over = Math.round(lay.baseRun - lay.limit);
+    out.push(lay.endReserve > 0
+      ? { level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm and only reaches ${Math.round(lay.limit)}mm before the corner cabinet on the next wall. Reduce by ${over}mm.` }
+      : { level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm against a ${lay.wall.length}mm wall. Reduce by ${over}mm.` });
   } else {
     /* Free placement means a gap can be anywhere, not just at the end, so
        say where it is rather than only how much is left over. */
@@ -658,7 +753,7 @@ export function wallWarnings(lay, project) {
       out.push({ level: 'warn', text: `${Math.round(tail.w)}mm of the base run is unfilled at the end. Add a filler or widen a cabinet.` });
     }
   }
-  if (lay.wallRun > lay.wall.length + 0.5) {
+  if (lay.wallRun > lay.limit + 0.5) {
     out.push({ level: 'error', text: `Wall run is ${Math.round(lay.wallRun)}mm against a ${lay.wall.length}mm wall.` });
   }
   return out;

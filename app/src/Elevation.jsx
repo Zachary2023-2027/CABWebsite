@@ -176,6 +176,34 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
                      stroke="var(--dw-line)" strokeWidth={S} opacity="0.45" />;
       })}
 
+      {/* The corner cabinet standing on the wall next door.
+
+          It is not a cabinet on this wall, so there is nothing here to select
+          or drag, but it is occupying this stretch of it and cabinets on this
+          wall stop at its side. Drawn rather than left as blank wall, because
+          an unexplained gap at one end is the thing that used to send people
+          looking for a filler to fill it with. */}
+      {[
+        lay.startOffset > 0 && { key: 'start', x: 0, w: lay.startOffset, text: 'Corner, wall before' },
+        lay.endReserve > 0 && { key: 'end', x: lay.limit, w: lay.endReserve, text: 'Corner, next wall' },
+      ].filter(Boolean).map((band) => {
+        /* Along the band rather than above it. Above it lands on the row of
+           cabinet numbers, and a label that sits on top of another label is
+           worse than no label. */
+        const cx = band.x + band.w / 2;
+        const cy = Y(cfg.benchHeight / 2);
+        return (
+          <g key={band.key} className="corner-band">
+            <rect x={band.x} y={Y(cfg.benchHeight)} width={band.w} height={cfg.benchHeight}
+                  fill="url(#hatchTight)" stroke="var(--dw-dim)" strokeWidth={S}
+                  strokeDasharray="20 14" />
+            <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle"
+                  transform={`rotate(-90 ${cx} ${cy})`}
+                  fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>{band.text}</text>
+          </g>
+        );
+      })}
+
       {/* What is already on the wall, behind the cabinets.
 
           Drawn by what it is. A window is an opening, so it is outlined and
