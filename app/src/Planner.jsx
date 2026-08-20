@@ -12,7 +12,7 @@ import { round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  ROOM_SHAPES, WALL_KINDS, firstFreeX, isIsland, islandDepth, layoutFor, money,
+  ROOM_SHAPES, WALL_KINDS, isIsland, islandDepth, layoutFor, money, placeOnRun,
   roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
 
@@ -435,21 +435,28 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     const fam = FAMILY[familyId];
     const probe = buildUnit('probe', familyId, {}, project.cfg);
 
-    /* Which side of an island it lands on. A wall has one side, so this is
-       always the front there and the setting is never written. */
-    const onSide = lay.island && side === 'back' ? 'back' : null;
+    /* Which side of an island it starts out looking at. A wall has one side,
+       so this is always the front there and the setting is never written. */
+    const wantSide = lay.island && side === 'back' ? 'back' : 'front';
 
-    const place = (targetWall, targetLay) => {
+    const place = (targetWall, targetLay, at = 'front') => {
       if (probe.corner) {
         const left = (probe.settings?.blindSide || 'right') === 'left';
-        return left ? targetLay.startOffset
-          : Math.max(targetLay.startOffset, targetWall.length - probe.width);
+        return {
+          x: left ? targetLay.startOffset
+            : Math.max(targetLay.startOffset, targetWall.length - probe.width),
+          side: at,
+        };
       }
-      return firstFreeX(targetLay, probe, probe.width, onSide || 'front');
+      /* The rule lives in the model, so this screen cannot have its own
+         slightly different version of it. */
+      return placeOnRun(targetLay, probe, probe.width, at);
     };
 
-    let x = place(wall, lay);
+    const landed = place(wall, lay, wantSide);
+    let x = landed.x;
     let targetId = wall.id;
+    const landedSide = landed.side;
 
     if (x === null) {
       const ids = roomWallIds(project);
@@ -458,7 +465,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const nextWall = nextId ? project.walls.find((w) => w.id === nextId) : null;
       if (nextWall) {
         const nextLay = layoutFor(project, nextWall);
-        const nx = place(nextWall, nextLay);
+        const nx = place(nextWall, nextLay).x;
         if (nx !== null) { x = nx; targetId = nextId; }
       }
     }
@@ -467,16 +474,24 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const next = structuredClone(prev);
       const w = next.walls.find((q) => q.id === targetId);
       const settings = x === null ? {} : { x };
-      if (onSide) settings.side = onSide;
+      if (landedSide === 'back') settings.side = 'back';
       w.units.push({ uid: id, familyId, settings });
       if (targetId !== prev.activeWall) next.activeWall = targetId;
       return next;
     });
     setSelected(id);
     setSelDrawer(null);
+
+    /* Follow it. A cabinet that went on the other side of the island is not
+       on the side you are looking at, and leaving the view where it was makes
+       it look as though nothing happened. */
+    if (landedSide !== wantSide) setSide(landedSide);
+
     if (targetId !== wall.id) {
       const name = project.walls.find((w) => w.id === targetId)?.name || targetId;
       setNotice(`${fam?.name || 'Cabinet'} did not fit on ${wall.name}, so it went on ${name}.`);
+    } else if (landedSide !== wantSide) {
+      setNotice(`The ${wantSide} of ${wall.name} is full, so ${fam?.name || 'the cabinet'} went on the ${landedSide}.`);
     } else if (x === null) {
       setNotice(`${fam?.name || 'Cabinet'} does not fit on ${wall.name}. It is on the end, past the wall.`);
     } else setNotice(null);

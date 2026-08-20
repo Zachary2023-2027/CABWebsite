@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  WALL_KINDS, allParts, firstFreeX, isIsland, islandDepth, layoutFor, roomLayout,
-  roomOffsets, roomWallIds, sideOf, starterProject, wallKind,
+  WALL_KINDS, allParts, firstFreeX, isIsland, islandDepth, layoutFor, placeOnRun,
+  roomLayout, roomOffsets, roomWallIds, sideOf, starterProject, wallKind,
 } from '../project.js';
 import { hydrate } from '../storage.js';
 import { decodeProject, encodeProject } from '../share.js';
@@ -208,5 +208,77 @@ describe('the rest of the app still adds up with an island in it', () => {
   it('the room layout leaves the island out of the joined run', () => {
     p.room = 'u';
     expect(roomLayout(p).some((r) => isIsland(r.wall))).toBe(false);
+  });
+});
+
+
+/* An island has a second side, so a full one is not the end of it. This is
+   the same idea as a cabinet carrying on around a corner when its wall runs
+   out: keep filling the thing you are working on rather than stacking
+   cabinets past its end. */
+describe('a full side spills onto the other one', () => {
+  const probe = (width) => buildUnit('probe', 'base-2door', { width }, PROJECT);
+
+  /* The rule itself, not a copy of it. Writing the planner's logic out again
+     here is how a test passes while the screen does something else: the first
+     version of this test had its own copy that tried the back of a wall, which
+     the real code never does. */
+  const placeOn = (l, unit, width, want) => placeOnRun(l, unit, width, want);
+
+  const island3600 = (units) => {
+    const p = starterProject();
+    const isl = island(p);
+    isl.length = 3600;
+    isl.units = units;
+    return { p, isl };
+  };
+
+  it('four 900s fill the front, then the fifth goes on the back', () => {
+    const units = [];
+    const p = starterProject();
+    const isl = island(p);
+    isl.length = 3600;
+    isl.units = units;
+
+    const sides = [];
+    for (let i = 0; i < 8; i++) {
+      const l = lay(p, isl);
+      const { x, side } = placeOn(l, probe(900), 900, 'front');
+      sides.push(side);
+      units.push({ uid: `u${i}`, familyId: 'base-2door', settings: { width: 900, ...(x === null ? {} : { x }), ...(side === 'back' ? { side: 'back' } : {}) } });
+    }
+
+    expect(sides.slice(0, 4)).toEqual(['front', 'front', 'front', 'front']);
+    expect(sides.slice(4)).toEqual(['back', 'back', 'back', 'back']);
+  });
+
+  it('spills the other way too, from the back to the front', () => {
+    const { p, isl } = island3600([
+      { uid: 'b1', familyId: 'base-2door', settings: { width: 3600, x: 0, side: 'back' } },
+    ]);
+    const { side } = placeOn(lay(p, isl), probe(600), 600, 'back');
+    expect(side).toBe('front');
+  });
+
+  it('when both sides are full it stays where you put it', () => {
+    const { p, isl } = island3600([
+      { uid: 'f1', familyId: 'base-2door', settings: { width: 3600, x: 0 } },
+      { uid: 'b1', familyId: 'base-2door', settings: { width: 3600, x: 0, side: 'back' } },
+    ]);
+    const { x, side } = placeOn(lay(p, isl), probe(600), 600, 'front');
+    expect(x).toBeNull();
+    expect(side).toBe('front');
+  });
+
+  it('a wall has nowhere to spill to, so a full one stays full', () => {
+    const p = starterProject();
+    const w = p.walls.find((q) => !isIsland(q));
+    w.units = [{ uid: 'f', familyId: 'base-2door', settings: { width: w.length, x: 0 } }];
+    const l = lay(p, w);
+
+    expect(l.island).toBe(false);
+    const got = placeOn(l, probe(600), 600, 'front');
+    expect(got.x).toBeNull();
+    expect(got.side).toBe('front');
   });
 });

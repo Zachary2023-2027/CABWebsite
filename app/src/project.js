@@ -430,6 +430,33 @@ export function firstFreeX(lay, unit, width, side = 'front') {
   return cursor + width <= lay.wall.length + 0.5 ? cursor : null;
 }
 
+/**
+ * Where a cabinet goes when you add it, and which side it ends up on.
+ *
+ * An island has a second side, so a full one is not the end of it: the same
+ * idea as a cabinet carrying on around a corner when its wall runs out. Keep
+ * filling the thing you are working on rather than stacking cabinets past its
+ * end.
+ *
+ * A wall has one side and nowhere to spill to, so it gets the answer it
+ * always got. That guard has to live here rather than in the screen, because
+ * a screen that reimplements it will get it wrong in exactly the way a test
+ * of the screen's copy will not notice.
+ *
+ * @returns {{x: ?number, side: 'front'|'back'}} x null when it fits nowhere
+ */
+export function placeOnRun(lay, unit, width, want = 'front') {
+  const side = want === 'back' ? 'back' : 'front';
+  const first = firstFreeX(lay, unit, width, side);
+  if (first !== null) return { x: first, side };
+
+  if (!lay.island) return { x: null, side };
+
+  const other = side === 'back' ? 'front' : 'back';
+  const second = firstFreeX(lay, unit, width, other);
+  return second === null ? { x: null, side } : { x: second, side: other };
+}
+
 /** Gaps left in a run, so the wall can say where they are. */
 export function runGaps(lay, which = 'base') {
   const spans = lay.placed
