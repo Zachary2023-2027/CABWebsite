@@ -8,7 +8,6 @@
 
 import { useState } from 'react';
 import { FAMILY, PROJECT, boardNames } from './catalog.js';
-import { ROOM_SHAPES, roomWallIds } from './project.js';
 import {
   HINGE_LIST, boringInRange, cupCentre, hingeProfile,
   longestFitting, runnerProfile,
@@ -39,10 +38,10 @@ const GROUPS = [
              ['boxHeight', 'Drawer box side height'], ['backRailHeight', 'Back rail height']] },
 ];
 
-export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset, onClose }) {
-  const shape = project?.room || 'straight';
-  const roomIds = project ? roomWallIds({ ...project, room: shape }) : [];
-  const roomWalls = roomIds.map((id) => project.walls.find((w) => w.id === id)).filter(Boolean);
+/* The room shape and the wall lengths used to live here, two screens away
+   from the tabs they were about. They are in Walls now, next to the list of
+   them. */
+export function Advanced({ cfg, onChange, onReset, onClose }) {
   const boards = boardNames();
 
   /* Only the lengths this runner is sold in, and only the ones that fit the
@@ -84,28 +83,6 @@ export function Advanced({ cfg, project, onChange, onRoom, onWallLength, onReset
         </div>
 
         <div className="adv-body">
-          {project && (
-            <section className="adv-group">
-              <span className="field__label">Room</span>
-              <p className="note">
-                An L turns at the right hand end of the first wall and runs toward you.
-                A U comes back down the other side. Put a blind corner cabinet at the end
-                of each wall that turns, so the next run starts clear of it.
-              </p>
-              <div className="settings-grid">
-                <Choice label="Shape" value={shape}
-                        options={ROOM_SHAPES.map((s) => ({ value: s.id, label: s.name }))}
-                        onChange={onRoom} />
-              </div>
-              <div className="settings-grid">
-                {roomWalls.map((w) => (
-                  <Num key={w.id} label={`${w.name} length`} value={w.length}
-                       onChange={(v) => onWallLength(w.id, v ?? w.length)} />
-                ))}
-              </div>
-            </section>
-          )}
-
           <section className="adv-group">
             <span className="field__label">Drawer runners</span>
             <p className="note">

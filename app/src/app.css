@@ -1430,3 +1430,42 @@ kbd {
 /* Saving a drawing as it stands. */
 .elev-svg { position: absolute; right: var(--sp-3); bottom: var(--sp-3); z-index: 4; }
 .elev-wrap { position: relative; }
+
+/* Which side of an island you are working on. */
+.elev-side { position: absolute; left: var(--sp-3); top: var(--sp-3); z-index: 4; }
+
+/* The wall manager. */
+.tab--add { font-weight: var(--fw-semibold); }
+.tab--island { font-style: italic; }
+/* Same shape as the advanced dialog: a fixed head, a body that scrolls, and
+   a height that fits the screen. Without the height it grew past the bottom
+   of the window and the Add buttons at the end of each list were unreachable,
+   which is a dialog you cannot finish using. */
+.walls-dialog {
+  width: min(660px, 100%);
+  max-width: min(660px, calc(100vw - var(--sp-6)));
+  max-height: min(86vh, 900px);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--sp-3);
+  padding: 0;
+}
+.walls-dialog .adv-head { padding: var(--sp-4) var(--sp-4) 0; }
+.walls-dialog .adv-body { padding: 0 var(--sp-4) var(--sp-4); }
+.walls-dialog .adv-group > .field__label,
+.walls-dialog .adv-group > .note { padding: 0; }
+.wall-row {
+  display: grid; gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-1);
+}
+.wall-row + .wall-row { margin-top: var(--sp-2); }
+.wall-row.is-active { border-color: var(--accent); }
+.wall-row__head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.wall-row__name {
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: inherit; font-size: var(--fs-3); font-weight: var(--fw-semibold);
+}
+.wall-row__name:hover { color: var(--accent); }

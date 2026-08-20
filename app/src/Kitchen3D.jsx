@@ -9,7 +9,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { Part, cssVar } from './Viewer.jsx';
-import { unitWarnings } from './project.js';
+import { islandDepth, unitWarnings } from './project.js';
 import { FULL_SWING, doorSwing, drawerSlide, largestSwing, swingSector, arcPoint, degrees } from './motion.js';
 
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -23,9 +23,14 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
    a worse drawing than one that does not move at all.
    --------------------------------------------------------------------------- */
 
-function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected }) {
+function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDepth = 0 }) {
   const { unit, x } = p;
   const travel = unit.cfg?.runnerLength ?? 500;
+
+  /* The back of an island faces the other way. Turned about its own middle
+     and pushed to the far face, so its doors open into the room behind it
+     rather than into the cabinets it is backing onto. */
+  const onBack = islandDepth > 0 && p.side === 'back';
 
   const partProps = {
     offset: [0, 0, 0], selected: sel, ghosted: ghost, hidden: false, warn,
@@ -46,8 +51,8 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected }) {
   const moving = new Set([...doors, ...[...drawers.values()].flat()]);
   const still = unit.parts.filter((q) => !moving.has(q));
 
-  return (
-    <group position={[x, unit.mountY, 0]}>
+  const body = (
+    <>
       {still.map((q) => <Part key={q.code} p={q} {...partProps} />)}
 
       {doors.map((q) => {
@@ -68,8 +73,18 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected }) {
           {parts.map((q) => <Part key={q.code} p={q} {...partProps} />)}
         </group>
       ))}
-    </group>
+    </>
   );
+
+  if (onBack) {
+    return (
+      <group position={[x + unit.width, unit.mountY, islandDepth]} rotation={[0, Math.PI, 0]}>
+        <group position={[0, 0, 0]}>{body}</group>
+      </group>
+    );
+  }
+
+  return <group position={[x, unit.mountY, 0]}>{body}</group>;
 }
 
 const VIEWS = {
@@ -242,6 +257,10 @@ function CooktopOven({ unit, colour, ghost, benchHeight, ...evt }) {
    ------------------------------------------------------------------------ */
 
 function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, open = 0 }) {
+  /* How deep the island is. Its cabinets sit back to back inside it, so the
+     depth is the island's own and not a cabinet's. */
+  const depth = lay.island ? islandDepth(lay.wall, cfg) : 0;
+
   /* Benchtop segments, same rule as the elevation. */
   const bench = useMemo(() => {
     const segs = [];
@@ -305,6 +324,7 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
 
         return (
           <Cabinet key={p.item.uid} p={p} open={open} sel={sel} ghost={ghost} warn={warn}
+                   islandDepth={lay.island ? depth : 0}
                    setHovered={setHovered} setSelected={setSelected} />
         );
       })}
@@ -312,15 +332,31 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
       {/* kickboard, set back from the front face */}
       {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
         <mesh key={`k${p.item.uid}`}
-              position={[p.x + p.unit.width / 2, cfg.kick / 2, p.unit.depth - 60]}
+              position={[p.x + p.unit.width / 2, cfg.kick / 2,
+                p.side === 'back' && depth
+                  ? depth - p.unit.depth + 60
+                  : p.unit.depth - 60]}
               onClick={noop}>
           <boxGeometry args={[p.unit.width, cfg.kick, 18]} />
           <meshStandardMaterial color="#4A453D" roughness={0.9} />
         </mesh>
       ))}
 
+      {/* An island's top is one slab over the whole footprint, overhanging on
+          every side, rather than a strip in front of one run. */}
+      {show.bench && lay.island && (
+        <mesh position={[lay.wall.length / 2,
+          cfg.benchHeight - cfg.benchThk / 2,
+          depth / 2]}>
+          <boxGeometry args={[lay.wall.length + 2 * (cfg.benchOverhang ?? 20),
+            cfg.benchThk,
+            depth + 2 * (cfg.benchOverhang ?? 20)]} />
+          <meshStandardMaterial color="#C9C4BB" roughness={0.5} />
+        </mesh>
+      )}
+
       {/* benchtop, continuous with a front overhang */}
-      {show.bench && bench.map((s, i) => (
+      {show.bench && !lay.island && bench.map((s, i) => (
         <mesh key={i}
               position={[s.x + s.w / 2, cfg.benchHeight - cfg.benchThk / 2, cfg.benchDepth / 2]}>
           <boxGeometry args={[s.w + 20, cfg.benchThk, cfg.benchDepth]} />
@@ -421,7 +457,9 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
           the wall you are standing behind disappears instead of hiding the
           kitchen. In an L that is the difference between seeing the corner
           and looking at the back of a slab. */}
-      {show.walls && runs.map((r, i) => (
+      {/* An island has nothing behind it. That is what makes it an island, so
+          it does not get a wall drawn against its back. */}
+      {show.walls && runs.filter((r) => !r.lay.island).map((r, i) => (
         <group key={i} position={[r.origin[0], 0, r.origin[1]]} rotation={[0, r.rot, 0]}>
           <mesh position={[r.lay.wall.length / 2, cfg.ceiling / 2, -20]}>
             <planeGeometry args={[r.lay.wall.length + 400, cfg.ceiling]} />

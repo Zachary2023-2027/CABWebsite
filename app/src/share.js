@@ -57,6 +57,7 @@ const CFG_KEYS = Object.keys(PROJECT).sort();
  * saves most of the payload on its own.
  */
 export function squeeze(project) {
+  const locks = new Set(project.locked || []);
   const cfg = {};
   for (const k of CFG_KEYS) {
     const v = project.cfg?.[k];
@@ -77,9 +78,17 @@ export function squeeze(project) {
       i: wall.id,
       m: wall.name,
       L: wall.length,
+      k: wall.kind === 'island' ? 1 : undefined,
+      D: wall.depth || undefined,
       o: wall.obstacles?.length ? wall.obstacles : undefined,
       u: wall.units.map((u) => {
-        const out = { f: u.familyId, d: u.uid };
+        const out = { f: u.familyId };
+        /* The id is only carried when something points at it. Nothing else in
+           a shared project refers to a cabinet by id: the cut ticks do not
+           travel, and the receiver gets a copy with fresh ids anyway. On a
+           kitchen of twenty odd cabinets that is a few hundred characters of
+           link spent on nothing. */
+        if (locks.has(u.uid)) out.d = u.uid;
         if (u.settings && Object.keys(u.settings).length) out.s = u.settings;
         return out;
       }),
@@ -108,10 +117,13 @@ export function expand(small) {
       walls: small.w.map((wall, i) => ({
         id: wall.i ?? `W${i}`,
         name: wall.m ?? `Wall ${i + 1}`,
+        kind: wall.k ? 'island' : 'wall',
+        ...(wall.D ? { depth: wall.D } : {}),
         length: wall.L,
         obstacles: wall.o || [],
-        units: (wall.u || []).map((u) => ({
-          uid: u.d,
+        units: (wall.u || []).map((u, j) => ({
+          // Minted where it was not carried. hydrate does the same for a file.
+          uid: u.d || `s${i}-${j}`,
           familyId: u.f,
           settings: u.s || {},
         })),

@@ -25,7 +25,14 @@ const FS_DIM = 88;  // dimension line
 const DRAG_START = 40;
 
 export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover, onDrag,
-                                   onObstacle }) {
+                                   onObstacle, side = 'front' }) {
+  /* An island has two sides and you work on one at a time, so the drawing
+     shows the side you are on. A wall has one side and everything is on it,
+     which is what 'front' means for a wall. */
+  const shown = lay.island
+    ? lay.placed.filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
+    : lay.placed;
+
   /* The drag is held here and committed on release. Writing every pointer
      move into the project would re-derive the whole kitchen, and the nest
      with it, sixty times a second. */
@@ -206,7 +213,7 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
           came out 22mm wide the wrong way and the browser refused to draw it.
           A unit that reaches the floor has no kick under it either, so those
           are left out rather than clamped to nothing. */}
-      {lay.placed
+      {shown
         .filter((p) => p.where !== 'wall' && !p.unit.cavity
           && p.unit.mountY > 0 && p.unit.width > 40)
         .map((p) => (
@@ -217,7 +224,7 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
         ))}
 
       {/* units */}
-      {lay.placed.map((p) => {
+      {shown.map((p) => {
         const { unit } = p;
         const x = drawX(p);
         const isSel = selected === p.item.uid;
@@ -335,7 +342,7 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
       ))}
 
       {/* labels: number and width, above the base run and under the wall run */}
-      {lay.placed.filter((p) => p.label).map((p) => {
+      {shown.filter((p) => p.label).map((p) => {
         const isWall = p.where === 'wall';
         const ty = isWall
           ? Y(p.unit.mountY) + FS + 34

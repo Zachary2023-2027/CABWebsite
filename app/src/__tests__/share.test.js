@@ -48,11 +48,32 @@ describe('a kitchen survives the trip', () => {
     }
   });
 
-  it('comes back with the same name, room and cabinet ids', () => {
+  it('comes back with the same name and room', () => {
     expect(back.project.name).toBe(project.name);
     expect(back.project.room).toBe(project.room);
-    expect(back.project.walls[0].units.map((u) => u.uid))
-      .toEqual(project.walls[0].units.map((u) => u.uid));
+  });
+
+  /* Nothing in a shared project refers to a cabinet by id: the cut ticks do
+     not travel, and the receiver gets a copy anyway. Carrying twenty odd ids
+     spends a few hundred characters of link on nothing. */
+  it('does not carry cabinet ids that nothing points at', () => {
+    const small = squeeze(project);
+    expect(small.w[0].u.every((u) => u.d === undefined)).toBe(true);
+  });
+
+  it('but the copy still has an id for every cabinet, all different', () => {
+    const uids = back.project.walls.flatMap((w) => w.units.map((u) => u.uid));
+    expect(uids.every(Boolean)).toBe(true);
+    expect(new Set(uids).size).toBe(uids.length);
+  });
+
+  it('a locked cabinet keeps its id, because the lock points at it', () => {
+    const p2 = starterProject();
+    p2.locked = [p2.walls[0].units[0].uid];
+    const round = load(encodeProject(p2));
+
+    expect(round.project.locked).toEqual([p2.walls[0].units[0].uid]);
+    expect(round.project.walls[0].units[0].uid).toBe(p2.walls[0].units[0].uid);
   });
 
   it('carries the obstacles on the wall', () => {

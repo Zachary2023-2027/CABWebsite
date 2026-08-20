@@ -12,8 +12,8 @@ import { round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  ROOM_SHAPES, firstFreeX, layoutFor, money, roomLayout, roomWallIds, uid,
-  unitServices, unitWarnings, wallWarnings,
+  ROOM_SHAPES, WALL_KINDS, firstFreeX, isIsland, islandDepth, layoutFor, money,
+  roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
@@ -377,6 +377,10 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [keysOpen, setKeysOpen] = useState(false);
   const [selObstacle, setSelObstacle] = useState(null);
   const elevRef = useRef(null);
+  /* Which side of an island you are working on. Meaningless on a wall, and
+     harmless there: a wall's cabinets are all on its one side. */
+  const [side, setSide] = useState('front');
+  const [wallsOpen, setWallsOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
@@ -431,13 +435,17 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     const fam = FAMILY[familyId];
     const probe = buildUnit('probe', familyId, {}, project.cfg);
 
+    /* Which side of an island it lands on. A wall has one side, so this is
+       always the front there and the setting is never written. */
+    const onSide = lay.island && side === 'back' ? 'back' : null;
+
     const place = (targetWall, targetLay) => {
       if (probe.corner) {
         const left = (probe.settings?.blindSide || 'right') === 'left';
         return left ? targetLay.startOffset
           : Math.max(targetLay.startOffset, targetWall.length - probe.width);
       }
-      return firstFreeX(targetLay, probe, probe.width);
+      return firstFreeX(targetLay, probe, probe.width, onSide || 'front');
     };
 
     let x = place(wall, lay);
@@ -459,6 +467,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const next = structuredClone(prev);
       const w = next.walls.find((q) => q.id === targetId);
       const settings = x === null ? {} : { x };
+      if (onSide) settings.side = onSide;
       w.units.push({ uid: id, familyId, settings });
       if (targetId !== prev.activeWall) next.activeWall = targetId;
       return next;
@@ -637,6 +646,69 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     ...prev, walls: prev.walls.map((w) => (w.id === id ? { ...w, length: v } : w)),
   }));
 
+  /* --- the walls themselves ----------------------------------------------- */
+
+  const changeWall = (id, patch) => setProject((prev) => ({
+    ...prev, walls: prev.walls.map((w) => (w.id === id ? { ...w, ...patch } : w)),
+  }));
+
+  /* A new wall or island. The id has to be unique and short, because it is
+     the prefix on every part code that comes off it: A1-SIDE-L is readable,
+     a generated id is not. */
+  const addWall = (kind) => {
+    const used = new Set(project.walls.map((w) => w.id));
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+    let id;
+    if (kind === 'island') {
+      let n = 1;
+      while (used.has(n === 1 ? 'ISL' : `ISL${n}`)) n += 1;
+      id = n === 1 ? 'ISL' : `ISL${n}`;
+    } else {
+      id = [...letters].find((c) => !used.has(c)) || `W${used.size + 1}`;
+    }
+
+    const wallCount = project.walls.filter((w) => !isIsland(w)).length;
+    const islandCount = project.walls.filter((w) => isIsland(w)).length;
+
+    const made = kind === 'island'
+      ? {
+        id, name: islandCount ? `Island ${islandCount + 1}` : 'Island', kind: 'island',
+        length: 2400, depth: 1120, obstacles: [], units: [],
+      }
+      : {
+        id, name: `Wall ${letters[wallCount] || id}`, kind: 'wall',
+        length: 3600, obstacles: [], units: [],
+      };
+
+    setProject((prev) => ({ ...prev, walls: [...prev.walls, made], activeWall: id }));
+    setSelected(null);
+    setSide('front');
+  };
+
+  /* Removing one takes its cabinets with it, which is worth saying out loud
+     rather than finding out afterwards. The last one cannot go: a kitchen
+     with no walls is not a state anything downstream can draw. */
+  const removeWall = (id) => {
+    const w = project.walls.find((q) => q.id === id);
+    const count = (w?.units || []).length;
+    if (count && !confirm(
+      `Remove ${w.name} and the ${count} cabinet${count === 1 ? '' : 's'} on it?`)) return;
+
+    setProject((prev) => {
+      if (prev.walls.length <= 1) return prev;
+      const walls = prev.walls.filter((q) => q.id !== id);
+      return {
+        ...prev,
+        walls,
+        locked: (prev.locked || []).filter(
+          (uid2) => walls.some((q) => q.units.some((u) => u.uid === uid2))),
+        activeWall: prev.activeWall === id ? walls[0].id : prev.activeWall,
+      };
+    });
+    setSelected(null);
+  };
+
   /* Locks are a property of the kitchen, not of this session, so a cabinet
      you have already built stays locked after a reload. */
   const locked = project.locked || [];
@@ -810,7 +882,21 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     <div className="elev-wrap" ref={elevRef} onClick={() => pickUnit(null)}>
       <Elevation lay={lay} cfg={project.cfg} selected={selected} selDrawer={selDrawer}
                  onSelect={pickUnit} onHover={setHovered} onDrag={dropUnit}
-                 onObstacle={(id) => { setSelObstacle(id); setSelected(null); }} />
+                 onObstacle={(id) => { setSelObstacle(id); setSelected(null); }}
+                 side={side} />
+
+      {/* An island has two sides. You work on one at a time, and a cabinet
+          added while the back is showing goes on the back. */}
+      {lay.island && (
+        <div className="seg elev-side no-print" role="group" aria-label="Which side of the island">
+          {[['front', 'Front'], ['back', 'Back']].map(([k, label]) => (
+            <button key={k} className="seg__item" aria-pressed={side === k}
+                    onClick={(e) => { e.stopPropagation(); setSide(k); setSelected(null); }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <button className="btn btn--ghost elev-svg no-print"
               title="Save this elevation as an SVG you can open anywhere"
               onClick={(e) => {
@@ -828,13 +914,20 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
       <div className="tabs wall-tabs" role="tablist">
         {project.walls.map((w) => (
-          <button key={w.id} className={`tab ${roomIds.includes(w.id) ? 'tab--room' : ''}`}
+          <button key={w.id}
+                  className={`tab ${roomIds.includes(w.id) ? 'tab--room' : ''} ${isIsland(w) ? 'tab--island' : ''}`}
                   role="tab" aria-selected={w.id === project.activeWall}
-                  title={roomIds.includes(w.id) ? 'Joined at a corner in this room shape' : undefined}
-                  onClick={() => { setProject((p) => ({ ...p, activeWall: w.id })); setSelected(null); }}>
+                  title={isIsland(w) ? 'Free standing, two sides'
+                    : roomIds.includes(w.id) ? 'Joined at a corner in this room shape' : undefined}
+                  onClick={() => { setProject((p) => ({ ...p, activeWall: w.id })); setSelected(null); setSide('front'); }}>
             {w.name} <span className="tab__len">{w.length}</span>
           </button>
         ))}
+        <button className="tab tab--add" onClick={() => setWallsOpen(true)}
+                title="Add, remove and set up the walls and islands in this kitchen">
+          Walls
+        </button>
+
         <div className="wall-len">
           <div className="seg" role="group" aria-label="Arrangement">
             {[['split', 'Split'], ['drawer', 'Drawer'], ['focus', 'Focus']].map(([k, label]) => (
@@ -848,10 +941,6 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
           <button className="btn btn--ghost" onClick={runOptimise} disabled={optBusy}>
             {optBusy ? 'Working' : 'Optimise'}
           </button>
-          {/* Typed, not picked. Real walls are 3742, not a round number off
-              a list. */}
-          <Num label="Wall length" value={wall.length} min={300} max={12000}
-               onChange={(v) => setWallLength(v ?? wall.length)} />
         </div>
       </div>
 
@@ -928,11 +1017,18 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       </div>
 
       {advOpen && (
-        <Advanced cfg={project.cfg} project={project} onChange={setCfg} onReset={resetCfg}
-                  onRoom={setRoom} onWallLength={setLengthOf}
+        <Advanced cfg={project.cfg} onChange={setCfg} onReset={resetCfg}
                   onClose={() => setAdvOpen(false)} />
       )}
       {keysOpen && <Shortcuts onClose={() => setKeysOpen(false)} />}
+      {wallsOpen && (
+        <WallManager project={project} onClose={() => setWallsOpen(false)}
+                     onRoom={setRoom} onChange={changeWall} onAdd={addWall}
+                     onRemove={removeWall} onSelect={(id) => {
+                       setProject((p) => ({ ...p, activeWall: id }));
+                       setSelected(null); setSide('front');
+                     }} />
+      )}
       {opt && (
         <OptimiseResult result={opt} project={project} wall={wall} locked={locked}
                         onApply={applyOptimise} onApplyPlan={applyPlan}
@@ -1065,5 +1161,120 @@ function Obstacles({ wall, selected, onSelect, onAdd, onChange, onRemove }) {
         </>
       )}
     </section>
+  );
+}
+
+
+/* ---------------------------------------------------------------------------
+   The walls in this kitchen.
+
+   The tabs used to be however many walls the starter project happened to
+   have, and the room shape and the wall lengths lived in Advanced design, two
+   screens away from the tabs they were about. Everything about what a wall is
+   is here now, next to the list of them.
+   --------------------------------------------------------------------------- */
+
+function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSelect }) {
+  const roomIds = roomWallIds(project);
+  const walls = project.walls.filter((w) => !isIsland(w));
+  const islands = project.walls.filter((w) => isIsland(w));
+  const shape = ROOM_SHAPES.find((s) => s.id === (project.room || 'straight'));
+
+  const row = (w) => {
+    const inRoom = roomIds.includes(w.id);
+    const island = isIsland(w);
+    return (
+      <div className={`wall-row ${w.id === project.activeWall ? 'is-active' : ''}`} key={w.id}>
+        <div className="wall-row__head">
+          <button className="wall-row__name" onClick={() => onSelect(w.id)}
+                  title="Work on this one">
+            {w.name}
+            {inRoom && <span className="badge badge--neutral">In the room shape</span>}
+            {island && <span className="badge badge--accent">Free standing</span>}
+          </button>
+          <button className="btn btn--danger" disabled={project.walls.length <= 1}
+                  onClick={() => onRemove(w.id)}>Remove</button>
+        </div>
+
+        <div className="settings-grid">
+          <Board label="Name" value={w.name} options={[]}
+                 onChange={(v) => onChange(w.id, { name: v })} />
+          <Num label={island ? 'Long' : 'Length'} value={w.length} min={300} max={12000}
+               onChange={(v) => onChange(w.id, { length: v ?? w.length })} />
+          {island && (
+            <Num label="Deep" value={islandDepth(w, project.cfg)} min={300} max={2400}
+                 onChange={(v) => onChange(w.id, { depth: v ?? islandDepth(w, project.cfg) })} />
+          )}
+        </div>
+
+        {island && (
+          <p className="note">
+            Cabinets go on both sides, back to back. Deep enough for two of them
+            is {project.cfg.baseDepth * 2}mm; less than that and one side is
+            shallower than a standard cabinet.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="dialog-scrim" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="dialog walls-dialog" role="dialog" aria-modal="true" aria-label="Walls">
+        <div className="adv-head">
+          <div>
+            <span className="dialog__title">Walls</span>
+            <p className="note">
+              What this kitchen is built against. The shape decides which walls meet
+              at a corner; anything past it stands on its own, and so does an island.
+            </p>
+          </div>
+          <Close onClick={onClose} />
+        </div>
+
+        <div className="adv-body">
+          <section className="adv-group">
+            <span className="field__label">Room shape</span>
+            <div className="settings-grid">
+              <Choice label="Shape" value={project.room || 'straight'}
+                      options={ROOM_SHAPES.map((x) => ({ value: x.id, label: x.name }))}
+                      onChange={onRoom} />
+            </div>
+            <p className="note">
+              The first {shape.walls} wall{shape.walls === 1 ? '' : 's'} join at a corner.
+              An L turns at the right hand end of the first wall. A U comes back down
+              the other side. Put a blind corner cabinet at the end of each wall that
+              turns, so the next run starts clear of it.
+            </p>
+          </section>
+
+          <section className="adv-group">
+            <span className="field__label">Walls</span>
+            {walls.map(row)}
+            <div className="group-foot">
+              <button className="btn btn--secondary" onClick={() => onAdd('wall')}>
+                Add a wall
+              </button>
+            </div>
+          </section>
+
+          <section className="adv-group">
+            <span className="field__label">Islands</span>
+            {islands.length === 0 && (
+              <p className="note">
+                None yet. An island stands free in the middle of the floor with a
+                length and a depth of its own, and takes cabinets on both sides.
+              </p>
+            )}
+            {islands.map(row)}
+            <div className="group-foot">
+              <button className="btn btn--secondary" onClick={() => onAdd('island')}>
+                Add an island
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   );
 }

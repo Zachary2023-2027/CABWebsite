@@ -72,11 +72,17 @@ export function starterProject() {
       },
       { id: 'D', name: 'Wall D', length: 2100, obstacles: [], units: [] },
       {
-        id: 'ISL', name: 'Island', length: 2400, obstacles: [],
+        id: 'ISL', name: 'Island', kind: 'island', length: 2400, depth: 1120,
+        obstacles: [],
         units: [
           u('base-3drawer', { width: 900 }),
           u('base-2door', { width: 900 }),
           u('base-1door', { width: 600 }),
+          /* The other side. Back to back with the front run, which is where
+             half an island's storage comes from and the reason an island has
+             a depth of its own rather than a cabinet's. */
+          u('base-2door', { width: 1200, side: 'back' }),
+          u('base-2door', { width: 1200, side: 'back' }),
         ],
       },
     ],
@@ -91,6 +97,43 @@ export function starterProject() {
 const occupies = (kind, full) =>
   kind === 'wall' ? 'wall' : (kind === 'tall' || full) ? 'both' : 'base';
 
+/* ---------------------------------------------------------------------------
+   Walls, and the thing that is not a wall.
+
+   An island is not a wall. It stands in the middle of the floor with nothing
+   behind it, it has a depth of its own rather than borrowing the cabinets',
+   and it has two sides you can put cabinets on, back to back, which is where
+   half its storage comes from.
+
+   It was a wall with the id ISL, filtered out of the room by name. That is
+   why it behaved like one: it took the room's depth, it had one side, and its
+   backs were drawn against nothing.
+   --------------------------------------------------------------------------- */
+
+export const WALL_KINDS = [
+  { id: 'wall', name: 'Wall', note: 'Against a wall. Joins the room shape.' },
+  { id: 'island', name: 'Island', note: 'Free standing. Two sides, its own depth.' },
+];
+
+/** What a wall is. Anything unrecognised is a wall, which is the common case. */
+export function wallKind(wall) {
+  if (wall?.kind === 'island') return 'island';
+  /* Projects saved before islands were their own thing carry one wall called
+     ISL, which the room filtered out by name. Still recognised so those
+     projects open as what they meant. */
+  if (!wall?.kind && wall?.id === 'ISL') return 'island';
+  return 'wall';
+}
+
+export const isIsland = (wall) => wallKind(wall) === 'island';
+
+/** How deep an island is. A wall has no depth of its own: its cabinets do. */
+export const islandDepth = (wall, cfg) =>
+  (Number(wall?.depth) > 0 ? Number(wall.depth) : (cfg?.baseDepth ?? 560) * 2);
+
+/** Which side of an island a cabinet is on. Only islands have two. */
+export const sideOf = (item) => (item?.settings?.side === 'back' ? 'back' : 'front');
+
 /**
  * Resolve a wall into placed units with real x positions.
  * Two cursors: the base run along the floor and the wall run above it.
@@ -103,8 +146,15 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
   assertMm(wall.length, `${wall.id} length`);
   assertMm(startOffset, `${wall.id} start offset`);
 
-  let baseX = startOffset;
-  let wallX = startOffset;
+  const island = isIsland(wall);
+
+  /* An island has two sides and they are laid out independently: a cabinet on
+     the back does not push one on the front along. A wall has one side, and
+     everything on it is on the front, so the same code covers both. */
+  const cursors = {
+    front: { base: startOffset, wall: startOffset },
+    back: { base: 0, wall: 0 },
+  };
   let n = 0;
   let f = 0;
   const placed = [];
@@ -130,24 +180,36 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0) {
     const raw = Number(item.settings?.x);
     const pinned = Number.isFinite(raw) ? Math.max(0, raw) : null;
 
+    const side = island ? sideOf(item) : 'front';
+    const c = cursors[side];
+
     let x;
     if (where === 'both') {
-      x = pinned ?? Math.max(baseX, wallX);
-      baseX = wallX = Math.max(baseX, wallX, x + unit.width);
+      x = pinned ?? Math.max(c.base, c.wall);
+      c.base = c.wall = Math.max(c.base, c.wall, x + unit.width);
     } else if (where === 'wall') {
-      x = pinned ?? wallX;
-      wallX = Math.max(wallX, x + unit.width);
+      x = pinned ?? c.wall;
+      c.wall = Math.max(c.wall, x + unit.width);
     } else {
-      x = pinned ?? baseX;
-      baseX = Math.max(baseX, x + unit.width);
+      x = pinned ?? c.base;
+      c.base = Math.max(c.base, x + unit.width);
     }
 
-    placed.push({ item, unit, x, where, label, codeId, pinned: pinned !== null });
+    placed.push({ item, unit, x, where, side, label, codeId, pinned: pinned !== null });
   }
 
+  /* How far along each side has been filled. An island reports the longer of
+     its two sides as its run, because that is what has to fit in its length. */
+  const baseRun = Math.max(cursors.front.base, cursors.back.base);
+  const wallRun = Math.max(cursors.front.wall, cursors.back.wall);
+
   return {
-    placed, baseRun: baseX, wallRun: wallX, run: Math.max(baseX, wallX),
-    wall, startOffset,
+    placed, baseRun, wallRun, run: Math.max(baseRun, wallRun),
+    wall, startOffset, island,
+    /* The two sides, for anything that draws them separately. A wall has an
+       empty back, which every consumer can ignore without knowing why. */
+    front: placed.filter((p) => p.side !== 'back'),
+    back: placed.filter((p) => p.side === 'back'),
   };
 }
 
@@ -177,7 +239,9 @@ export const roomShape = (project) =>
 /** The walls that form the joined run, in corner order. */
 export function roomWallIds(project) {
   const n = ROOM_SHAPES.find((s) => s.id === roomShape(project)).walls;
-  return project.walls.filter((w) => w.id !== 'ISL').slice(0, n).map((w) => w.id);
+  /* By what it is, not by what it is called. Filtering on the id ISL meant a
+     second island, or one you renamed, joined the room and turned a corner. */
+  return project.walls.filter((w) => !isIsland(w)).slice(0, n).map((w) => w.id);
 }
 
 /**
@@ -347,9 +411,13 @@ export function snapX(lay, item, unit, rawX, opts = SNAP) {
  * will not. Used when you add one, so it lands in the first real gap rather
  * than on top of something.
  */
-export function firstFreeX(lay, unit, width) {
+export function firstFreeX(lay, unit, width, side = 'front') {
   const where = occupies(unit.kind, unit.fullHeight);
+  /* Only what is on the same side counts. A cabinet on the back of an island
+     does not push one on the front along, so looking at both sides finds the
+     island full when the side you are adding to is empty. */
   const taken = lay.placed
+    .filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
     .filter((p) => sameRun(where, p.where))
     .map((p) => [p.x, p.x + p.unit.width])
     .sort((a, b) => a[0] - b[0]);

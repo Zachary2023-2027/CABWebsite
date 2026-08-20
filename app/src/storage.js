@@ -122,6 +122,11 @@ export function hydrate(raw) {
   const walls = p.walls.map((w, i) => ({
     id: String(w.id ?? `W${i}`),
     name: String(w.name ?? `Wall ${i + 1}`),
+    /* An island is a kind of thing now rather than a wall called ISL. A
+       project saved before that carries the old name and no kind, so the id
+       is read one last time here and written down properly. */
+    kind: (w.kind === 'island' || (!w.kind && w.id === 'ISL')) ? 'island' : 'wall',
+    ...(Number(w.depth) > 0 ? { depth: Number(w.depth) } : {}),
     length: Number(w.length) > 0 ? Number(w.length) : 3600,
     /* Cleaned rather than filtered. The old test threw away anything with a
        bad number in it, which quietly deleted a window because its height
@@ -286,6 +291,11 @@ function cleanSettings(s) {
          filtered out with a falsy test. */
       if (v === null || v === undefined || v === '') { out[k] = null; continue; }
       if (Number.isFinite(Number(v)) && Number(v) >= 0) out[k] = Number(v);
+      continue;
+    }
+    if (k === 'side') {
+      // Only an island has two sides, and only 'back' means anything.
+      if (v === 'back') out[k] = 'back';
       continue;
     }
     if (k === 'x') {
