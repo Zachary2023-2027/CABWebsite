@@ -166,14 +166,34 @@ export function facingGap(p, q, tolerance = 0.05) {
   return { gap: round1(gap), overlap: round1(overlap) };
 }
 
+/**
+ * The faces a run presents to the room.
+ *
+ * A wall has one: the front of its cabinets. An island has two, because it is
+ * free standing and you walk on both sides of it. Leaving the second one out
+ * misses the gap that matters most in a kitchen with an island.
+ */
+export function facesOf(entry, cfg) {
+  if (!entry.island) return [wallFace(entry, runDepth(entry, cfg))];
+
+  const depth = entry.depth ?? runDepth(entry, cfg);
+  return [
+    { ...wallFace(entry, 0), name: `${entry.wall.name}, front` },
+    { ...wallFace(entry, depth), name: `${entry.wall.name}, back` },
+  ];
+}
+
 /** Every gap between two runs that face each other across the room. */
 export function walkways(project, roomEntries) {
   const cfg = project.cfg;
-  const faces = roomEntries.map((e) => wallFace(e, runDepth(e, cfg)));
+  const faces = roomEntries.flatMap((e) => facesOf(e, cfg));
   const out = [];
 
   for (let i = 0; i < faces.length; i++) {
     for (let j = i + 1; j < faces.length; j++) {
+      /* The two faces of one island are not a walkway across each other:
+         they are the island. */
+      if (faces[i].id === faces[j].id) continue;
       const facing = facingGap(faces[i], faces[j]);
       if (!facing) continue;
       out.push({
@@ -200,7 +220,7 @@ export function walkways(project, roomEntries) {
  */
 export function runChecks(project, deps) {
   const {
-    roomLayout, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
+    floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
     unitWarnings, wallWarnings,
   } = deps;
 
@@ -208,7 +228,8 @@ export function runChecks(project, deps) {
   const clear = { ...CLEARANCE_DEFAULTS, ...project.cfg };
   const out = [];
   const offsets = roomOffsets(project);
-  const entries = roomLayout(project);
+  /* The whole floor, not only the joined run, so an island is measured too. */
+  const entries = floorPlan(project);
   const lays = project.walls.map((w) => ({ wall: w, lay: layoutFor(project, w, offsets) }));
 
   /* --- what the model already knew, gathered in one place ----------------- */

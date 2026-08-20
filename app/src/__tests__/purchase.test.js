@@ -8,6 +8,7 @@ import {
 import { nestProject } from '../nesting.js';
 import { drillUnit } from '../drilling.js';
 import { PRICES, PROJECT } from '../catalog.js';
+import { totals } from '../project.js';
 
 const DEPS = { allParts, allFittings, allUnits, drillUnit, nestProject, nestCfg, benchPieces };
 const order = (project, prices = PRICES) => orderList(project, prices, DEPS);
@@ -194,5 +195,40 @@ describe('edge tape', () => {
 
   it('a part with no edging adds nothing', () => {
     expect(edgeMetres([{ L: 500, W: 300 }])).toBe(0);
+  });
+});
+
+
+/* Two screens computing the same benchtop two ways is how they end up
+   disagreeing. The order list was summing schedule lengths while the project
+   total billed an island slab by area, so an island was ordered at roughly
+   half what it costs. */
+describe('the order list and the project total agree about the benchtop', () => {
+  const project = starterProject();
+
+  it('to the cent, and to the metre', () => {
+    const o = order(project);
+    const t = totals(project);
+    const bench = o.other.find((r) => r.what === 'Benchtop');
+
+    expect(bench.needed).toBeCloseTo(t.benchMetres, 6);
+    expect(bench.cost).toBeCloseTo(t.benchCost, 6);
+  });
+
+  it('a wider island costs more, on both of them', () => {
+    const wide = starterProject();
+    wide.walls.find((w) => w.kind === 'island').depth = 1600;
+
+    const before = order(project).other.find((r) => r.what === 'Benchtop').cost;
+    const after = order(wide).other.find((r) => r.what === 'Benchtop').cost;
+
+    expect(after).toBeGreaterThan(before);
+    expect(after).toBeCloseTo(totals(wide).benchCost, 6);
+  });
+
+  it('the quantity is not rounded to a tenth of a metre', () => {
+    /* A tenth of a metre is a hundred millimetres of benchtop. */
+    const bench = order(project).other.find((r) => r.what === 'Benchtop');
+    expect(bench.needed).not.toBe(Math.round(bench.needed * 10) / 10);
   });
 });

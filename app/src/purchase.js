@@ -28,6 +28,7 @@
    =========================================================================== */
 
 import { round1, whole } from './mm.js';
+import { benchLength } from './runs.js';
 
 /**
  * How things are sold, as a default to start from.
@@ -255,11 +256,17 @@ export function orderList(project, prices, deps) {
 
   const bench = benchPieces(project);
   if (bench.length && prices.includeBench !== false) {
-    const benchM = bench.reduce((a, b) => a + b.length, 0) / 1000;
+    /* benchLength, not a sum of lengths. An island is a slab wider than a
+       benchtop and is billed by the area it takes over a standard width, so
+       adding its length would order half an island. Computing it here a
+       second way is how the order list and the project total end up
+       disagreeing about the same benchtop. */
+    const benchM = benchLength(bench) / 1000;
     other.push({
       what: 'Benchtop',
       unit: 'm',
-      needed: round1(benchM),
+      // Exact. A tenth of a metre is a hundred millimetres of benchtop.
+      needed: benchM,
       packSize: 1,
       packs: bench.length,
       ordered: round1(benchM),

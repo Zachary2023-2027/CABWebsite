@@ -3,14 +3,14 @@ import {
   CLEARANCE_DEFAULTS, byLevel, facingGap, runChecks, summarise, wallFace, walkways,
 } from '../checks.js';
 import {
-  allParts, layoutFor, nestCfg, roomLayout, roomOffsets, starterProject,
+  allParts, floorPlan, layoutFor, nestCfg, roomLayout, roomOffsets, starterProject,
   unitWarnings, wallWarnings,
 } from '../project.js';
 import { nestProject } from '../nesting.js';
 import { PROJECT } from '../catalog.js';
 
 const DEPS = {
-  roomLayout, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
+  floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
   unitWarnings, wallWarnings,
 };
 

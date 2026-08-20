@@ -31,6 +31,15 @@ const PACK_FIELDS = [
   ['dowelPack', 'Dowels per box'],
 ];
 
+/* A quantity, at a sensible number of places for what it is counting.
+
+   fmt rounds to a tenth, which is right for a millimetre and wrong for a
+   metre: a tenth of a metre is a hundred millimetres of benchtop, and 9.26
+   showing as 9.3 is forty dollars of stone. */
+const qty = (value, unit) => (unit === 'm'
+  ? Number(value).toFixed(2).replace(/\.00$/, '')
+  : fmt(value));
+
 function Table({ title, rows, sheetFinish }) {
   if (!rows.length) return null;
   return (
@@ -59,7 +68,7 @@ function Table({ title, rows, sheetFinish }) {
                     <span className="order-note">{[r.note, r.offcut].filter(Boolean).join('. ')}</span>
                   )}
                 </td>
-                <td className="num">{fmt(r.needed)} {r.unit}</td>
+                <td className="num">{qty(r.needed, r.unit)} {r.unit}</td>
                 <td className="num">{r.packSize === 1 ? 'single' : fmt(r.packSize)}</td>
                 <td className="num">{fmt(r.packs)}</td>
                 <td className={`num ${r.spare > 0 ? 'is-spare' : ''}`}>

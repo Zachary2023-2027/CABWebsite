@@ -127,6 +127,10 @@ export function hydrate(raw) {
        is read one last time here and written down properly. */
     kind: (w.kind === 'island' || (!w.kind && w.id === 'ISL')) ? 'island' : 'wall',
     ...(Number(w.depth) > 0 ? { depth: Number(w.depth) } : {}),
+    /* Where an island stands. Free standing has to mean somewhere, and the
+       walkway to it cannot be measured without it. */
+    ...(w.at && Number.isFinite(Number(w.at.x)) && Number.isFinite(Number(w.at.y))
+      ? { at: { x: Math.max(0, Number(w.at.x)), y: Math.max(0, Number(w.at.y)) } } : {}),
     length: Number(w.length) > 0 ? Number(w.length) : 3600,
     /* Cleaned rather than filtered. The old test threw away anything with a
        bad number in it, which quietly deleted a window because its height

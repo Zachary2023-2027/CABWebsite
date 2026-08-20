@@ -18,7 +18,8 @@
 import { FAMILY, PRICES, PROJECT, buildUnit, sheetFor, unitCost } from './catalog.js';
 import { NEST, nestProject } from './nesting.js';
 import {
-  baseRuns, benchLength, benchSchedule, endPanelParts, kickParts, usableLength,
+  baseRuns, benchLength, benchSchedule, endPanelParts, islandBench, islandKickRuns,
+  kickParts, usableLength,
 } from './runs.js';
 import { assertMm } from './mm.js';
 import { finishFor, roleOf } from './finishes.js';
@@ -133,6 +134,57 @@ export const islandDepth = (wall, cfg) =>
 
 /** Which side of an island a cabinet is on. Only islands have two. */
 export const sideOf = (item) => (item?.settings?.side === 'back' ? 'back' : 'front');
+
+/**
+ * Where an island stands on the floor.
+ *
+ * Free standing has to mean somewhere. Without a position an island cannot be
+ * drawn in the room with the walls, and the gap between it and the run behind
+ * it, which is the clearance that matters most in a kitchen with an island,
+ * cannot be measured at all.
+ *
+ * Measured from the same corner the room is: along the back wall, then out
+ * into the room. No rotation: an island square to the run is what nearly
+ * every one is, and an angled one is a different drawing problem than this
+ * model is set up for.
+ */
+export const islandAt = (wall, cfg) => ({
+  x: Number.isFinite(Number(wall?.at?.x)) ? Number(wall.at.x) : 800,
+  y: Number.isFinite(Number(wall?.at?.y))
+    ? Number(wall.at.y)
+    : (cfg?.baseDepth ?? 560) + (cfg?.walkwayComfortable ?? 1200),
+});
+
+/**
+ * Everything standing on the floor, placed and turned.
+ *
+ * The joined walls, then the islands where they actually stand. roomLayout is
+ * the corner run on its own, because the corner offsets are worked out along
+ * it and an island is not part of that. Anything that wants the whole floor,
+ * rather than the run, wants this.
+ */
+export function floorPlan(project) {
+  const cfg = project.cfg;
+  const walls = roomLayout(project);
+  const inRun = new Set(walls.map((r) => r.wall.id));
+
+  const islands = project.walls
+    .filter((w) => isIsland(w) && !inRun.has(w.id))
+    .map((wall) => {
+      const at = islandAt(wall, cfg);
+      return {
+        wall,
+        lay: layoutWall(wall, cfg, 0),
+        origin: [at.x, at.y],
+        rot: 0,
+        corner: false,
+        island: true,
+        depth: islandDepth(wall, cfg),
+      };
+    });
+
+  return [...walls, ...islands];
+}
 
 /**
  * Resolve a wall into placed units with real x positions.
@@ -367,9 +419,15 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
   add(lay.startOffset, 'start', 'start of the wall');
   add(lay.wall.length - w, 'end', 'end of the wall');
 
+  /* Only what is beside it. On an island the other side occupies the same
+     stretch of x, so without this a cabinet on the back snaps to the edges of
+     cabinets on the front, which are behind it rather than next to it. */
+  const side = lay.island ? sideOf(item) : null;
+
   for (const p of lay.placed) {
     if (p.item.uid === item.uid) continue;
     if (!sameRun(where, p.where)) continue;
+    if (side !== null && (p.side === 'back' ? side !== 'back' : side === 'back')) continue;
     add(p.x + p.unit.width, 'butt', `right of ${p.label || p.unit.family.name}`);
     add(p.x - w, 'butt', `left of ${p.label || p.unit.family.name}`);
   }
@@ -739,7 +797,14 @@ export function runParts(project) {
 
   for (const wall of project.walls) {
     const lay = layoutFor(project, wall, offsets);
-    const runs = baseRuns(lay, 'kick', cfg);
+    /* An island is kicked right round, because it has two open ends you can
+       see the feet through. A wall is kicked in front of its cabinets, and
+       each side of an island is asked for on its own so that the two sides,
+       which occupy the same stretch of x, do not read as cabinets overlapping
+       each other and break the run at every one. */
+    const runs = isIsland(wall)
+      ? islandKickRuns(wall, islandDepth(wall, cfg))
+      : baseRuns(lay, 'kick', cfg);
     /* A kickboard piece has to come off a real sheet with the trim already
        taken off it, or it is cut to a length that fits nowhere and lands on
        the oversize list. */
@@ -769,6 +834,16 @@ export function benchPieces(project) {
   const offsets = roomOffsets(project);
   const out = [];
   for (const wall of project.walls) {
+    /* An island's top is one slab over the whole footprint, which is what the
+       3D has always drawn. The schedule was reading it as a linear run and
+       reporting five strips of 600 deep for one 2400 by 1120 slab: the two
+       disagreed, and the order list was the one that was wrong. */
+    if (isIsland(wall)) {
+      for (const piece of islandBench(wall, islandDepth(wall, project.cfg), project.cfg)) {
+        out.push({ ...piece, wallId: wall.id, wallName: wall.name });
+      }
+      continue;
+    }
     const runs = baseRuns(layoutFor(project, wall, offsets), 'bench', project.cfg);
     for (const piece of benchSchedule(runs, project.cfg)) {
       out.push({ ...piece, wallId: wall.id, wallName: wall.name });

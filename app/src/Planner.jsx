@@ -12,8 +12,9 @@ import { round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  ROOM_SHAPES, WALL_KINDS, isIsland, islandDepth, layoutFor, money, placeOnRun,
-  roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
+  ROOM_SHAPES, WALL_KINDS, floorPlan, isIsland, islandAt, islandDepth, layoutFor,
+  money, placeOnRun, roomLayout, roomWallIds, uid, unitServices, unitWarnings,
+  wallWarnings,
 } from './project.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
@@ -395,8 +396,27 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const wallWarns = useMemo(() => wallWarnings(lay, project), [lay, project]);
   /* The whole joined run, so the 3D can show the corner rather than one wall
      at a time. A straight kitchen has nothing to join, so it stays as it was. */
-  const room = useMemo(
-    () => (project.room && project.room !== 'straight' ? roomLayout(project) : null), [project]);
+  /* What the 3D shows.
+
+     The joined run when there is one, plus every island where it actually
+     stands, because an island you cannot see in the room with the walls is
+     the one thing an island is for. A straight kitchen with no island still
+     shows the wall you are working on, as it always did. */
+  const room = useMemo(() => {
+    const joined = project.room && project.room !== 'straight';
+    const plan = floorPlan(project);
+    const islands = plan.filter((r) => r.island);
+
+    if (joined) return plan;
+    if (!islands.length) return null;
+
+    /* Straight, with an island. Show the wall you are on beside it, unless
+       that is the island itself. */
+    const active = project.walls.find((w) => w.id === project.activeWall);
+    const here = active && !isIsland(active)
+      ? [{ wall: active, lay: layoutFor(project, active), origin: [0, 0], rot: 0 }] : [];
+    return [...here, ...islands];
+  }, [project]);
   const roomIds = useMemo(
     () => (project.room && project.room !== 'straight' ? roomWallIds(project) : []), [project]);
   const placedSel = lay.placed.find((p) => p.item.uid === selected) || null;
@@ -1223,10 +1243,24 @@ function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSe
         </div>
 
         {island && (
+          <div className="settings-grid">
+            <Num label="Along the back wall" value={islandAt(w, project.cfg).x} min={0} max={12000}
+                 onChange={(v) => onChange(w.id, {
+                   at: { ...islandAt(w, project.cfg), x: v ?? islandAt(w, project.cfg).x },
+                 })} />
+            <Num label="Out from the back wall" value={islandAt(w, project.cfg).y} min={0} max={9000}
+                 onChange={(v) => onChange(w.id, {
+                   at: { ...islandAt(w, project.cfg), y: v ?? islandAt(w, project.cfg).y },
+                 })} />
+          </div>
+        )}
+
+        {island && (
           <p className="note">
             Cabinets go on both sides, back to back. Deep enough for two of them
             is {project.cfg.baseDepth * 2}mm; less than that and one side is
-            shallower than a standard cabinet.
+            shallower than a standard cabinet. Where it stands decides the
+            walkway either side of it, which Checks measures.
           </p>
         )}
       </div>

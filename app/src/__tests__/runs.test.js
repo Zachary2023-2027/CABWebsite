@@ -171,10 +171,44 @@ describe('the benchtop is a schedule, not a nested part', () => {
     expect(sched[0].pieces.reduce((a, x) => a + x, 0)).toBeCloseTo(5000, 1);
   });
 
-  /* The quote and the delivery have to be the same number. */
+  /* The quote and the delivery have to be the same number.
+
+     A run is billed by its length. An island is a slab wider than a benchtop,
+     so it is billed by the area it takes converted to metres of the width you
+     are actually buying: charging a 1120 deep slab as though it were 600 deep
+     buys half an island. The rule is written out here rather than read off
+     benchLength, so the two are genuinely independent. */
   it('the metres billed are the metres in the schedule', () => {
-    const scheduled = benchPieces(project).reduce((a, b) => a + b.length, 0);
-    expect(totals(project).benchMetres).toBeCloseTo(scheduled / 1000, 6);
+    const byHand = benchPieces(project).reduce((a, b) => (
+      b.island ? a + (b.length * b.depth) / project.cfg.benchDepth : a + b.length
+    ), 0);
+    expect(totals(project).benchMetres).toBeCloseTo(byHand / 1000, 6);
+  });
+
+  it('an island is one slab over its whole footprint, not a run of strips', () => {
+    const slabs = benchPieces(project).filter((b) => b.island);
+    expect(slabs).toHaveLength(1);
+
+    const isl = project.walls.find((w) => w.kind === 'island');
+    const over = project.cfg.benchOverhang;
+    expect(slabs[0].length).toBe(isl.length + 2 * over);
+    expect(slabs[0].depth).toBe(isl.depth + 2 * over);
+    // Every side of an island is an open one.
+    expect(slabs[0].overhangs).toBe(4);
+  });
+
+  it('a slab wider than a benchtop is billed as more than its length', () => {
+    const slab = benchPieces(project).find((b) => b.island);
+    expect(slab.metres * 1000).toBeGreaterThan(slab.length);
+  });
+
+  it('the kickboard goes right round an island, not across one face', () => {
+    const kick = runParts(project).filter((p) => p.group === 'kick' && p.wallId === 'ISL');
+    const isl = project.walls.find((w) => w.kind === 'island');
+    const total = kick.reduce((a, p) => a + p.L, 0);
+
+    // Two long sides and two ends, whatever it is split into to fit a sheet.
+    expect(total).toBeCloseTo(2 * isl.length + 2 * isl.depth, 1);
   });
 
   it('leaving the benchtop out still lowers the total by exactly the benchtop', () => {

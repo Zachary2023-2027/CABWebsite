@@ -80,6 +80,7 @@ export function squeeze(project) {
       L: wall.length,
       k: wall.kind === 'island' ? 1 : undefined,
       D: wall.depth || undefined,
+      A: wall.at ? [wall.at.x, wall.at.y] : undefined,
       o: wall.obstacles?.length ? wall.obstacles : undefined,
       u: wall.units.map((u) => {
         const out = { f: u.familyId };
@@ -119,6 +120,7 @@ export function expand(small) {
         name: wall.m ?? `Wall ${i + 1}`,
         kind: wall.k ? 'island' : 'wall',
         ...(wall.D ? { depth: wall.D } : {}),
+        ...(Array.isArray(wall.A) ? { at: { x: wall.A[0], y: wall.A[1] } } : {}),
         length: wall.L,
         obstacles: wall.o || [],
         units: (wall.u || []).map((u, j) => ({

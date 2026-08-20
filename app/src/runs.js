@@ -44,7 +44,7 @@ import { round1 } from './mm.js';
  * @returns {{x0:number,x1:number,length:number,items:object[],
  *            openStart:boolean,openEnd:boolean}[]}
  */
-export function baseRuns(lay, purpose = 'kick', P = {}, tolerance = 2) {
+export function baseRuns(lay, purpose = 'kick', P = {}, tolerance = 2, side = null) {
   const runs = [];
   let current = null;
   const close = () => { if (current) runs.push(current); current = null; };
@@ -72,7 +72,15 @@ export function baseRuns(lay, purpose = 'kick', P = {}, tolerance = 2) {
      in the list while being anywhere on the wall. Two cabinets touch when the
      gap between them is nothing, and a millimetre of rounding is not a gap
      you would cut a separate kickboard for. */
-  const placed = [...lay.placed].filter((p) => onFloor(p.unit)).sort((a, b) => a.x - b.x);
+  /* An island's two sides occupy the same stretch of x, one behind the other.
+     Looked at together they read as cabinets overlapping each other, and the
+     run finder breaks the run at every one: five cabinets on a 2400 island
+     came out as five separate pieces of kickboard. Each side is its own run
+     and is asked for separately. */
+  const placed = [...lay.placed]
+    .filter((p) => onFloor(p.unit))
+    .filter((p) => (side === null ? true : (p.side === 'back' ? side === 'back' : side !== 'back')))
+    .sort((a, b) => a.x - b.x);
 
   for (const p of placed) {
     if (!carries(p.unit)) { close(); continue; }
@@ -138,6 +146,24 @@ export function splitRun(length, max = MAX_PIECE) {
   const pieces = Array.from({ length: n - 1 }, () => each);
   pieces.push(round1(length - each * (n - 1)));
   return pieces;
+}
+
+/**
+ * The plinth around a free standing island.
+ *
+ * An island is kicked right round, not only in front of the cabinets: it has
+ * two open ends and you can see the feet through them. Four pieces, two the
+ * length of it and two the depth.
+ *
+ * @returns {{length:number, label:string}[]}
+ */
+export function islandKickRuns(wall, depth) {
+  return [
+    { length: round1(wall.length), label: 'front' },
+    { length: round1(wall.length), label: 'back' },
+    { length: round1(depth), label: 'left end' },
+    { length: round1(depth), label: 'right end' },
+  ];
 }
 
 /**
@@ -239,6 +265,44 @@ export function benchSchedule(runs, P) {
   });
 }
 
-/** Total benchtop length, which is what the per metre price is applied to. */
+/**
+ * The top on an island: one slab over the whole footprint.
+ *
+ * Overhanging on all four sides, because every side of an island is an open
+ * one. Reported with its real depth rather than as a run, and priced by what
+ * it would be as a standard width top, which is the only honest way to put a
+ * slab against a rate quoted per metre of a normal benchtop.
+ */
+export function islandBench(wall, depth, P) {
+  const over = Number(P.benchOverhang) || 0;
+  const length = round1(wall.length + 2 * over);
+  const across = round1(depth + 2 * over);
+
+  return [{
+    index: 1,
+    length,
+    depth: across,
+    thickness: round1(P.benchThk),
+    overhangs: 4,
+    island: true,
+    /* A slab this wide is not one metre of benchtop per metre of length. The
+       area over a standard width is what it really costs.
+
+       Not rounded. round1 is the millimetre path, and a tenth of a metre is
+       a hundred millimetres: rounding a billing quantity to that loses real
+       money and stops the lines adding up to the total. Rounded where it is
+       shown, like every other figure that is not a millimetre. */
+    metres: (length * across) / (Number(P.benchDepth) || 600) / 1000,
+    pieces: splitRun(length, Number(P.benchMaxPiece) || 3600),
+  }];
+}
+
+/**
+ * Total benchtop, in metres of a standard width top.
+ *
+ * A run is its length. An island slab is wider than a benchtop, so it is the
+ * area it takes converted to metres of the width you are actually buying:
+ * charging a 1120 deep slab as though it were 600 deep buys half an island.
+ */
 export const benchLength = (schedule) =>
-  schedule.reduce((a, s) => a + s.length, 0);
+  schedule.reduce((a, s) => a + (s.island ? s.metres * 1000 : s.length), 0);

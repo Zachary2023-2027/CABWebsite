@@ -11,14 +11,14 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { CLEARANCE_DEFAULTS, byLevel, runChecks, summarise, walkways } from './checks.js';
 import {
-  allParts, layoutFor, nestCfg, roomLayout, roomOffsets, unitWarnings, wallWarnings,
+  allParts, floorPlan, layoutFor, nestCfg, roomOffsets, unitWarnings, wallWarnings,
 } from './project.js';
 import { nestProject } from './nesting.js';
 import { Num } from './Fields.jsx';
 import { fmt } from './mm.js';
 
 const DEPS = {
-  roomLayout, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
+  floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
   unitWarnings, wallWarnings,
 };
 
@@ -59,7 +59,7 @@ export default function Checks({ project, onCfg }) {
     }
   }, [project]);
 
-  const paths = useMemo(() => walkways(project, roomLayout(project)), [project]);
+  const paths = useMemo(() => walkways(project, floorPlan(project)), [project]);
   const groups = byLevel(findings);
   const summary = summarise(findings);
   const cfg = { ...CLEARANCE_DEFAULTS, ...project.cfg };
