@@ -6,6 +6,7 @@
    Frameless European carcass, 32mm system. All dimensions mm, all costs AUD.
    =========================================================================== */
 
+import { BAR_RULES } from './bar.js';
 import { assertMm, round1 } from './mm.js';
 import {
   drawerBox, hingeCountFor, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
@@ -145,6 +146,11 @@ export const PROJECT = {
   doorMinWidth: 200,
   doorMinSwing: 75,
 
+  /* The breakfast bar figures, from the one file that holds them. Spread here
+     so a project carries its own copy like every other clearance, and so the
+     Checks screen can type over them. */
+  ...BAR_RULES,
+
   /* How things are sold. Your supplier's box is not mine, so these are
      settings. A pack of 1 means sold singly, which is true of a benchtop and
      false of a hinge. */
@@ -185,6 +191,10 @@ export const PRICES = {
   runnerPair: 28,
   handle: 9,
   binRunner: 64,
+  /* A bracket or a leg under a breakfast bar overhang. Which one you buy
+     changes the price a lot, so this is a seed to replace rather than a
+     figure to rely on. */
+  barBracket: 34,
   benchPerMetre: 320,
   kickPerMetre: 26,
   /* Whether the benchtop belongs in the project total. Off if you are buying
@@ -356,6 +366,20 @@ export const FAMILIES = [
     cavity: true, appliance: 'hood',
     desc: 'Hangs over the cooktop. Drawn as a hood, not a box.',
     widths: [600, 700, 900], def: { width: 900, height: 600, mountY: 1500 }, glyph: 'hood' },
+
+  /* An Australian laundry usually opens off the kitchen and is built from the
+     same run of cabinets, so the machine that goes under that benchtop belongs
+     in the same drawing. A front loader needs its door swing checked against
+     the walkway exactly like an oven does. */
+  { id: 'app-washer', group: 'Appliance', name: 'Washing machine space', kind: 'base', fronts: 'none',
+    cavity: true, appliance: 'washer',
+    desc: 'Under bench cavity for a front loader, 600 standard.',
+    widths: [600, 650, 700], def: { width: 600 }, glyph: 'washer' },
+
+  { id: 'app-dryer', group: 'Appliance', name: 'Dryer space', kind: 'wall', fronts: 'none',
+    cavity: true, appliance: 'washer',
+    desc: 'Wall hung dryer over the machine. Same front, up the wall.',
+    widths: [600, 650, 700], def: { width: 600, height: 850, mountY: 1100 }, glyph: 'washer' },
 
   { id: 'filler', group: 'Filler', name: 'Filler', kind: 'filler', fronts: 'none', cavity: false,
     desc: 'Scribe strip against a wall or appliance.',

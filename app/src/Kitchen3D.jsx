@@ -1,15 +1,45 @@
 /* ===========================================================================
-   Full kitchen mode. Every cabinet placed on its wall at its real position,
-   benchtop as a continuous slab with the correct overhang, kickboard set
-   back, appliances as blocked out volumes.
+   Full kitchen mode.
+
+   Every cabinet placed on its wall at its real position, benchtop as a slab
+   with the correct overhang, kickboard set back, and a room around all of it:
+   walls with real thickness and real holes in them, a floor, a ceiling, and
+   the appliances, fixtures and services drawn as what they are.
+
+   That last part used to be one grey box per appliance, sized to the hole
+   rather than shaped like the thing, and nothing at all for a window, a power
+   point or a waste pipe. A kitchen where the fridge, the dishwasher, the oven
+   and the washing machine are four identical slabs is a kitchen you cannot
+   check: you cannot see which way the fridge opens, or that the oven door
+   lands in the walkway, or that the tap is going to hit the window reveal.
+
+   Three files. The shapes are in Fixtures.jsx, the arithmetic that decides
+   where they go is in fixtures.js where it can be tested without a browser,
+   and this file is the scene: what goes in it, how it is lit, and how the
+   camera moves.
    =========================================================================== */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { Part, cssVar } from './Viewer.jsx';
-import { islandDepth, unitWarnings } from './project.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Part, boxGeo, cssVar } from './Viewer.jsx';
+import {
+  NO_BAR, barBrackets, barSeats, islandBar, islandDepth, unitWarnings,
+} from './project.js';
+import { BAR_RULES } from './bar.js';
+import { finishFor } from './finishes.js';
+import { obstacleKind } from './obstacles.js';
+import {
+  barBracketPositions, barSeatPositions, handlesFor, islandSlab, skirtingRuns,
+  wallBands,
+} from './fixtures.js';
+import {
+  BarBracket, Box, Cooker, Cooktop, Dishwasher, Doorway, Fridge, Handle, Hood,
+  Microwave, Outlet, OvenFront, SURFACE, Service, Sink, SinkPlumbing, Stool,
+  Vent, Washer, Window,
+} from './Fixtures.jsx';
 import { FULL_SWING, doorSwing, drawerSlide, largestSwing, swingSector, arcPoint, degrees } from './motion.js';
 
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -23,9 +53,12 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
    a worse drawing than one that does not move at all.
    --------------------------------------------------------------------------- */
 
-function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDepth = 0 }) {
+function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDepth = 0,
+                   cfg, benchTop, show }) {
   const { unit, x } = p;
   const travel = unit.cfg?.runnerLength ?? 500;
+  const handles = useMemo(() => (show.handles ? handlesFor(unit) : []), [unit, show.handles]);
+  const handleFor = (pred) => handles.filter(pred);
 
   /* The back of an island faces the other way. Turned about its own middle
      and pushed to the far face, so its doors open into the room behind it
@@ -55,6 +88,11 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
     <>
       {still.map((q) => <Part key={q.code} p={q} {...partProps} />)}
 
+      {/* What is in the cabinet rather than part of it: a sink in the top, an
+          oven in the cavity, a microwave in the bay. It does not move when the
+          fronts do, so it sits with the carcass. */}
+      <Fittings p={p} cfg={cfg} ghost={ghost} benchTop={benchTop} show={show} />
+
       {doors.map((q) => {
         const swing = doorSwing(q, open);
         return (
@@ -63,6 +101,13 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
                 has to be moved back to where the pivot is. */}
             <group position={[-swing.pivot[0], -swing.pivot[1], -swing.pivot[2]]}>
               <Part p={q} {...partProps} />
+              {/* The handle turns with the door it is screwed to. Drawing it
+                  in cabinet space instead leaves it hanging in the air the
+                  moment anything opens. */}
+              {handleFor((h) => h.door === q.code).map((h) => (
+                <Handle key={h.key} at={h.at} length={h.length}
+                        vertical={h.vertical} ghost={ghost} />
+              ))}
             </group>
           </group>
         );
@@ -71,6 +116,9 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
       {[...drawers.entries()].map(([n, parts]) => (
         <group key={`d${n}`} position={[0, 0, drawerSlide(parts[0], open, travel).z]}>
           {parts.map((q) => <Part key={q.code} p={q} {...partProps} />)}
+          {handleFor((h) => h.drawer === n).map((h) => (
+            <Handle key={h.key} at={h.at} length={h.length} ghost={ghost} />
+          ))}
         </group>
       ))}
     </>
@@ -178,76 +226,97 @@ function Rig({ preset, nonce, target, distance, eye, run }) {
 }
 
 /* --- appliances ----------------------------------------------------------
-   Most cavities are honestly just a blocked out volume, and drawing them as
-   a plain box is the truthful thing to do. Two are not: a range hood you
-   recognise by its shape, and a cooktop with an oven under it, where the
-   oven door is what tells you which way round the unit goes. Those two get
-   built out of a few boxes so the 3D reads at a glance. */
 
-function Hood({ unit, colour, ghost, ...evt }) {
+   Every one of these used to be the same grey box, sized to the hole rather
+   than shaped like the thing. A kitchen where the fridge, the dishwasher, the
+   oven and the washing machine are four identical slabs is a kitchen you
+   cannot check: you cannot see which way the fridge opens, or that the oven
+   door lands in the walkway, or that the tap is going to hit the window.
+
+   The shapes live in Fixtures.jsx, built out of primitives from their real
+   dimensions. This is only the part that decides which one a cavity gets and
+   where it goes.
+   ------------------------------------------------------------------------ */
+
+function Appliance({ unit, ghost, benchHeight }) {
   const w = unit.width;
   const h = unit.height;
   const d = unit.depth;
-  const canopy = Math.min(200, h * 0.4);        // the flared shroud at the bottom
-  const flueW = Math.max(200, w * 0.34);
-  const mat = (
-    <meshStandardMaterial color={colour} roughness={0.35} metalness={0.35}
-                          transparent={ghost} opacity={ghost ? 0.18 : 1} />
-  );
-  return (
-    <group {...evt}>
-      {/* canopy, the wide part you stand under */}
-      <mesh position={[w / 2, canopy / 2, d / 2]}>
-        <boxGeometry args={[w, canopy, d]} />{mat}
-      </mesh>
-      {/* filter face, set just under the canopy so it catches the light */}
-      <mesh position={[w / 2, 12, d / 2]}>
-        <boxGeometry args={[w - 80, 24, d - 80]} />
-        <meshStandardMaterial color="#8C9095" roughness={0.8}
-                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
-      </mesh>
-      {/* flue, running up the wall */}
-      <mesh position={[w / 2, canopy + (h - canopy) / 2, Math.min(d, 300) / 2]}>
-        <boxGeometry args={[flueW, h - canopy, Math.min(d, 300)]} />{mat}
-      </mesh>
-    </group>
-  );
+
+  switch (unit.family.appliance) {
+    case 'hood':
+      return <Hood width={w} height={h} depth={d} ghost={ghost} />;
+    case 'fridge':
+      return <Fridge width={w} height={h} depth={d} ghost={ghost} />;
+    case 'dw':
+      return <Dishwasher width={w} height={h} depth={d} ghost={ghost} />;
+    case 'washer':
+      return <Washer width={w} height={h} depth={d} ghost={ghost} />;
+    case 'cooktop':
+      // A freestanding cooker: hob on top, oven under, which is why the bench
+      // breaks either side of it.
+      return <Cooker width={w} height={h} depth={d} ghost={ghost} />;
+    case 'cooktopOven':
+      return (
+        <>
+          <Box at={[w / 2, h / 2, d / 2]} size={[w, h, d]} of="darkSteel" ghost={ghost} />
+          <OvenFront width={w - 20} height={Math.min(620, h - 90)} at={[10, 60, d]} ghost={ghost} />
+          <Cooktop width={w} depth={d} top={benchHeight} ghost={ghost} />
+        </>
+      );
+    default:
+      return <Box at={[w / 2, h / 2, d / 2]} size={[w, h, d]} of="brushed" ghost={ghost} />;
+  }
 }
 
-function CooktopOven({ unit, colour, ghost, benchHeight, ...evt }) {
-  const w = unit.width;
-  const h = unit.height;
-  const d = unit.depth;
-  const ovenH = Math.min(600, h - 100);
-  const mat = (
-    <meshStandardMaterial color={colour} roughness={0.5}
-                          transparent={ghost} opacity={ghost ? 0.18 : 1} />
-  );
-  return (
-    <group {...evt}>
-      {/* the cavity itself */}
-      <mesh position={[w / 2, h / 2, d / 2]}>
-        <boxGeometry args={[w, h, d]} />{mat}
-      </mesh>
-      {/* oven door and handle, proud of the front face */}
-      <mesh position={[w / 2, h - ovenH / 2 - 60, d + 10]}>
-        <boxGeometry args={[w - 20, ovenH, 20]} />
-        <meshStandardMaterial color="#3A3B3D" roughness={0.35} metalness={0.3}
-                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
-      </mesh>
-      <mesh position={[w / 2, h - 90, d + 40]}>
-        <boxGeometry args={[w - 100, 26, 26]} />
-        <meshStandardMaterial color="#B6BABE" roughness={0.3} metalness={0.6}
-                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
-      </mesh>
-      {/* cooktop, sitting in the benchtop cut out */}
-      <mesh position={[w / 2, benchHeight + 6, d / 2 - 20]}>
-        <boxGeometry args={[w - 40, 12, d - 120]} />
-        <meshStandardMaterial color="#2B2C2E" roughness={0.2}
-                              transparent={ghost} opacity={ghost ? 0.18 : 1} />
-      </mesh>
-    </group>
-  );
+/* --- what a cabinet has in it or on it -----------------------------------
+
+   A sink base has a sink, a plumbed one has a trap under it, an oven tower
+   has an oven in its cavity and a microwave bay has a microwave. None of that
+   is a part, so none of it was ever drawn, and a sink base looked exactly like
+   a cupboard.
+   ------------------------------------------------------------------------ */
+
+function Fittings({ p, cfg, ghost, benchTop, show }) {
+  const { unit } = p;
+  const fronts = unit.family.fronts;
+  const hasSink = fronts === 'sink' || (fronts === 'stack' && /sink/i.test(unit.family.name));
+  const out = [];
+
+  if (hasSink && show.fixtures) {
+    const twin = unit.width >= 900;
+    out.push(
+      <Sink key="sink" width={unit.width} benchDepth={unit.depth}
+            benchTop={benchTop - unit.mountY} ghost={ghost} double={twin} />,
+    );
+    /* The trap and the stop taps, which is the volume that argues with a
+       drawer box. Only drawn inside a cabinet you can see into, because
+       otherwise it is geometry nobody will ever look at. */
+    if (show.plumbing) {
+      out.push(
+        <SinkPlumbing key="trap" width={unit.width} benchDepth={unit.depth}
+                      benchTop={benchTop - unit.mountY} ghost={ghost} twin={twin} />,
+      );
+    }
+  }
+
+  if (unit.ovenCavity && show.fixtures) {
+    out.push(
+      <OvenFront key="oven" width={unit.width - 24} height={unit.ovenCavity.h}
+                 at={[12, unit.ovenCavity.y, unit.depth]} ghost={ghost} />,
+    );
+  }
+
+  if (unit.microBay && show.fixtures) {
+    out.push(
+      <group key="micro" position={[0, unit.microBay.y, 0]}>
+        <Microwave width={unit.width - 40} height={unit.microBay.h - 30}
+                   depth={unit.depth - 60} ghost={ghost} />
+      </group>,
+    );
+  }
+
+  return out.length ? <>{out}</> : null;
 }
 
 /* --- one wall's run ------------------------------------------------------
@@ -260,6 +329,26 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
   /* How deep the island is. Its cabinets sit back to back inside it, so the
      depth is the island's own and not a cabinet's. */
   const depth = lay.island ? islandDepth(lay.wall, cfg) : 0;
+
+  /* The breakfast bar, read from the same place the price and the checks read
+     it. A drawing that works the overhang out for itself is a drawing that can
+     disagree with the invoice. */
+  const clear = { ...BAR_RULES, ...cfg };
+  const bar = lay.island ? islandBar(lay.wall) : NO_BAR;
+
+  /* The slab, and how far off centre it sits. The bar runs out on one side
+     only, so a top that is 400 wider is 200 further over as well: centring it
+     on the island puts 200 of overhang on the side with no stools. */
+  const slab = useMemo(
+    () => islandSlab(lay.wall.length, depth, cfg.benchOverhang ?? 20, bar),
+    [lay.wall.length, depth, bar.side, bar.depth, cfg.benchOverhang],
+  );
+
+  /* The benchtop is bought rather than made, so it has no board and no finish
+     to follow. Stone. The kickboard is cut from board like everything else, so
+     it takes the colour the project says it is. */
+  const benchCol = SURFACE.stone.color;
+  const kickCol = finishFor('kick', cfg)?.hex || '#4A453D';
 
   /* Benchtop segments, same rule as the elevation. */
   const bench = useMemo(() => {
@@ -290,88 +379,383 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
         const pick = (e) => { e.stopPropagation(); setSelected(sel ? null : p.item.uid); };
 
         if (unit.cavity) {
-          const colour = sel ? '#BBD3E6' : '#B9BDC0';
           const evt = {
             onClick: pick,
             onPointerOver: (e) => { e.stopPropagation(); setHovered(p); },
             onPointerOut: () => setHovered(null),
           };
-          if (unit.family.appliance === 'hood') {
-            return (
-              <group key={p.item.uid} position={[x, unit.mountY, 0]}>
-                <Hood unit={unit} colour={colour} ghost={ghost} {...evt} />
-              </group>
-            );
-          }
-          if (unit.family.appliance === 'cooktopOven') {
-            return (
-              <group key={p.item.uid} position={[x, unit.mountY, 0]}>
-                <CooktopOven unit={unit} colour={colour} ghost={ghost}
-                             benchHeight={cfg.benchHeight - unit.mountY} {...evt} />
-              </group>
-            );
-          }
+          const onBack = lay.island && p.side === 'back';
+          const inner = (
+            <Appliance unit={unit} ghost={ghost}
+                       benchHeight={cfg.benchHeight - unit.mountY} />
+          );
           return (
-            <mesh key={p.item.uid}
-                  position={[x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}
-                  {...evt}>
-              <boxGeometry args={[unit.width, unit.height, unit.depth]} />
-              <meshStandardMaterial color={colour} roughness={0.55}
-                                    transparent={ghost} opacity={ghost ? 0.18 : 1} />
-            </mesh>
+            <group key={p.item.uid} {...evt}>
+              {onBack ? (
+                <group position={[x + unit.width, unit.mountY, depth]} rotation={[0, Math.PI, 0]}>
+                  {inner}
+                </group>
+              ) : (
+                <group position={[x, unit.mountY, 0]}>{inner}</group>
+              )}
+              {/* Selection reads off a wire cage rather than off a tint. Tinting
+                  a fridge blue makes it stop being a fridge, which is the thing
+                  drawing them properly was for. */}
+              {sel && (
+                <lineSegments position={onBack
+                  ? [x + unit.width / 2, unit.mountY + unit.height / 2, depth - unit.depth / 2]
+                  : [x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}>
+                  <edgesGeometry args={[boxGeo(unit.width + 16, unit.height + 16, unit.depth + 16).box]} />
+                  <lineBasicMaterial color="#1D5E8C" />
+                </lineSegments>
+              )}
+            </group>
           );
         }
 
         return (
           <Cabinet key={p.item.uid} p={p} open={open} sel={sel} ghost={ghost} warn={warn}
-                   islandDepth={lay.island ? depth : 0}
+                   islandDepth={lay.island ? depth : 0} cfg={cfg} show={show}
+                   benchTop={cfg.benchHeight}
                    setHovered={setHovered} setSelected={setSelected} />
         );
       })}
 
       {/* kickboard, set back from the front face */}
       {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
-        <mesh key={`k${p.item.uid}`}
+        <mesh key={`k${p.item.uid}`} receiveShadow
               position={[p.x + p.unit.width / 2, cfg.kick / 2,
                 p.side === 'back' && depth
                   ? depth - p.unit.depth + 60
                   : p.unit.depth - 60]}
               onClick={noop}>
           <boxGeometry args={[p.unit.width, cfg.kick, 18]} />
-          <meshStandardMaterial color="#4A453D" roughness={0.9} />
+          <meshStandardMaterial color={kickCol} roughness={0.86} />
         </mesh>
       ))}
 
-      {/* An island's top is one slab over the whole footprint, overhanging on
-          every side, rather than a strip in front of one run. */}
-      {show.bench && lay.island && (
+      {/* The splashback: the wall between the benchtop and the wall cabinets.
+          It is what you see behind every base cabinet from standing height, and
+          leaving it as bare wall made a kitchen look unbuilt. */}
+      {show.bench && !lay.island && bench.length > 0 && (
         <mesh position={[lay.wall.length / 2,
+          (cfg.benchHeight + Math.min(cfg.wallMount, cfg.ceiling)) / 2, 9]}
+              receiveShadow>
+          <boxGeometry args={[lay.wall.length,
+            Math.max(0, Math.min(cfg.wallMount, cfg.ceiling) - cfg.benchHeight), 18]} />
+          {/* Cooler and glossier than the wall it is fixed to, so it reads as a
+              different material rather than as a change of mind about the
+              paint, and so it takes a highlight the plaster does not. */}
+          <meshStandardMaterial color="#D7DEDD" roughness={0.14} metalness={0.04} />
+        </mesh>
+      )}
+
+      {/* An island's top is one slab over the whole footprint, overhanging on
+          every side, rather than a strip in front of one run. A breakfast bar
+          runs it further out on one side, so the slab is placed off its own
+          centre rather than off the island's. */}
+      {show.bench && lay.island && (
+        <mesh position={[lay.wall.length / 2 + slab.shiftX,
           cfg.benchHeight - cfg.benchThk / 2,
-          depth / 2]}>
-          <boxGeometry args={[lay.wall.length + 2 * (cfg.benchOverhang ?? 20),
-            cfg.benchThk,
-            depth + 2 * (cfg.benchOverhang ?? 20)]} />
-          <meshStandardMaterial color="#C9C4BB" roughness={0.5} />
+          depth / 2 + slab.shiftZ]} castShadow receiveShadow>
+          <boxGeometry args={[slab.length, cfg.benchThk, slab.across]} />
+          <meshStandardMaterial color={benchCol} roughness={0.32} metalness={0.05} />
         </mesh>
       )}
 
       {/* benchtop, continuous with a front overhang */}
       {show.bench && !lay.island && bench.map((s, i) => (
-        <mesh key={i}
+        <mesh key={i} castShadow receiveShadow
               position={[s.x + s.w / 2, cfg.benchHeight - cfg.benchThk / 2, cfg.benchDepth / 2]}>
           <boxGeometry args={[s.w + 20, cfg.benchThk, cfg.benchDepth]} />
-          <meshStandardMaterial color="#C9C4BB" roughness={0.5} />
+          <meshStandardMaterial color={benchCol} roughness={0.32} metalness={0.05} />
         </mesh>
       ))}
+
+      {/* Stools at the bar, and whatever is holding it up. Both are scale
+          figures rather than things this app is designing: four stools drawn
+          along an island is the fastest way to see whether four people fit at
+          it, and a bracket drawn under the stone is the argument for a leg. */}
+      {show.bench && lay.island && bar.depth > 0 && show.fixtures && (
+        <>
+          {barSeatPositions(barSeats(lay.wall, cfg, clear, bar),
+            lay.wall.length, depth, bar, slab.over).map((s, i) => (
+            <group key={`s${i}`} position={[s.x, 0, s.z]} rotation={[0, s.rot, 0]}>
+              <Stool ghost={false} seatHeight={Math.round(cfg.benchHeight * 0.72)} />
+            </group>
+          ))}
+          {barBracketPositions(barBrackets(lay.wall, cfg, clear, bar),
+            lay.wall.length, depth, bar).map((b, i) => (
+            <group key={`b${i}`} position={[b.x, cfg.benchHeight - cfg.benchThk, b.z]}
+                   rotation={[0, b.rot, 0]}>
+              <BarBracket reach={Math.min(bar.depth, 320)} ghost={false} />
+            </group>
+          ))}
+        </>
+      )}
     </>
   );
+}
+
+/* --- the room -------------------------------------------------------------
+
+   The walls were one plane each and a window was a rectangle painted on it,
+   which reads as a picture hanging on a wall rather than as a hole in one.
+
+   So a wall is built as the pieces around its openings: over the head, under
+   the sill, and a pier either side. That is a real hole with a real reveal,
+   and once there is a hole the window frame and the sill have somewhere to
+   be. It is also the truthful drawing, because that is how the wall is
+   actually built.
+   ------------------------------------------------------------------------ */
+
+const WALL_THK = 90;
+const SKIRT = { height: 90, thickness: 18 };
+
+/**
+ * One wall and everything on it, and gone when you are behind it.
+ *
+ * A wall used to be a single sided plane, so the one you were standing behind
+ * simply was not drawn and you could see the kitchen through it. A wall with
+ * real thickness cannot do that trick: it has an outside face and that face
+ * blocks the view, so orbiting round an L put you nose to nose with the back
+ * of a slab.
+ *
+ * So the test is made explicit. The camera is put into the wall's own space
+ * and asked which side of it it is on. In front, the wall and its skirting and
+ * its window are all drawn. Behind, the whole lot disappears and you are
+ * looking into the room, which is the only useful thing to be looking at.
+ */
+function RoomWall({ wall, length, ceiling, wallCol, trimCol, show }) {
+  const ref = useRef();
+  const { camera, invalidate } = useThree();
+  const inFront = useRef(true);
+
+  useFrame(() => {
+    const g = ref.current;
+    if (!g) return;
+    const local = g.worldToLocal(camera.position.clone());
+    // The room is at +z from the wall's face, which sits just behind zero.
+    const want = local.z > 0;
+    if (want !== inFront.current) {
+      inFront.current = want;
+      g.visible = want;
+      invalidate();
+    }
+  });
+
+  return (
+    <group ref={ref}>
+      <WallShell wall={wall} length={length} ceiling={ceiling} colour={wallCol} />
+      <Skirting wall={wall} length={length} colour={trimCol} />
+      <WallFittings wall={wall} show={show} />
+    </group>
+  );
+}
+
+function WallShell({ wall, length, ceiling, colour, ghost }) {
+  const bands = useMemo(() => wallBands(wall, length, ceiling), [wall, length, ceiling]);
+
+  return (
+    <group>
+      {bands.map((b, i) => (
+        <mesh key={i} receiveShadow
+              position={[b.x + b.w / 2, b.y + b.h / 2, -WALL_THK / 2]}>
+          <boxGeometry args={[b.w, b.h, WALL_THK]} />
+          <meshStandardMaterial color={colour} roughness={0.96} metalness={0}
+                                transparent={ghost} opacity={ghost ? 0.2 : 1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * What is fixed to a wall: windows, doorways, power points, services.
+ *
+ * Every one of these is already in the model as an obstacle with a real
+ * position and size. Until now the 3D ignored all of them, so a design could
+ * put a wall cabinet over a meter box and the picture said nothing.
+ */
+function WallFittings({ wall, ghost, show }) {
+  if (!show.services) return null;
+  return (wall.obstacles || []).map((o) => {
+    const kind = obstacleKind(o.kind).id;
+    const at = [Number(o.x) || 0, Number(o.y) || 0, 0];
+    const w = Math.max(1, Number(o.w) || 0);
+    const h = Math.max(1, Number(o.h) || 0);
+
+    /* The reveal is the wall's thickness, not a number of this component's
+       own. A window frame set deeper than the wall it is in sits outside the
+       building, which is exactly what it looked like. */
+    const body = kind === 'window' ? <Window w={w} h={h} ghost={ghost} reveal={WALL_THK} />
+      : kind === 'door' ? <Doorway w={w} h={h} ghost={ghost} reveal={WALL_THK} />
+        : kind === 'power' ? <Outlet w={w} h={h} ghost={ghost} />
+          : kind === 'vent' ? <Vent w={w} h={h} ghost={ghost} />
+            : ['waste', 'water', 'gas'].includes(kind)
+              ? <Service kind={kind} w={w} h={h} ghost={ghost} />
+              /* A beam, a meter box or a pipe running the height of the wall.
+                 A plain block is the honest drawing of those: they are a volume
+                 in the way and nothing more. */
+              : <Box at={[w / 2, h / 2, 30]} size={[w, h, 60]} of="plaster" ghost={ghost} />;
+
+    return <group key={o.id ?? `${o.x}-${o.y}`} position={at}>{body}</group>;
+  });
+}
+
+/** Skirting along the bottom of a wall, broken where a doorway meets it. */
+function Skirting({ wall, length, colour }) {
+  return skirtingRuns(wall, length).map(({ x, w }, i) => (
+    <mesh key={i} position={[x + w / 2, SKIRT.height / 2, SKIRT.thickness / 2]} receiveShadow>
+      <boxGeometry args={[w, SKIRT.height, SKIRT.thickness]} />
+      <meshStandardMaterial color={colour} roughness={0.7} />
+    </mesh>
+  ));
+}
+
+/**
+ * The floor.
+ *
+ * Boards rather than a plane, because a plane of one colour gives the eye
+ * nothing to judge distance by, and the whole reason for standing a person in
+ * the room is to be able to judge distance. Drawn as long thin boxes with a
+ * hairline between them, which costs one geometry and reads at any angle.
+ */
+function Floor({ span, colour }) {
+  const board = 190;
+  /* Boards over the room and a good margin round it, then flat ground out to
+     the horizon under that.
+
+     Both halves earn their place. Boards only, stopping at the edge of the
+     room, read as a rug the kitchen is standing on with sky underneath.
+     Ground only, out to the horizon, fills the whole picture with one colour
+     and puts floorboards outside the window. Boards where the room is and
+     quiet ground beyond is what a room in a house actually looks like. */
+  const w = span.x + 9000;
+  const d = span.z + 10000;
+  const n = Math.min(140, Math.ceil(d / board));
+
+  return (
+    <group position={[span.x / 2, 0, span.z / 2 + 300]}>
+      {/* Plain floor out to the horizon under the boards, in the same colour,
+          so where the boards stop there is no edge to see: just grain near the
+          room and flat colour away from it, going quiet in the fog. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -14, 0]}>
+        <planeGeometry args={[70000, 70000]} />
+        <meshStandardMaterial color={shade(colour, 0.94)} roughness={1} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -6, 0]} receiveShadow>
+        <planeGeometry args={[w, d]} />
+        <meshStandardMaterial color={colour} roughness={1} />
+      </mesh>
+      {Array.from({ length: n }, (_, i) => (
+        <mesh key={i} receiveShadow
+              position={[0, -1, -d / 2 + (i + 0.5) * (d / n)]}>
+          <boxGeometry args={[w, 4, (d / n) - 6]} />
+          <meshStandardMaterial color={i % 3 === 0 ? colour : shade(colour, i % 2 ? 0.95 : 1.05)}
+                                roughness={0.68} metalness={0.02} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** A colour nudged lighter or darker, so the floor has grain without a texture. */
+function shade(hex, k) {
+  const c = new THREE.Color(hex);
+  c.multiplyScalar(k);
+  return `#${c.getHexString()}`;
+}
+
+/* ---------------------------------------------------------------------------
+   The background, and what the room can see of itself.
+
+   Two separate things that both used to be one flat colour.
+
+   The background is what is behind the kitchen when you orbit outside it. A
+   single flat fill gives no horizon, so a room floating in it has no up and no
+   ground: pulling back reads as the kitchen shrinking rather than as you
+   stepping away. A gradient dome fixes that for the cost of one sphere.
+
+   The environment is what the shiny things reflect. Without one, a chrome tap
+   reflects nothing and renders as a flat grey stick, and stainless steel and
+   matte plastic look identical. RoomEnvironment ships with three and needs no
+   file fetched, which matters here: the app has no server, so an asset is a
+   request that may not come back.
+   --------------------------------------------------------------------------- */
+
+function Sky({ reduced }) {
+  const geo = useMemo(() => new THREE.SphereGeometry(46000, 32, 20), []);
+  const mat = useMemo(() => new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {
+      top: { value: new THREE.Color('#DCE4EC') },
+      middle: { value: new THREE.Color('#F2EFE9') },
+      bottom: { value: new THREE.Color('#C6BFB4') },
+    },
+    vertexShader: `
+      varying float vH;
+      void main() {
+        vec4 world = modelMatrix * vec4(position, 1.0);
+        vH = normalize(world.xyz).y;
+        gl_Position = projectionMatrix * viewMatrix * world;
+      }`,
+    fragmentShader: `
+      uniform vec3 top; uniform vec3 middle; uniform vec3 bottom;
+      varying float vH;
+      void main() {
+        /* Two ramps meeting at the horizon, so the ground half is not just the
+           sky upside down. */
+        vec3 c = vH > 0.0 ? mix(middle, top, pow(vH, 0.7))
+                          : mix(middle, bottom, pow(-vH, 0.6));
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  }), []);
+
+  if (reduced) return null;
+  return <mesh geometry={geo} material={mat} frustumCulled={false} renderOrder={-1} />;
+}
+
+/**
+ * A reflection environment, built once and shared.
+ *
+ * Generated rather than loaded. The scene it is generated from is a lit box,
+ * which is exactly what a kitchen is, so what a tap reflects is roughly what
+ * it would reflect in the room.
+ */
+function Environment({ reduced }) {
+  const { gl, scene } = useThree();
+
+  useEffect(() => {
+    if (reduced) { scene.environment = null; return undefined; }
+    const pmrem = new THREE.PMREMGenerator(gl);
+    const room = new RoomEnvironment();
+    const target = pmrem.fromScene(room, 0.04);
+    scene.environment = target.texture;
+    scene.environmentIntensity = 0.55;
+    return () => {
+      scene.environment = null;
+      target.dispose();
+      room.dispose?.();
+      pmrem.dispose();
+    };
+  }, [gl, scene, reduced]);
+
+  return null;
 }
 
 /* --- scene --------------------------------------------------------------- */
 
 function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset, nonce,
                 eye, reduced, warnMap, open = 0, silhouette }) {
-  const wallCol = cssVar('--sunken', '#EAE7E1');
+  /* The room's own surfaces. These do not follow the theme: a painted wall is
+     off white in a dark room too, and a floor that goes black when the app
+     does is a floor nobody can judge a walkway against. Only the sky behind
+     the room follows the theme, because that is the app's background rather
+     than part of the kitchen. */
+  const wallCol = '#E3DED4';
+  const trimCol = '#FAF8F4';
+  const floorCol = '#B98D57';
 
   /* One wall, or the joined run of an L or a U. Each entry carries where its
      corner is and how far it is turned, worked out by the room layout. The
@@ -427,9 +811,41 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
 
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[span.x * 0.6, 3400, 2600]} intensity={1.1} />
-      <directionalLight position={[-1800, 1500, -1400]} intensity={0.4} />
+      {/* Light, in the three parts a room actually has.
+
+          A key from high and to one side, which is what casts the shadows that
+          tell you a cabinet is standing on the floor rather than floating over
+          it. A fill from the opposite side so the shadow side is not black. A
+          bounce off the floor, which is most of what lights the underside of a
+          wall cabinet and the inside of an open one. Flat ambient alone gave a
+          picture with no depth at all: every surface the same value, so an
+          800 wide door and a 400 wide one were the same shape. */}
+      {/* Distance haze. It starts well past anything in the kitchen, so the
+          cabinets are never touched by it, and it gives the floor a horizon to
+          run out to instead of an edge to stop at. The sky is exempt: fogging
+          the dome as well leaves one flat colour and no horizon at all. */}
+      <fog attach="fog" args={['#E9E4DA', 11000, 38000]} />
+
+      <hemisphereLight args={['#F2F5F8', '#CFCCC6', 0.5]} />
+      <directionalLight
+        position={[span.x * 0.55 + 2200, 4200, span.z + 3400]}
+        intensity={1.5} color="#FFF6E8"
+        castShadow={!reduced}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0006}
+        shadow-normalBias={12}
+        shadow-camera-near={100}
+        shadow-camera-far={16000}
+        shadow-camera-left={-(span.x + 4000)}
+        shadow-camera-right={span.x + 4000}
+        shadow-camera-top={span.z + 5000}
+        shadow-camera-bottom={-(span.z + 3000)}
+      />
+      <directionalLight position={[-2600, 2200, -1800]} intensity={0.35} color="#DDE6F2" />
+      <pointLight position={[span.x / 2, 260, span.z / 2 + 900]} intensity={0.25}
+                  distance={6000} decay={2} color="#F0E6D4" />
+
+      <Sky reduced={reduced} />
 
       <OrbitControls
         makeDefault enableDamping dampingFactor={0.09}
@@ -445,33 +861,34 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
              ? Math.max(1400, framed.size * 3.2) : distance}
            eye={eye} run={span.x} />
 
-      {/* floor */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[span.x / 2, 0, span.z / 2 + 300]}>
-        <planeGeometry args={[span.x + 2400, span.z + 5000]} />
-        <meshStandardMaterial color={wallCol} roughness={1} />
-      </mesh>
+      <Floor span={span} colour={floorCol} />
 
-      {/* The walls the cabinets stand against, one per run.
-
-          Each is a plane facing into the room and drawn on one side only, so
-          the wall you are standing behind disappears instead of hiding the
-          kitchen. In an L that is the difference between seeing the corner
-          and looking at the back of a slab. */}
-      {/* An island has nothing behind it. That is what makes it an island, so
-          it does not get a wall drawn against its back. */}
+      {/* The walls the cabinets stand against, one per run, built as the
+          pieces around their openings so a window is a hole rather than a
+          picture. An island has nothing behind it, which is what makes it an
+          island, so it gets no wall. */}
       {show.walls && runs.filter((r) => !r.lay.island).map((r, i) => (
         <group key={i} position={[r.origin[0], 0, r.origin[1]]} rotation={[0, r.rot, 0]}>
-          <mesh position={[r.lay.wall.length / 2, cfg.ceiling / 2, -20]}>
-            <planeGeometry args={[r.lay.wall.length + 400, cfg.ceiling]} />
-            <meshStandardMaterial color={wallCol} roughness={1} side={THREE.FrontSide} />
-          </mesh>
+          <RoomWall wall={r.lay.wall} length={r.lay.wall.length + 400}
+                    ceiling={cfg.ceiling} wallCol={wallCol} trimCol={trimCol} show={show} />
         </group>
       ))}
 
+      {/* The ceiling, drawn from one side only so it is there when you look up
+          from inside and gone when you look down from outside. Without it an
+          eye level walk is a room with the sky where the ceiling should be. */}
+      {show.walls && (
+        <mesh rotation={[Math.PI / 2, 0, 0]}
+              position={[span.x / 2, cfg.ceiling, span.z / 2 + 300]}>
+          <planeGeometry args={[span.x + 4800, span.z + 6000]} />
+          <meshStandardMaterial color="#F7F6F3" roughness={1} side={THREE.FrontSide} />
+        </mesh>
+      )}
+
       {!reduced && (
-        <ContactShadows position={[span.x / 2, 2, span.z / 2 + 300]}
+        <ContactShadows position={[span.x / 2, 3, span.z / 2 + 300]}
                         scale={Math.max(span.x, span.z, 3000) * 2}
-                        blur={2.6} opacity={0.3} far={1200} resolution={1024} color="#000000" />
+                        blur={2.2} opacity={0.42} far={900} resolution={1024} color="#3A332A" />
       )}
 
       {runs.map((r, i) => (
@@ -524,10 +941,19 @@ export default function Kitchen3D(props) {
       frameloop="demand"
       dpr={props.reduced ? 1 : [1, 2]}
       camera={{ position: [2600, 2600, 3600], fov: 35, near: 10, far: 60000 }}
-      gl={{ antialias: !props.reduced }}
+      /* Real shadows, and film response rather than raw linear output. Without
+         the tone mapping every bright surface clips to flat white, which is
+         what made a white kitchen look like cut paper. */
+      shadows={props.reduced ? false : { type: THREE.PCFSoftShadowMap }}
+      gl={{
+        antialias: !props.reduced,
+        toneMapping: THREE.ACESFilmicToneMapping,
+        toneMappingExposure: 0.95,
+      }}
       onPointerMissed={() => props.setSelected(null)}
       style={{ background: bg }}
     >
+      <Environment reduced={props.reduced} />
       <Room {...props} warnMap={warnMap} />
     </Canvas>
   );

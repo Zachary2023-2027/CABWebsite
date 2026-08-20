@@ -72,7 +72,13 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
     <group position={centre}>
       <mesh
         geometry={geo}
-        castShadow={false}
+        /* Every panel casts and takes a shadow. Without this a kitchen is lit
+           flat: a wall cabinet throws nothing onto the splashback under it, so
+           it reads as painted on the wall rather than hanging off it, and the
+           whole picture loses its depth. Costs nothing where the canvas has no
+           shadow map, which is the single cabinet viewer. */
+        castShadow
+        receiveShadow
         onPointerOver={(e) => { e.stopPropagation(); onHover(p); }}
         onPointerOut={(e) => { e.stopPropagation(); onHover(null); }}
         onClick={(e) => { e.stopPropagation(); onSelect(p); }}

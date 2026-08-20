@@ -273,10 +273,19 @@ export function benchSchedule(runs, P) {
  * it would be as a standard width top, which is the only honest way to put a
  * slab against a rate quoted per metre of a normal benchtop.
  */
-export function islandBench(wall, depth, P) {
+export function islandBench(wall, depth, P, bar = { side: 'none', depth: 0 }) {
   const over = Number(P.benchOverhang) || 0;
-  const length = round1(wall.length + 2 * over);
-  const across = round1(depth + 2 * over);
+
+  /* The breakfast bar is more of the same slab, not a second piece. It runs
+     past the carcass on one side only, so it lengthens the top across that
+     one axis and leaves the other alone. Adding it to both, or billing it as
+     its own piece, is how you end up ordering a top that will not fit the
+     island it is going on. */
+  const along = bar.side === 'left' || bar.side === 'right' ? bar.depth : 0;
+  const across_ = bar.side === 'front' || bar.side === 'back' ? bar.depth : 0;
+
+  const length = round1(wall.length + 2 * over + along);
+  const across = round1(depth + 2 * over + across_);
 
   return [{
     index: 1,
@@ -285,6 +294,9 @@ export function islandBench(wall, depth, P) {
     thickness: round1(P.benchThk),
     overhangs: 4,
     island: true,
+    /* Which side runs out past the carcass and how far, so the drawing and
+       the print pack say the same thing about it as the price does. */
+    bar: bar.depth > 0 ? { side: bar.side, depth: bar.depth } : null,
     /* A slab this wide is not one metre of benchtop per metre of length. The
        area over a standard width is what it really costs.
 

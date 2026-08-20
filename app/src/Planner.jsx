@@ -8,14 +8,15 @@ import { Advanced, OptimiseResult } from './Advanced.jsx';
 import { Board, Choice, Close, Num, Pick, Section, Warn } from './Fields.jsx';
 import { RUNNERS } from './hardware.js';
 import { OBSTACLE_LIST, natureOf, newObstacle, obstacleKind } from './obstacles.js';
-import { round1 } from './mm.js';
+import { fmt, round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  ROOM_SHAPES, WALL_KINDS, floorPlan, isIsland, islandAt, islandDepth, layoutFor,
-  money, placeOnRun, roomLayout, roomWallIds, uid, unitServices, unitWarnings,
-  wallWarnings,
+  BAR_SIDES, ROOM_SHAPES, WALL_KINDS, barBrackets, barSeats, barSpan, floorPlan,
+  isIsland, islandAt, islandBar, islandDepth, layoutFor, money, placeOnRun,
+  roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
+import { BAR_RULES } from './bar.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -40,6 +41,7 @@ const G = {
   bin: <><rect x="4" y="3" width="16" height="18" /><path d="M8 7h8l-1 11H9z" /><path d="M9.5 5h5" /></>,
   cooktopOven: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><circle cx="8" cy="6.5" r="1.6" /><circle cx="16" cy="6.5" r="1.6" /><path d="M3 10h18" /><rect x="6" y="13" width="12" height="5" /></>,
   hood: <><path d="M3 20h18l-4-7H7z" /><path d="M9.5 13V4h5v9" /><path d="M6 20v1M18 20v1" /></>,
+  washer: <><rect x="3" y="3" width="18" height="18" strokeDasharray="2 2" /><path d="M3 7.5h18" /><circle cx="12" cy="14.5" r="4.5" /><circle cx="12" cy="14.5" r="2" /><path d="M5 5.2h5" /></>,
   filler: <><rect x="10" y="3" width="4" height="18" /></>,
 };
 
@@ -51,6 +53,22 @@ const Glyph = ({ name, tint }) => (
        stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"
        aria-hidden="true">{G[name] || G.door1}</svg>
 );
+
+/* What the 3D can draw, and what each one is for. The note matters: half of
+   these are things you turn off to see past, and half are things you turn on
+   to check something, and the name alone does not say which. */
+const SHOW_ITEMS = [
+  ['walls', 'Walls', 'The room around the kitchen'],
+  ['bench', 'Benchtop', 'And the splashback behind it'],
+  ['wallCabs', 'Wall cabinets', 'Off to see the bench under them'],
+  ['appliances', 'Appliances', 'Fridge, oven, dishwasher, machine'],
+  ['fixtures', 'Fixtures', 'Sink, tap, cooktop, stools'],
+  ['handles', 'Handles', 'Where your knuckles go'],
+  ['services', 'Services', 'Windows, doors, power, pipes'],
+  ['plumbing', 'Plumbing under the sink', 'The trap that argues with a drawer'],
+  ['arcs', 'Door swing', 'How far each door actually opens'],
+  ['person', 'Person', 'Somebody 1700 tall, for scale'],
+];
 
 /* --- picker --------------------------------------------------------------- */
 
@@ -369,6 +387,21 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [eye, setEye] = useState(false);
   const [show, setShow] = useState({
     walls: true, bench: true, wallCabs: true, appliances: true,
+    /* What is in a cabinet rather than part of it: the sink, the oven, the
+       microwave, the stools at the bar. On by default, because a sink base
+       that looks like a cupboard is the thing this is for. */
+    fixtures: true,
+    /* Handles. Most of what a kitchen looks like from across the room, and the
+       first thing to turn off when you are looking at the carcasses. */
+    handles: true,
+    /* What comes out of the walls: windows, doorways, power points, pipes.
+       The model has had all of it as obstacles all along and the 3D drew none
+       of it. */
+    services: true,
+    /* The trap and the stop taps under the sink. Off by default: it is the
+       volume that argues with a drawer box, which is worth seeing when you go
+       looking for it and is in the way the rest of the time. */
+    plumbing: false,
     arcs: false, person: false,
   });
   /* How far the fronts are open, 0 to 1. A kitchen drawn shut is a wall of
@@ -376,6 +409,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
      and whether a door can be used at all. */
   const [open, setOpen] = useState(0);
   const [keysOpen, setKeysOpen] = useState(false);
+  const [showOpen, setShowOpen] = useState(false);
   const [selObstacle, setSelObstacle] = useState(null);
   const elevRef = useRef(null);
   /* Which side of an island you are working on. Meaningless on a wall, and
@@ -882,16 +916,32 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                 onClick={() => { setEye((e) => !e); setNonce((n) => n + 1); }}
                 title="Stand in the room at 1600. Walk with W A S D">Eye</button>
         <span className="vp-toolbar__sep" />
-        {[['walls', 'Walls'], ['bench', 'Benchtop'], ['wallCabs', 'Wall cabs'], ['appliances', 'Appliances'],
-          ['arcs', 'Door swing'], ['person', 'Person']].map(([k, label]) => (
-          <button key={k} className="seg__item" aria-pressed={show[k]}
-                  onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}>{label}</button>
-        ))}
+        {/* There are ten of these now, and ten across the top of the view is
+            two rows of buttons standing on the kitchen. Behind one control,
+            they are a list you read down instead. */}
+        <button className="seg__item" aria-pressed={showOpen}
+                aria-expanded={showOpen} onClick={() => setShowOpen((o) => !o)}
+                title="What is drawn in the view">Show</button>
         <span className="vp-toolbar__sep" />
         <button className="seg__item" disabled={!selected}
                 onClick={() => { setEye(false); setPreset('Frame'); setNonce((n) => n + 1); }}
                 title="Move the camera to the selected cabinet">Frame</button>
       </div>
+
+      {showOpen && (
+        <div className="vp-sheet float-tl show-sheet" role="group" aria-label="What is drawn">
+          {SHOW_ITEMS.map(([k, label, note]) => (
+            <button key={k} className="show-row" aria-pressed={show[k]}
+                    onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}>
+              <span className={`show-tick ${show[k] ? 'is-on' : ''}`} aria-hidden="true" />
+              <span className="show-text">
+                <span className="show-name">{label}</span>
+                <span className="show-note">{note}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="vp-toolbar float-bl open-control">
         <label className="field__label" htmlFor="open-fronts">Open</label>
@@ -1211,6 +1261,67 @@ function Obstacles({ wall, selected, onSelect, onAdd, onChange, onRemove }) {
    is here now, next to the list of them.
    --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   The breakfast bar.
+
+   One side and one number. Everything else about it follows: how much top you
+   are buying, how many stools fit, whether it holds itself up and how much
+   floor has to be left behind it. All of that is worked out in the model and
+   said back here, so this panel is two controls and a sentence rather than a
+   form full of things to get wrong.
+   --------------------------------------------------------------------------- */
+
+function BarFields({ wall, project, onChange }) {
+  const clear = { ...BAR_RULES, ...project.cfg };
+  const bar = islandBar(wall);
+  const on = bar.depth > 0;
+
+  const seats = barSeats(wall, project.cfg, clear, bar);
+  const brackets = barBrackets(wall, project.cfg, clear, bar);
+  const span = barSpan(wall, project.cfg, bar);
+
+  /* Turning it on with no depth typed is a bar of nothing, which the model
+     reads as no bar at all. So picking a side starts it at a depth you can
+     actually sit at, and picking None keeps the depth for when you turn it
+     back on. */
+  const setSide = (side) => onChange(wall.id, {
+    bar: side === 'none' ? null
+      : { side, depth: bar.depth > 0 ? bar.depth : clear.barKneeDepth },
+  });
+
+  return (
+    <>
+      <div className="settings-grid">
+        <Choice label="Breakfast bar" value={bar.side}
+                options={BAR_SIDES.map((s) => ({ value: s.id, label: s.name }))}
+                onChange={setSide} />
+        {on && (
+          <Num label="Sticks out" value={bar.depth} min={0} max={1200}
+               onChange={(v) => onChange(wall.id, {
+                 bar: v == null || v <= 0 ? null : { side: bar.side, depth: v },
+               })} />
+        )}
+      </div>
+
+      {on && (
+        <p className="note">
+          {seats > 0
+            ? `${seats} ${seats === 1 ? 'stool fits' : 'stools fit'} along ${fmt(span)}mm at ${clear.barSeatWidth} each. `
+            : `Not enough along ${fmt(span)}mm for a stool at ${clear.barSeatWidth}. `}
+          {bar.depth < clear.barKneeDepth
+            ? `Under ${clear.barKneeDepth} you cannot get knees under it. `
+            : ''}
+          {brackets > 0
+            ? `Past ${clear.barMaxUnsupported} it needs holding up, so ${brackets} brackets are on the order list. `
+            : `It carries itself at up to ${clear.barMaxUnsupported}. `}
+          Leave {clear.barStoolSpace}mm of floor behind it for the stools. Every
+          one of those figures is yours to set, under The figures on Checks.
+        </p>
+      )}
+    </>
+  );
+}
+
 function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSelect }) {
   const roomIds = roomWallIds(project);
   const walls = project.walls.filter((w) => !isIsland(w));
@@ -1256,6 +1367,8 @@ function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSe
                  })} />
           </div>
         )}
+
+        {island && <BarFields wall={w} project={project} onChange={onChange} />}
 
         {island && (
           <p className="note">

@@ -226,6 +226,18 @@ export function orderList(project, prices, deps) {
     }));
   }
 
+  /* Breakfast bar supports. They come through allFittings like everything
+     else, so this line and the project total are counting the same brackets
+     rather than each working out how many an overhang needs. */
+  const brackets = count('barBracket');
+  if (brackets) {
+    hardware.push(row({
+      what: 'Breakfast bar brackets', needed: brackets, unit: 'each',
+      packSize: 1, each: prices.barBracket,
+      note: 'Or legs, or corbels. Whatever you are holding the overhang up with.',
+    }));
+  }
+
   /* --- everything else ---------------------------------------------------- */
 
   const other = [];

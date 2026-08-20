@@ -11,7 +11,8 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { CLEARANCE_DEFAULTS, byLevel, runChecks, summarise, walkways } from './checks.js';
 import {
-  allParts, floorPlan, layoutFor, nestCfg, roomOffsets, unitWarnings, wallWarnings,
+  allParts, barBrackets, barSeats, floorPlan, layoutFor, nestCfg, roomOffsets,
+  unitWarnings, wallWarnings,
 } from './project.js';
 import { nestProject } from './nesting.js';
 import { Num } from './Fields.jsx';
@@ -19,7 +20,7 @@ import { fmt } from './mm.js';
 
 const DEPS = {
   floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
-  unitWarnings, wallWarnings,
+  unitWarnings, wallWarnings, barSeats, barBrackets,
 };
 
 const LEVEL_NAME = {
@@ -41,6 +42,11 @@ const SETTINGS = [
   ['reachHeight', 'Reach without standing on anything'],
   ['doorMinWidth', 'Narrowest door worth hanging'],
   ['doorMinSwing', 'Door has to open at least, degrees'],
+  ['barKneeDepth', 'Breakfast bar, knees under it'],
+  ['barSeatWidth', 'Breakfast bar, elbow room per stool'],
+  ['barMaxUnsupported', 'Breakfast bar, unsupported overhang'],
+  ['barBracketSpacing', 'Breakfast bar, bracket spacing'],
+  ['barStoolSpace', 'Breakfast bar, floor behind a stool'],
 ];
 
 export default function Checks({ project, onCfg }) {
@@ -114,7 +120,10 @@ export default function Checks({ project, onCfg }) {
                   <td className="num">{fmt(p.gap)}</td>
                   <td className="num">{fmt(p.overlap)}</td>
                   <td>{p.gap < cfg.walkwayMin ? 'Too tight'
-                    : p.gap < cfg.walkwayComfortable ? 'One person' : 'Two can pass'}</td>
+                    : p.gap < cfg.walkwayComfortable ? 'One person' : 'Two can pass'}
+                    {/* Measured to the edge of the slab, not the carcass, so
+                        say which gap this is. */}
+                    {p.bar && <span className="check-where">Behind a breakfast bar</span>}</td>
                 </tr>
               ))}
             </tbody>

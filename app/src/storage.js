@@ -131,6 +131,10 @@ export function hydrate(raw) {
        walkway to it cannot be measured without it. */
     ...(w.at && Number.isFinite(Number(w.at.x)) && Number.isFinite(Number(w.at.y))
       ? { at: { x: Math.max(0, Number(w.at.x)), y: Math.max(0, Number(w.at.y)) } } : {}),
+    /* The breakfast bar. A side nobody recognises or an overhang that is not
+       a number is no bar rather than a broken one, and the island still
+       opens. */
+    ...(cleanBar(w.bar) ? { bar: cleanBar(w.bar) } : {}),
     length: Number(w.length) > 0 ? Number(w.length) : 3600,
     /* Cleaned rather than filtered. The old test threw away anything with a
        bad number in it, which quietly deleted a window because its height
@@ -277,6 +281,21 @@ function cleanCfg(cfg) {
     out[k] = v;
   }
   return out;
+}
+
+/* The breakfast bar on an island: one side and one number, both checked.
+
+   The sides are listed here rather than imported from the model, because this
+   file's job is to decide what an untrusted file is allowed to contain and
+   that list has to be a closed one it owns. */
+const BAR_SIDE_NAMES = new Set(['front', 'back', 'left', 'right']);
+
+function cleanBar(bar) {
+  if (!bar || typeof bar !== 'object') return null;
+  if (!BAR_SIDE_NAMES.has(bar.side)) return null;
+  const depth = Number(bar.depth);
+  if (!Number.isFinite(depth) || depth <= 0) return null;
+  return { side: bar.side, depth: Math.min(1200, depth) };
 }
 
 /* Per cabinet settings are free form, because a family decides what it reads.

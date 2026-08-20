@@ -8,6 +8,8 @@ const LABEL = {
   hinge: 'Hinge, 110 degree, full overlay',
   runnerPair: 'Drawer runner pair, full extension',
   handle: 'Handle',
+  binRunner: 'Bin runner',
+  barBracket: 'Breakfast bar bracket or leg',
 };
 
 /* Anything the derived list cannot know about: the handles you actually

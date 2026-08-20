@@ -35,6 +35,7 @@
    It cannot know whether the number is right.
    =========================================================================== */
 
+import { BAR_RULES } from './bar.js';
 import { round1, whole } from './mm.js';
 import { FULL_SWING, degrees, largestSwing } from './motion.js';
 import { natureOf, obstacleKind, overlaps } from './obstacles.js';
@@ -74,9 +75,19 @@ export const CLEARANCE_DEFAULTS = {
   doorMinWidth: 200,
   /* A door that cannot open this far is not usable. */
   doorMinSwing: 75,
+
+  /* The breakfast bar figures, from the one place that holds them. The model
+     needs the same numbers to count brackets, so they are not this file's to
+     own. */
+  ...BAR_RULES,
 };
 
 export const LEVELS = ['error', 'warn', 'note'];
+
+/** A bar side, said the way you would say it out loud. */
+const BAR_SIDE_NAME = {
+  front: 'front', back: 'back', left: 'left end', right: 'right end',
+};
 
 const finding = (level, rule, text, where = null) => ({ level, rule, text, where });
 
@@ -177,9 +188,20 @@ export function facesOf(entry, cfg) {
   if (!entry.island) return [wallFace(entry, runDepth(entry, cfg))];
 
   const depth = entry.depth ?? runDepth(entry, cfg);
+
+  /* A breakfast bar is what you actually walk into. The carcass stops where it
+     stops, but the top runs on past it at chest height, and measuring the
+     walkway to the cabinet rather than to the edge of the slab reports a gap
+     nobody can use.
+
+     Only one side carries it, so the other keeps the carcass face. */
+  const bar = entry.bar || { side: 'none', depth: 0 };
+  const out = bar.side === 'front' ? -bar.depth : 0;
+  const back = depth + (bar.side === 'back' ? bar.depth : 0);
+
   return [
-    { ...wallFace(entry, 0), name: `${entry.wall.name}, front` },
-    { ...wallFace(entry, depth), name: `${entry.wall.name}, back` },
+    { ...wallFace(entry, out), name: `${entry.wall.name}, front`, bar: bar.side === 'front' },
+    { ...wallFace(entry, back), name: `${entry.wall.name}, back`, bar: bar.side === 'back' },
   ];
 }
 
@@ -200,6 +222,9 @@ export function walkways(project, roomEntries) {
         between: [faces[i].name, faces[j].name],
         gap: facing.gap,
         overlap: facing.overlap,
+        /* A gap somebody sits in is not the same gap as one they walk through:
+           it has to take a stool as well. */
+        bar: !!(faces[i].bar || faces[j].bar),
       });
     }
   }
@@ -223,6 +248,9 @@ export function runChecks(project, deps) {
     floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
     unitWarnings, wallWarnings,
   } = deps;
+  /* barSeats and barBrackets stay on deps rather than being pulled out here,
+     because they are read inside the bar loop below and taking them apart
+     twice reads worse than leaving them where the rest of the model is. */
 
   const cfg = project.cfg;
   const clear = { ...CLEARANCE_DEFAULTS, ...project.cfg };
@@ -280,6 +308,48 @@ export function runChecks(project, deps) {
     } else {
       out.push(finding('note', 'walkway',
         `${whole(w.gap)}mm between ${a} and ${b}.`, `${a} to ${b}`));
+    }
+
+    /* Sitting takes more room than walking. A gap wide enough to pass through
+       can still be one where the stool has to be pushed in before anybody can
+       get past, and that is worth knowing before the stools arrive. */
+    if (w.bar && w.gap >= clear.walkwayMin && w.gap < clear.barStoolSpace) {
+      out.push(finding('warn', 'bar',
+        `${whole(w.gap)}mm behind the breakfast bar. Under ${clear.barStoolSpace} a stool has to be pushed in before anyone can get past it.`,
+        `${a} to ${b}`));
+    }
+  }
+
+  /* --- the breakfast bar --------------------------------------------------- */
+
+  for (const entry of entries) {
+    if (!entry.island) continue;
+    const bar = entry.bar || { side: 'none', depth: 0 };
+    if (bar.depth <= 0) continue;
+
+    const where = entry.wall.name;
+    const side = BAR_SIDE_NAME[bar.side] || bar.side;
+
+    if (bar.depth < clear.barKneeDepth) {
+      out.push(finding('warn', 'bar',
+        `The ${whole(bar.depth)}mm overhang on the ${side} is under the ${clear.barKneeDepth} it takes to get knees under it. That is a wide benchtop rather than somewhere to sit.`,
+        where));
+    }
+
+    const seats = deps.barSeats(entry.wall, cfg, clear, bar);
+    out.push(seats > 0
+      ? finding('note', 'bar',
+        `${seats} ${seats === 1 ? 'stool fits' : 'stools fit'} at the ${side}, at ${clear.barSeatWidth}mm each.`,
+        where)
+      : finding('warn', 'bar',
+        `Nothing like enough along the ${side} for one stool at ${clear.barSeatWidth}mm.`,
+        where));
+
+    const brackets = deps.barBrackets(entry.wall, cfg, clear, bar);
+    if (brackets > 0) {
+      out.push(finding('note', 'bar',
+        `${whole(bar.depth)}mm is past the ${clear.barMaxUnsupported} this top carries on its own, so it wants ${brackets} brackets or legs. They are on the order list.`,
+        where));
     }
   }
 

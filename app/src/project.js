@@ -21,7 +21,8 @@ import {
   baseRuns, benchLength, benchSchedule, endPanelParts, islandBench, islandKickRuns,
   kickParts, usableLength,
 } from './runs.js';
-import { assertMm } from './mm.js';
+import { BAR_RULES } from './bar.js';
+import { assertMm, round1 } from './mm.js';
 import { finishFor, roleOf } from './finishes.js';
 import { obstacleNote, overlaps } from './obstacles.js';
 
@@ -155,6 +156,97 @@ export const islandAt = (wall, cfg) => ({
     : (cfg?.baseDepth ?? 560) + (cfg?.walkwayComfortable ?? 1200),
 });
 
+/* --- the breakfast bar ----------------------------------------------------
+
+   An island's top can run on past its carcass far enough to sit at. That is
+   one number and one choice of side, and everything else about a breakfast
+   bar follows from them: how much top you are buying, how many stools fit,
+   whether it holds itself up, and how much floor has to be left behind it for
+   somebody to pull a stool out and sit down.
+
+   It is a property of the island rather than of any cabinet, because it is the
+   top that overhangs and the top belongs to the island. Nothing is built here:
+   no carcass changes, no extra parts. The slab gets bigger and the room gets
+   smaller, and both of those are already things this model knows how to say.
+   -------------------------------------------------------------------------- */
+
+export const BAR_SIDES = [
+  { id: 'none', name: 'None' },
+  { id: 'front', name: 'Front' },
+  { id: 'back', name: 'Back' },
+  { id: 'left', name: 'Left end' },
+  { id: 'right', name: 'Right end' },
+];
+
+const BAR_SIDE_IDS = new Set(BAR_SIDES.map((s) => s.id));
+
+/** No bar. One object, so a project without one is not a special case. */
+export const NO_BAR = Object.freeze({ side: 'none', depth: 0 });
+
+/**
+ * The breakfast bar on an island, as the model sees it.
+ *
+ * A side nobody recognises, or an overhang of nothing, is no bar at all
+ * rather than a broken one.
+ *
+ * @returns {{side:string, depth:number}}
+ */
+export function islandBar(wall) {
+  const raw = wall?.bar;
+  const side = BAR_SIDE_IDS.has(raw?.side) ? raw.side : 'none';
+  const depth = Number.isFinite(Number(raw?.depth)) ? Math.max(0, Number(raw.depth)) : 0;
+  if (side === 'none' || depth <= 0) return NO_BAR;
+  return { side, depth: round1(depth) };
+}
+
+/** True when a side of an island carries the bar. */
+export const barOn = (bar, side) => bar.side === side && bar.depth > 0;
+
+/**
+ * How long the bar edge is, which is what the stools and the brackets are
+ * spaced along.
+ *
+ * A bar on the front or the back runs the island's length. One on an end runs
+ * its depth. Getting these the wrong way round on a long shallow island is the
+ * difference between six stools and two.
+ */
+export function barSpan(wall, cfg, bar = islandBar(wall)) {
+  if (bar.depth <= 0) return 0;
+  return bar.side === 'left' || bar.side === 'right'
+    ? islandDepth(wall, cfg)
+    : Number(wall.length) || 0;
+}
+
+/**
+ * How many stools fit along it.
+ *
+ * Elbow room per seat, not stool width: two stools touching is two stools
+ * nobody can sit on at once.
+ */
+export function barSeats(wall, cfg, clear, bar = islandBar(wall)) {
+  const each = Number(clear?.barSeatWidth) || 0;
+  if (bar.depth <= 0 || each <= 0) return 0;
+  return Math.floor(barSpan(wall, cfg, bar) / each);
+}
+
+/**
+ * How many brackets or legs the overhang needs.
+ *
+ * None while it carries itself. Once it does not, one at each end and enough
+ * between them to keep to the spacing, which is the way a bracket run is
+ * actually set out: you do not fit two thirds of a bracket in the middle.
+ */
+export function barBrackets(wall, cfg, clear, bar = islandBar(wall)) {
+  if (bar.depth <= 0) return 0;
+  const carries = Number(clear?.barMaxUnsupported) || 0;
+  if (bar.depth <= carries) return 0;
+
+  const spacing = Number(clear?.barBracketSpacing) || 0;
+  const span = barSpan(wall, cfg, bar);
+  if (spacing <= 0 || span <= 0) return 2;
+  return Math.max(2, Math.ceil(span / spacing) + 1);
+}
+
 /**
  * Everything standing on the floor, placed and turned.
  *
@@ -180,6 +272,9 @@ export function floorPlan(project) {
         corner: false,
         island: true,
         depth: islandDepth(wall, cfg),
+        /* Carried here so the checks and the 3D read the same bar the price
+           did, rather than each working it out off the wall record. */
+        bar: islandBar(wall),
       };
     });
 
@@ -810,6 +905,10 @@ export function totals(project) {
      is counted here once and shows up in costing and in the print pack. */
   const extras = extrasCost(project);
 
+  /* What holds a breakfast bar up. Derived, but from the island rather than
+     from a cabinet, so the per unit sum above cannot have caught it. */
+  const bar = barCost(project);
+
   /* The benchtop can be left out of the total. The metres and the rate are
      still reported, so the number you are not counting is still visible. */
   /* The benchtop is billed from the schedule the print pack shows, including
@@ -845,12 +944,13 @@ export function totals(project) {
     wastePct: nest.wastePct,
     oversize: nest.oversize,
     boardCost: nest.cost,
-    hardwareCost: cost + extras,
+    hardwareCost: cost + extras + bar,
     extrasCost: extras,
+    barCost: bar,
     benchCost: bench,
     kickCost: kick,
     benchIncluded,
-    cost: nest.cost + cost + extras + (benchIncluded ? bench : 0) + kick,
+    cost: nest.cost + cost + extras + bar + (benchIncluded ? bench : 0) + kick,
     estimate: true,
   };
 }
@@ -934,7 +1034,10 @@ export function benchPieces(project) {
        reporting five strips of 600 deep for one 2400 by 1120 slab: the two
        disagreed, and the order list was the one that was wrong. */
     if (isIsland(wall)) {
-      for (const piece of islandBench(wall, islandDepth(wall, project.cfg), project.cfg)) {
+      const pieces = islandBench(
+        wall, islandDepth(wall, project.cfg), project.cfg, islandBar(wall),
+      );
+      for (const piece of pieces) {
         out.push({ ...piece, wallId: wall.id, wallName: wall.name });
       }
       continue;
@@ -981,8 +1084,41 @@ export function allFittings(project) {
       }
     }
   }
+
+  /* What holds a breakfast bar up. It belongs to the island rather than to any
+     cabinet on it, so it is added here rather than found on a unit, and it is
+     added here rather than in the order list so the hardware screen, the
+     costing and the order list all count it once and agree. */
+  for (const f of barFittings(project)) {
+    const cur = rows.get(f.type) || { type: f.type, qty: 0, units: new Set() };
+    cur.qty += f.qty;
+    cur.units.add(f.where);
+    rows.set(f.type, cur);
+  }
+
   return [...rows.entries()].map(([key, v]) => ({ key, ...v, units: [...v.units] }));
 }
+
+/**
+ * The brackets under every breakfast bar in the project.
+ *
+ * Nothing at all until an overhang stops carrying itself, which is the common
+ * case: a 300mm bar on a laminate top wants no ironmongery whatever.
+ */
+export function barFittings(project) {
+  const clear = { ...BAR_RULES, ...project.cfg };
+  const out = [];
+  for (const wall of project.walls) {
+    if (!isIsland(wall)) continue;
+    const qty = barBrackets(wall, project.cfg, clear);
+    if (qty > 0) out.push({ type: 'barBracket', qty, where: wall.name });
+  }
+  return out;
+}
+
+/** What a project's bar brackets come to. */
+export const barCost = (project, prices = PRICES) =>
+  barFittings(project).reduce((a, f) => a + f.qty * (Number(prices.barBracket) || 0), 0);
 
 /** Cabinets across the whole project, for the cut list and costing screens. */
 export function allUnits(project) {

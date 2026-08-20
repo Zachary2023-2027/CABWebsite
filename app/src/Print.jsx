@@ -424,8 +424,18 @@ function PageBody({ page, project, cut }) {
                 {tot.benchPieces.map((b2, i) => (
                   <tr key={i}>
                     <td>{b2.wallName}, run {b2.index}
-                      {b2.overhangs > 0 && (
+                      {b2.overhangs > 0 && !b2.island && (
                         <span className="p-note"> with {b2.overhangs === 2 ? 'both ends' : 'one end'} overhanging</span>
+                      )}
+                      {b2.island && (
+                        <span className="p-note"> one slab, overhanging all four sides</span>
+                      )}
+                      {/* Which side runs out past the carcass. A fabricator
+                          cutting a slab needs to know which edge is the bar,
+                          because that is the edge that gets polished and the
+                          one the brackets go under. */}
+                      {b2.bar && (
+                        <span className="p-note"> breakfast bar {fmt(b2.bar.depth)} past the {BAR_EDGE[b2.bar.side]}</span>
                       )}
                     </td>
                     <td className="p-n">{fmt(b2.length)}</td>
@@ -470,6 +480,9 @@ function PageBody({ page, project, cut }) {
 }
 
 /* --- screen --------------------------------------------------------------- */
+
+/* Which edge of an island slab is the breakfast bar. */
+const BAR_EDGE = { front: 'front', back: 'back', left: 'left end', right: 'right end' };
 
 export default function Print({ project, cut }) {
   const [docs, setDocs] = useState({
