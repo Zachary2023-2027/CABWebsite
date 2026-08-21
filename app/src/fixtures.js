@@ -223,3 +223,62 @@ export function barBracketPositions(count, length, depth, bar) {
   }
   return out;
 }
+
+/* ---------------------------------------------------------------------------
+   Where the benchtop runs, and therefore where the splashback does.
+
+   Both the elevation and the 3D worked this out for themselves, in two
+   copies of the same twelve lines, which is how the splashback came to be
+   wrong in only one of them. It went in as a single slab the whole length of
+   the wall, so it ran through every tall cabinet standing on that wall and
+   hung in the air past the end of the run, while the elevation drew the
+   benchtop correctly in segments a foot away on the same screen.
+
+   A splashback is fixed to the wall behind a bench. Where there is no bench
+   there is no splashback, and that is the same question as where the bench
+   breaks, so it is one function now and both screens call it.
+   --------------------------------------------------------------------------- */
+
+/** True when a cabinet has a benchtop over it. */
+export function carriesBench(unit) {
+  /* A cavity is decided by what it is, never by which run it stands in.
+
+     Both copies of this rule asked the kind first, and a freestanding cooker
+     is a base kind cavity, so it answered yes and returned before the cavity
+     clause underneath was ever reached. The benchtop was drawn straight over
+     a cooker that the catalog says breaks it, on the elevation and in the 3D
+     both, while the bench schedule that costs and orders the stone broke the
+     run there correctly. The drawing and the order disagreed about how much
+     benchtop there is. */
+  if (unit.cavity) return !unit.breaksBench && !unit.fullHeight;
+  return unit.kind === 'base' || unit.kind === 'filler';
+}
+
+/**
+ * The stretches of a run that have a benchtop over them.
+ *
+ * Touching cabinets merge into one length, because a benchtop over four
+ * cabinets is one piece, not four. A tall unit or a cooker ends the stretch
+ * and the next one starts after it.
+ *
+ * @param {object} lay a wall layout
+ * @param {(p:object)=>number} [at] where a cabinet is right now, so the
+ *   elevation can pass the position of the one being dragged rather than the
+ *   one stored
+ * @returns {{x:number, w:number}[]}
+ */
+export function benchSegments(lay, at = (p) => p.x) {
+  const segs = [];
+  let cur = null;
+  const floor = lay.placed
+    .filter((p) => p.where !== 'wall')
+    .sort((a, b) => at(a) - at(b));
+
+  for (const p of floor) {
+    if (!carriesBench(p.unit)) { cur = null; continue; }
+    const x = at(p);
+    if (cur && Math.abs(cur.x + cur.w - x) < 0.5) cur.w += p.unit.width;
+    else { cur = { x, w: p.unit.width }; segs.push(cur); }
+  }
+  return segs;
+}

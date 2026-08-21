@@ -8,6 +8,7 @@ import Drilling from './Drilling.jsx';
 import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
+import Instructions from './Instructions.jsx';
 import Checks from './Checks.jsx';
 import Purchase from './Purchase.jsx';
 import { readShared, shareUrl } from './share.js';
@@ -62,10 +63,19 @@ const NAV = [
   ]],
 ];
 
-const SETTINGS_ITEM = ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'];
+/* The two that are not part of any of those. They sit at the foot of the rail
+   because they are somewhere you go once and then leave alone, and because
+   help belongs at the bottom where people look for it. */
+const FOOT_ITEMS = [
+  ['instructions', 'How to', 'M12 17v.01M12 13.5a2.5 2.5 0 1 0-2.5-3M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18z'],
+  ['settings', 'Settings', 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2'],
+];
 
 /** Every screen id, flat, for the keyboard shortcuts and anything else. */
-export const SCREEN_IDS = [...NAV.flatMap(([, items]) => items.map(([id]) => id)), 'settings'];
+export const SCREEN_IDS = [
+  ...NAV.flatMap(([, items]) => items.map(([id]) => id)),
+  ...FOOT_ITEMS.map(([id]) => id),
+];
 
 const RailItem = ({ id, label, d, screen, setScreen }) => (
   <button className="rail-item" aria-current={screen === id} title={label}
@@ -88,8 +98,9 @@ function Rail({ screen, setScreen }) {
         </div>
       ))}
       <div className="rail-group rail-group--foot">
-        <RailItem id={SETTINGS_ITEM[0]} label={SETTINGS_ITEM[1]} d={SETTINGS_ITEM[2]}
-                  screen={screen} setScreen={setScreen} />
+        {FOOT_ITEMS.map(([id, label, d]) => (
+          <RailItem key={id} id={id} label={label} d={d} screen={screen} setScreen={setScreen} />
+        ))}
       </div>
     </nav>
   );
@@ -589,6 +600,7 @@ export default function App() {
         ...p, cfg: { ...p.cfg, ...patch },
       }))} />;
       case 'reference': return <Reference />;
+      case 'instructions': return <Instructions />;
       case 'print': return <Print project={project} cut={cut} />;
       default: return null;
     }

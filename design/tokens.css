@@ -62,15 +62,35 @@
   --n-light-text: #F1EEE8;
   --n-dark-text: #1B1916;
 
-  /* Steel marking blue. The only accent. */
-  --a-40: #124265;
-  --a-50: #17507A;
-  --a-60: #1D5E8C;
-  --a-70: #5A9DCB;
-  --a-80: #6FB0DC;
-  --a-90: #86BEE4;
-  --a-tint-light: #E3EDF4;
-  --a-tint-dark: #1B2E3B;
+  /* Eucalyptus green. The only accent.
+
+     It was a steel marking blue, which is the right colour for a scribe line
+     and the wrong one for the app around it: cold, and at odds with a warm
+     neutral ramp built out of board and timber. Green is what this trade's
+     work is made of, and a muted eucalyptus sits on these warm greys without
+     fighting them. Mixed toward the neutral, never fluorescent, same as every
+     other colour here.
+
+     --a-60 carries text on --surface at 5.7:1 and white on itself at 5.9:1,
+     so it works as a link colour and as a button ground without a second
+     green being needed for either. */
+  --a-40: #24503A;
+  --a-50: #2C6046;
+  --a-60: #356F51;
+  --a-70: #6FA588;
+  --a-80: #8CBCA1;
+  --a-90: #A8D0B8;
+  --a-tint-light: #E7EFE9;
+  --a-tint-dark: #1C2A22;
+
+  /* Timber. Not an accent and never a control colour: a warm mark used flat,
+     for the brand and for the rules that separate a heading from its page.
+     Oiled hardwood, which is what a bench looks like. */
+  --w-50: #8A5A32;
+  --w-60: #A66E3E;
+  --w-70: #C08A56;
+  --w-tint-light: #F2E9DE;
+  --w-tint-dark: #2B2019;
 
   /* Semantic. Muted, mixed toward the warm neutral, never fluorescent. */
   --warn-dark: #8F5A0B;
@@ -83,10 +103,15 @@
   --err-tint-light: #F7E7E5;
   --err-tint-dark: #331B19;
 
-  --ok-dark: #2F6B3D;
-  --ok-light: #6FBF84;
-  --ok-tint-light: #E6F0E7;
-  --ok-tint-dark: #17291B;
+  /* Leaf green, deliberately yellower than the eucalyptus accent. Both are
+     green now, and a status that means "this is fine" sitting next to a
+     control that means "press me" has to be a different green or it is not a
+     status at all. Separated by hue rather than by lightness, so it still
+     reads when the two are side by side. */
+  --ok-dark: #4F7A33;
+  --ok-light: #9CC46E;
+  --ok-tint-light: #ECF1E2;
+  --ok-tint-dark: #1F2916;
 }
 
 /* --- Semantic mapping, light. -------------------------------------------- */
@@ -117,6 +142,9 @@
   --error-weak: var(--err-tint-light);
   --ok: var(--ok-dark);
   --ok-weak: var(--ok-tint-light);
+
+  --timber: var(--w-50);
+  --timber-weak: var(--w-tint-light);
 
   --scrim: rgb(27 25 22 / 0.32);
 
@@ -172,6 +200,9 @@
     --ok: var(--ok-light);
     --ok-weak: var(--ok-tint-dark);
 
+    --timber: var(--w-70);
+    --timber-weak: var(--w-tint-dark);
+
     --scrim: rgb(0 0 0 / 0.55);
 
     --dw-carcass: #35302A;
@@ -217,6 +248,9 @@
   --error-weak: var(--err-tint-dark);
   --ok: var(--ok-light);
   --ok-weak: var(--ok-tint-dark);
+
+  --timber: var(--w-70);
+  --timber-weak: var(--w-tint-dark);
 
   --scrim: rgb(0 0 0 / 0.55);
 

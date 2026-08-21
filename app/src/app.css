@@ -170,7 +170,21 @@ body {
   width: 250px; flex: none; display: flex; flex-direction: column; min-height: 0;
   background: var(--surface); border-right: var(--bw) solid var(--border);
 }
-.picker { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+/* The rail is two panels sharing one column, and they have to share it
+   properly.
+
+   The obstacle panel grows with whatever is on the wall, and with nothing
+   stopping it, it took the lot: the picker was flexed to zero height and, being
+   overflow visible, went on painting its search box and its kind buttons over
+   the top. That read as two panels drawn on each other rather than as one
+   squeezed out of existence, and it made the cabinets impossible to click.
+
+   So each keeps a floor, each scrolls inside itself, and neither paints
+   outside its own box. */
+.picker {
+  display: flex; flex-direction: column;
+  flex: 1 1 auto; min-height: 200px; overflow: hidden;
+}
 .picker-search { margin: var(--sp-3); height: 30px; flex: none; }
 .picker-list { overflow-y: auto; padding: 0 var(--sp-2) var(--sp-4); }
 .picker-group { display: block; padding: var(--sp-3) var(--sp-2) var(--sp-1); }
@@ -294,6 +308,9 @@ body {
 @media (max-width: 900px) {
   .planner-body { flex-direction: column; }
   .rail { width: 100%; border-right: 0; border-bottom: var(--bw) solid var(--border); max-height: 34vh; }
+  /* The rail lies on its side here and is a third of a phone screen tall, so
+     the picker's floor has to come down with it or it wins the whole strip. */
+  .picker { min-height: 120px; }
   .inspector-side { width: 100%; border-left: 0; border-top: var(--bw) solid var(--border); }
   .canvas-area { min-height: 52vh; }
   .focus-arr .inset { width: 180px; height: 120px; }
@@ -1310,6 +1327,13 @@ kbd {
   padding: var(--sp-3);
   display: grid;
   gap: var(--sp-2);
+  /* Never more than half the rail, and what does not fit scrolls here rather
+     than pushing the cabinet picker out of the column. */
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 52%;
+  overflow-y: auto;
+  align-content: start;
 }
 .obstacles-head { width: 100%; }
 .obstacles .sub-toggle svg { transition: transform 120ms ease; }
@@ -1507,3 +1531,59 @@ kbd {
 .show-text { display: grid; gap: 1px; min-width: 0; }
 .show-name { font-size: var(--fs-1); line-height: var(--lh-1); }
 .show-note { font-size: var(--fs-0); line-height: var(--lh-0); color: var(--text-2); }
+
+/* ===========================================================================
+   Instructions.
+
+   A long read, so it is set like one: a measure that stops at something you
+   can actually track across, headings that separate without shouting, and no
+   card inside a card. The timber rule down the left of each group is the only
+   decoration, and it is there to mark where one part of the app stops and the
+   next begins while you scroll.
+   =========================================================================== */
+
+.guide-search { width: 260px; height: var(--ctl-h); }
+
+.guide-intro { display: grid; gap: var(--sp-3); }
+.guide-intro p { margin: 0; max-width: 68ch; }
+
+.guide-group { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-8); }
+.guide-group__label {
+  padding-left: var(--sp-3);
+  border-left: 3px solid var(--timber);
+}
+
+.guide-card { display: grid; gap: var(--sp-3); }
+.guide-card p { margin: 0; max-width: 68ch; }
+
+.guide-title {
+  margin: 0;
+  font-size: var(--fs-4); line-height: var(--lh-4); font-weight: var(--fw-semibold);
+}
+.guide-h {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-3); line-height: var(--lh-3); font-weight: var(--fw-semibold);
+  color: var(--accent);
+}
+
+.guide-list { margin: 0; padding-left: var(--sp-5); display: grid; gap: var(--sp-2); max-width: 68ch; }
+.guide-list li { padding-left: var(--sp-1); }
+.guide-list li::marker { color: var(--accent); }
+
+.guide-keys { margin: 0; display: grid; gap: var(--sp-2); }
+.guide-key {
+  display: grid; grid-template-columns: minmax(0, 220px) 1fr;
+  gap: var(--sp-4); align-items: baseline;
+}
+.guide-key dd { margin: 0; color: var(--text-2); }
+.guide-keys kbd {
+  font-family: var(--font-mono); font-size: var(--fs-2);
+  background: var(--sunken); border: var(--bw) solid var(--border);
+  border-radius: var(--r-1); padding: 1px var(--sp-2);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .guide-search { width: 100%; }
+  .guide-key { grid-template-columns: 1fr; gap: var(--sp-1); }
+}

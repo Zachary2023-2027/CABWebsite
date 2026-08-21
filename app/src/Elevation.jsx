@@ -9,6 +9,7 @@ import { useMemo, useRef, useState } from 'react';
 import { finish, finishFor } from './finishes.js';
 import { natureOf, obstacleKind } from './obstacles.js';
 import { snapX, unitWarnings } from './project.js';
+import { benchSegments } from './fixtures.js';
 
 const S = 4;        // hairline, mm at drawing scale
 /* Text sizes in millimetres of drawing.
@@ -124,24 +125,13 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
     return m;
   }, [lay, cfg]);
 
-  /* Benchtop segments. A cooktop or a tall unit breaks the run. */
-  const benchSegs = useMemo(() => {
-    const segs = [];
-    let cur = null;
-    const at = (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x);
-    const floor = lay.placed
-      .filter((p) => p.where !== 'wall')
-      .sort((a, b) => at(a) - at(b));
-    for (const p of floor) {
-      const carries =
-        p.unit.kind === 'base' || p.unit.kind === 'filler' ||
-        (p.unit.cavity && !p.unit.breaksBench && !p.unit.fullHeight);
-      if (!carries) { cur = null; continue; }
-      if (cur && Math.abs(cur.x + cur.w - at(p)) < 0.5) cur.w += p.unit.width;
-      else { cur = { x: at(p), w: p.unit.width }; segs.push(cur); }
-    }
-    return segs;
-  }, [lay, drag]);
+  /* Benchtop segments. A cooktop or a tall unit breaks the run.
+     One rule, shared with the 3D. While something is being dragged it is
+     asked about where that cabinet is now, not where it is stored. */
+  const benchSegs = useMemo(
+    () => benchSegments(lay, (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x)),
+    [lay, drag],
+  );
 
   const rect = (x, y, w, h, fill, extra = {}) => (
     <rect x={x} y={y} width={Math.max(0, w)} height={Math.max(0, h)}

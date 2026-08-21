@@ -32,8 +32,8 @@ import { BAR_RULES } from './bar.js';
 import { finishFor } from './finishes.js';
 import { obstacleKind } from './obstacles.js';
 import {
-  barBracketPositions, barSeatPositions, handlesFor, islandSlab, skirtingRuns,
-  wallBands,
+  barBracketPositions, barSeatPositions, benchSegments, handlesFor, islandSlab,
+  skirtingRuns, wallBands,
 } from './fixtures.js';
 import {
   BarBracket, Box, Cooker, Cooktop, Dishwasher, Doorway, Fridge, Handle, Hood,
@@ -349,20 +349,13 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
      it takes the colour the project says it is. */
   const benchCol = SURFACE.stone.color;
   const kickCol = finishFor('kick', cfg)?.hex || '#4A453D';
+  /* Glazed splashback. Cooler and glossier than the plaster behind it. */
+  const splashCol = '#DCE3E0';
 
   /* Benchtop segments, same rule as the elevation. */
-  const bench = useMemo(() => {
-    const segs = [];
-    let cur = null;
-    for (const p of lay.placed.filter((q) => q.where !== 'wall').sort((a, b) => a.x - b.x)) {
-      const carries = p.unit.kind === 'base' || p.unit.kind === 'filler' ||
-        (p.unit.cavity && !p.unit.breaksBench && !p.unit.fullHeight);
-      if (!carries) { cur = null; continue; }
-      if (cur && Math.abs(cur.x + cur.w - p.x) < 0.5) cur.w += p.unit.width;
-      else { cur = { x: p.x, w: p.unit.width }; segs.push(cur); }
-    }
-    return segs;
-  }, [lay]);
+  /* One rule, shared with the elevation. The splashback rides on these too:
+     where there is no bench there is no splashback. */
+  const bench = useMemo(() => benchSegments(lay), [lay]);
 
   const noop = () => {};
 
@@ -406,7 +399,7 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
                   ? [x + unit.width / 2, unit.mountY + unit.height / 2, depth - unit.depth / 2]
                   : [x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}>
                   <edgesGeometry args={[boxGeo(unit.width + 16, unit.height + 16, unit.depth + 16).box]} />
-                  <lineBasicMaterial color="#1D5E8C" />
+                  <lineBasicMaterial color={cssVar('--accent', '#356F51')} />
                 </lineSegments>
               )}
             </group>
@@ -435,20 +428,29 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
       ))}
 
       {/* The splashback: the wall between the benchtop and the wall cabinets.
-          It is what you see behind every base cabinet from standing height, and
-          leaving it as bare wall made a kitchen look unbuilt. */}
-      {show.bench && !lay.island && bench.length > 0 && (
-        <mesh position={[lay.wall.length / 2,
-          (cfg.benchHeight + Math.min(cfg.wallMount, cfg.ceiling)) / 2, 9]}
-              receiveShadow>
-          <boxGeometry args={[lay.wall.length,
-            Math.max(0, Math.min(cfg.wallMount, cfg.ceiling) - cfg.benchHeight), 18]} />
-          {/* Cooler and glossier than the wall it is fixed to, so it reads as a
-              different material rather than as a change of mind about the
-              paint, and so it takes a highlight the plaster does not. */}
-          <meshStandardMaterial color="#D7DEDD" roughness={0.14} metalness={0.04} />
-        </mesh>
-      )}
+
+          Behind the benchtop and nowhere else. It used to be one slab the whole
+          length of the wall, which put it straight through every tall cabinet
+          standing on that wall and left it hanging in the air past the end of
+          the run. A splashback is fixed to the wall behind a bench: where there
+          is no bench there is no splashback, and the benchtop segments already
+          know where that is, because they break at a tall unit and at a
+          freestanding cooker for the same reason. */}
+      {show.bench && !lay.island && bench.map((s, i) => {
+        const top = Math.min(cfg.wallMount, cfg.ceiling);
+        const height = Math.max(0, top - cfg.benchHeight);
+        if (height <= 0) return null;
+        return (
+          <mesh key={`sb${i}`} receiveShadow
+                position={[s.x + s.w / 2, cfg.benchHeight + height / 2, 9]}>
+            <boxGeometry args={[s.w, height, 18]} />
+            {/* Cooler and glossier than the plaster it is fixed to, so it reads
+                as a different material rather than as a change of mind about
+                the paint, and so it takes a highlight the wall does not. */}
+            <meshStandardMaterial color={splashCol} roughness={0.14} metalness={0.04} />
+          </mesh>
+        );
+      })}
 
       {/* An island's top is one slab over the whole footprint, overhanging on
           every side, rather than a strip in front of one run. A breakfast bar
@@ -689,9 +691,13 @@ function Sky({ reduced }) {
   const mat = useMemo(() => new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     uniforms: {
-      top: { value: new THREE.Color('#DCE4EC') },
-      middle: { value: new THREE.Color('#F2EFE9') },
-      bottom: { value: new THREE.Color('#C6BFB4') },
+      /* Daylight above, warm neutral at the horizon, and the ground half
+         settling toward the floor's own colour so the two meet without a
+         seam. The horizon is the whole point: it is what tells you the room
+         is standing on something. */
+      top: { value: new THREE.Color('#D8E2E4') },
+      middle: { value: new THREE.Color('#F1EEE9') },
+      bottom: { value: new THREE.Color('#CBC0B0') },
     },
     vertexShader: `
       varying float vH;
@@ -755,7 +761,12 @@ function Room({ lay, room, cfg, selected, setSelected, setHovered, show, preset,
      than part of the kitchen. */
   const wallCol = '#E3DED4';
   const trimCol = '#FAF8F4';
-  const floorCol = '#B98D57';
+  /* Pale oak, not the orange this used to be. The floor plane runs to the
+     horizon, so its colour is most of the picture whenever you orbit outside
+     the room, and at the old saturation it stopped being a floor and became a
+     background wash that everything else had to compete with. A floor is
+     meant to be the quietest thing in a render. */
+  const floorCol = '#C4B29B';
 
   /* One wall, or the joined run of an L or a U. Each entry carries where its
      corner is and how far it is turned, worked out by the room layout. The

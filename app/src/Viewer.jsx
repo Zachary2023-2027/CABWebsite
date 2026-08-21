@@ -30,6 +30,13 @@ function surfaceFor(p) {
 }
 
 const EDGE = '#2A2722';
+
+/* Selection, in the accent. Read from the tokens rather than written out
+   here, so changing the accent changes what a selected part looks like
+   instead of leaving one blue cabinet in a green app. Fallbacks match the
+   light theme, for the frame or two before the sheet is parsed. */
+const SELECT_FILL = () => cssVar('--accent-weak', '#E7EFE9');
+const SELECT_EDGE = () => cssVar('--accent', '#356F51');
 const smoothstep = (t) => t * t * (3 - 2 * t);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
@@ -84,7 +91,7 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
         onClick={(e) => { e.stopPropagation(); onSelect(p); }}
       >
         <meshStandardMaterial
-          color={selected ? '#BBD3E6' : tone.color}
+          color={selected ? SELECT_FILL() : tone.color}
           roughness={tone.roughness}
           metalness={tone.metalness}
           transparent={ghosted}
@@ -96,7 +103,7 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
       </mesh>
       <lineSegments geometry={edges} renderOrder={1}>
         <lineBasicMaterial
-          color={selected ? '#1D5E8C' : warn ? '#B4791E' : EDGE}
+          color={selected ? SELECT_EDGE() : warn ? '#B4791E' : EDGE}
           transparent
           opacity={ghosted ? 0.12 : selected || warn ? 1 : 0.55}
           clippingPlanes={clip}
