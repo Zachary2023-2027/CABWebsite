@@ -770,7 +770,17 @@ body {
   font: inherit; font-weight: var(--fw-semibold); color: var(--text);
 }
 .brand-input:hover { border-color: var(--border); }
-.brand-input:focus { border-color: var(--accent); background: var(--sunken); outline: none; }
+/* The project name does not look like a field until you are in it, which is
+   the point, but suppressing the outline left it the one control in the app
+   you could tab to and not see. It keeps the quiet focus treatment and gets
+   the ring back. */
+.brand-input:focus-visible {
+  border-color: var(--accent); background: var(--sunken);
+  outline: var(--focus-w) solid var(--accent); outline-offset: var(--focus-offset);
+}
+.brand-input:focus:not(:focus-visible) {
+  border-color: var(--accent); background: var(--sunken); outline: none;
+}
 
 .save-state { font-size: var(--fs-1); color: var(--text-2); white-space: nowrap; }
 .save-state.is-error { color: var(--error); white-space: normal; }
@@ -1335,7 +1345,9 @@ kbd {
   overflow-y: auto;
   align-content: start;
 }
-.obstacles-head { width: 100%; }
+/* WCAG 2.2 asks for 24px on a pointer target. This was 20, which is also
+   simply hard to hit with a thumb. */
+.obstacles-head { width: 100%; min-height: 24px; }
 .obstacles .sub-toggle svg { transition: transform 120ms ease; }
 .obstacles.is-open .sub-toggle svg { transform: rotate(90deg); }
 

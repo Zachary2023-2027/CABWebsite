@@ -51,7 +51,11 @@
   --n-05: #F4F2EE;
   --n-10: #EAE7E1;
   --n-20: #DFDAD2;
-  --n-30: #C4BDB2;
+  /* Control boundaries. A text field and a secondary button are identified by
+     nothing but this line, so WCAG 1.4.11 wants 3:1 against the surface behind
+     them and the old #C4BDB2 gave 1.79. Darkened until it clears, which also
+     makes the fields findable at arm's length on a bright bench. */
+  --n-30: #96908A;
   --n-40: #A39C92;
   --n-50: #6A645B;
   --n-60: #443F38;
@@ -108,7 +112,7 @@
      control that means "press me" has to be a different green or it is not a
      status at all. Separated by hue rather than by lightness, so it still
      reads when the two are side by side. */
-  --ok-dark: #4F7A33;
+  --ok-dark: #486F2E;
   --ok-light: #9CC46E;
   --ok-tint-light: #ECF1E2;
   --ok-tint-dark: #1F2916;
@@ -163,7 +167,7 @@
      so the blade width between them reads as a gap rather than a hairline. */
   --dw-saw: #C6C0B4;
   --dw-line: #2A2722;
-  --dw-dim: #7A736A;
+  --dw-dim: #6E675E;
   --dw-hatch: #B4AB9C;
 }
 
