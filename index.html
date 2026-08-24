@@ -19,7 +19,7 @@
 <meta name="referrer" content="no-referrer">
 
 <title>Kitchen Cabinet Builder</title>
-<meta name="description" content="Design a kitchen, then build it. Draw the run, see it in 3D, and get a cut list, sheet layouts, a drilling schedule and a costed shopping list. Runs in your browser, no account, no server.">
+<meta name="description" content="Design a kitchen, then build it. Draw the run in your own colours and door style, see it in 3D, and get a cut list, sheet layouts, a drilling schedule and a costed shopping list. Runs in your browser, no account, no server.">
 <meta name="color-scheme" content="light">
 <link rel="stylesheet" href="assets/home.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%238A5A32'/><rect x='3' y='3.5' width='4.2' height='9' rx='.6' fill='%23F4F2EE'/><rect x='8.8' y='3.5' width='4.2' height='9' rx='.6' fill='%23F4F2EE'/></svg>">
@@ -41,6 +41,7 @@
   </a>
   <nav class="nav__links" aria-label="Sections">
     <a href="#how">How it works</a>
+    <a href="#look">Finishes</a>
     <a href="#features">Features</a>
     <a href="#precision">Precision</a>
     <a href="#private">Private</a>
@@ -89,6 +90,14 @@
         <rect x="600" y="40"  width="200" height="80"  rx="3"/>
         <rect x="806" y="40"  width="150" height="150" rx="3"/>
         <rect x="962" y="40"  width="118" height="150" rx="3"/>
+        <g class="panel">
+          <rect x="136" y="56"  width="118" height="118"/>
+          <rect x="292" y="56"  width="43"  height="118"/>
+          <rect x="367" y="56"  width="43"  height="118"/>
+          <rect x="616" y="56"  width="168" height="48"/>
+          <rect x="822" y="56"  width="118" height="118"/>
+          <rect x="978" y="56"  width="86"  height="118"/>
+        </g>
         <g class="pull">
           <line x1="258" y1="150" x2="258" y2="178"/>
           <line x1="288" y1="150" x2="288" y2="178"/>
@@ -117,6 +126,19 @@
         <rect x="806" y="294" width="150" height="120" rx="3"/>
         <line x1="806" y1="334" x2="956" y2="334"/>
         <rect x="962" y="294" width="118" height="120" rx="3"/>
+        <g class="panel">
+          <rect x="136" y="302" width="118" height="24"/>
+          <rect x="136" y="342" width="118" height="24"/>
+          <rect x="136" y="382" width="118" height="24"/>
+          <rect x="292" y="310" width="68"  height="88"/>
+          <rect x="392" y="310" width="68"  height="88"/>
+          <rect x="498" y="310" width="80"  height="88"/>
+          <rect x="616" y="310" width="68"  height="88"/>
+          <rect x="716" y="310" width="68"  height="88"/>
+          <rect x="822" y="302" width="118" height="24"/>
+          <rect x="822" y="350" width="118" height="48"/>
+          <rect x="978" y="310" width="86"  height="88"/>
+        </g>
         <g class="pull">
           <line x1="180" y1="314" x2="210" y2="314"/>
           <line x1="180" y1="354" x2="210" y2="354"/>
@@ -287,8 +309,8 @@
       <p>
         Pick from 21 families and they flow along the run in order. Drag one and it pins to
         the millimetre, snapping to its neighbours, the wall ends and a blind corner. The
-        elevation redraws to scale as you go and the 3D view stands the whole run up beside
-        it.
+        elevation redraws to scale as you go, in the colours and the door style you chose,
+        and the 3D view stands the same kitchen up beside it.
       </p>
     </article>
 
@@ -314,6 +336,86 @@
   </div>
 </section>
 
+<!-- ===================== 3b. What it looks like ===================== -->
+<section class="look" id="look">
+  <div class="wrap">
+    <p class="eyebrow reveal">The drawing is the thing you build from</p>
+    <h2 class="big reveal">See the kitchen you are actually making.</h2>
+    <p class="lede reveal">
+      A door drawn as a plain rectangle tells you nothing you did not already know. The
+      elevation draws the fronts the way they will look: the panel your door style gives
+      them, the handle you picked on the stile you would really reach for, grain where the
+      board is timber. Appliances are drawn as appliances. Change any of it and the
+      drawing, the 3D and the print pack all move together.
+    </p>
+
+    <div class="doors reveal">
+        <figure class="door">
+          <svg viewBox="0 0 100 140" role="presentation" aria-hidden="true">
+            <rect class="d" x="2" y="2" width="96" height="136"/>
+            
+            <rect class="h" x="84" y="56" width="5" height="30" rx="2.5"/>
+          </svg>
+          <figcaption>Slab</figcaption>
+        </figure>
+        <figure class="door">
+          <svg viewBox="0 0 100 140" role="presentation" aria-hidden="true">
+            <rect class="d" x="2" y="2" width="96" height="136"/>
+            <rect class="p" x="16" y="16" width="68" height="108"/>
+            <rect class="h" x="84" y="56" width="5" height="30" rx="2.5"/>
+          </svg>
+          <figcaption>Shaker</figcaption>
+        </figure>
+        <figure class="door">
+          <svg viewBox="0 0 100 140" role="presentation" aria-hidden="true">
+            <rect class="d" x="2" y="2" width="96" height="136"/>
+            <rect class="p" x="16" y="16" width="68" height="108"/><rect class="p" x="24" y="24" width="52" height="92"/>
+            <rect class="h" x="84" y="56" width="5" height="30" rx="2.5"/>
+          </svg>
+          <figcaption>Raised</figcaption>
+        </figure>
+        <figure class="door">
+          <svg viewBox="0 0 100 140" role="presentation" aria-hidden="true">
+            <rect class="d" x="2" y="2" width="96" height="136"/>
+            <rect class="g" x="16" y="16" width="68" height="108"/><line x1="50" y1="16" x2="50" y2="124"/><line x1="16" y1="70" x2="84" y2="70"/>
+            <rect class="h" x="84" y="56" width="5" height="30" rx="2.5"/>
+          </svg>
+          <figcaption>Glass</figcaption>
+        </figure>
+        <figure class="door">
+          <svg viewBox="0 0 100 140" role="presentation" aria-hidden="true">
+            <rect class="d" x="2" y="2" width="96" height="136"/>
+            <rect class="p" x="16" y="16" width="68" height="108"/><line x1="33" y1="22" x2="33" y2="118"/><line x1="50" y1="22" x2="50" y2="118"/><line x1="67" y1="22" x2="67" y2="118"/>
+            <rect class="h" x="84" y="56" width="5" height="30" rx="2.5"/>
+          </svg>
+          <figcaption>Beadboard</figcaption>
+        </figure>
+    </div>
+
+    <p class="lede reveal look__note">
+      Then set the colour. Fronts, carcass, kickboard and benchtop, each on its own, so a
+      two tone kitchen is two clicks. Colour is not a preview: pick walnut fronts and the
+      cut list, the labels and the shopping list all say walnut, because that is what you
+      are going to buy.
+    </p>
+
+    <ul class="swatches reveal">
+        <li><span class="chip" style="background:#F1EDE6"></span>White</li>
+        <li><span class="chip" style="background:#D8D2C7"></span>Stone</li>
+        <li><span class="chip" style="background:#BFB6A6"></span>Putty</li>
+        <li><span class="chip" style="background:#8E9C86"></span>Sage</li>
+        <li><span class="chip" style="background:#38465C"></span>Navy</li>
+        <li><span class="chip" style="background:#3B4E42"></span>Forest</li>
+        <li><span class="chip" style="background:#3A3B3C"></span>Charcoal</li>
+        <li><span class="chip" style="background:#232323"></span>Black</li>
+        <li><span class="chip" style="background:#D9BD8C"></span>Birch ply</li>
+        <li><span class="chip" style="background:#C9A875"></span>Oak</li>
+        <li><span class="chip" style="background:#6B4E36"></span>Walnut</li>
+        <li><span class="chip" style="background:#E2CFA6"></span>Hoop pine</li>
+    </ul>
+  </div>
+</section>
+
 <!-- ===================== 4. Features ===================== -->
 <section class="features" id="features">
   <div class="wrap">
@@ -326,13 +428,15 @@
         <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h20M6 12V6h5v6M13 12V8h5v4"/></svg>
         <h3>Planner</h3>
         <p>
-          The main screen. A searchable cabinet picker, a to-scale elevation and a live 3D
-          room side by side, and an inspector for every number on the cabinet you have
-          selected: width, height, depth, doors, drawers, shelves, drawer heights, blind
-          corner, board species and thickness for that one cabinet alone.
+          The main screen, and two views of it: the drawing on its own, or the room in 3D
+          with the drawing kept in the corner. A searchable cabinet picker down one side, an
+          inspector down the other for every number on the cabinet you have selected: width,
+          height, depth, doors, drawers, shelves, drawer heights, blind corner, board species
+          and thickness for that one cabinet alone.
         </p>
         <ul class="bullets">
           <li>Snapping drags and pinned positions</li>
+          <li>Colour, door style and handles, set right beside the drawing</li>
           <li>Warnings drawn on the cabinet: overlaps, shelf spans, doors too wide, gaps</li>
           <li>Walk the room in first person at eye height</li>
         </ul>

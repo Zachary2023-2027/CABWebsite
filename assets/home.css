@@ -336,6 +336,12 @@ a { color: var(--a-50); text-decoration-thickness: 1px; text-underline-offset: 3
   stroke: color-mix(in srgb, var(--n-05) 44%, transparent);
   stroke-width: 1.5;
 }
+/* The panels the app draws on a shaker front. Dimmer than the carcass lines,
+   the way a shadow line reads on the real drawing. */
+.hook__art .art-layer .panel rect {
+  stroke: color-mix(in srgb, var(--n-05) 26%, transparent);
+  stroke-width: 1.2;
+}
 .hook__art .art-layer .kick {
   fill: color-mix(in srgb, var(--w-50) 34%, transparent);
   stroke: color-mix(in srgb, var(--w-70) 30%, transparent);
@@ -553,6 +559,54 @@ a { color: var(--a-50); text-decoration-thickness: 1px; text-underline-offset: 3
   }
   .journey__frame { max-height: 34vh; }
   .journey__title { margin-bottom: 22px; }
+}
+
+/* --- 3b. What it looks like ---------------------------------------------- */
+
+.look { padding: clamp(90px, 14vw, 170px) 0; }
+.look .eyebrow { color: var(--w-50); }
+.look__note { margin-top: clamp(40px, 6vw, 64px); }
+
+/* Five doors in a row, drawn the way the app draws them. */
+.doors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: clamp(14px, 2vw, 26px);
+  margin-top: clamp(40px, 6vw, 64px);
+}
+.door { margin: 0; display: grid; gap: 12px; justify-items: center; }
+.door svg { width: 100%; max-width: 130px; height: auto; }
+.door figcaption {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.door .d { fill: var(--n-05); stroke: var(--n-50); stroke-width: 2; }
+.door .p { fill: var(--n-10); stroke: var(--n-50); stroke-width: 1.6; }
+.door .g { fill: #DCE7EB; stroke: var(--n-50); stroke-width: 1.6; }
+.door line { stroke: var(--n-50); stroke-width: 1.4; }
+.door .h { fill: var(--w-50); stroke: none; }
+
+/* The app's own finish list, not an impression of it. */
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px 20px;
+  list-style: none;
+  margin: 30px 0 0;
+  padding: 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.swatches li { display: flex; align-items: center; gap: 10px; }
+.chip {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
 }
 
 /* --- 4. Features --------------------------------------------------------- */
