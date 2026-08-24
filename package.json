@@ -1,0 +1,14 @@
+{
+  "name": "kitchen-cabinet-builder-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The static builder at the site root. The Vite viewer under app/ is its own package.",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.10"
+  }
+}

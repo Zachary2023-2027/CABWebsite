@@ -29,14 +29,26 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+
+      # Two packages, two suites: the root builder's model and the viewer's.
+      # Both gate the deploy — a red suite must not reach Pages.
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix app
+
+      - name: Test the site
+        run: npm test
+
+      - name: Test the viewer
+        run: npm test --prefix app
 
       # The viewer is a Vite app. Everything else on the site is static.
       - name: Build the viewer
-        working-directory: app
-        run: |
-          npm ci
-          npm run build
+        run: npm run build --prefix app
 
       # Pages must already be switched on for the repo:
       # Settings -> Pages -> Source: "GitHub Actions".

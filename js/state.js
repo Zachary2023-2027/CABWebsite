@@ -33,6 +33,15 @@ export function starterState() {
   };
 }
 
+/** Coerce a stored number into range, falling back when it is absent or junk.
+    null and '' are absent, not zero — Number() would quietly call them 0 and
+    clamp them to the bottom of the range instead of using the default. */
+function num(v, lo, hi, fallback) {
+  if (v === null || v === undefined || v === '') return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
+}
+
 /** Merge a stored blob over defaults so older saves keep working. */
 function hydrate(raw) {
   const base = starterState();
@@ -43,15 +52,29 @@ function hydrate(raw) {
         .map((it) => ({
           uid: it.uid || uid(),
           typeId: it.typeId,
-          width: Number(it.width) || TYPE_BY_ID[it.typeId].defaultWidth,
-          height: it.height == null ? undefined : Number(it.height),
+          width: num(it.width, 1, 120, TYPE_BY_ID[it.typeId].defaultWidth),
+          height: it.height == null ? undefined : num(it.height, 1, 144, undefined),
         }))
     : base.items;
+  // Numbers off the wire are clamped, not trusted: a corrupt or hand-edited
+  // save otherwise puts NaN through the layout and blanks the whole drawing.
+  const wall = raw.wall || {};
+  const opts = raw.options || {};
+
   return {
-    wall: { ...base.wall, ...(raw.wall || {}) },
+    wall: {
+      width: num(wall.width, 24, 600, base.wall.width),
+      height: num(wall.height, 72, 144, base.wall.height),
+    },
     style: { ...base.style, ...(raw.style || {}) },
     counter: { ...base.counter, ...(raw.counter || {}) },
-    options: { ...base.options, ...(raw.options || {}) },
+    options: {
+      ...base.options,
+      ...opts,
+      install: Boolean(opts.install ?? base.options.install),
+      installRate: num(opts.installRate, 0, 1, base.options.installRate),
+      taxRate: num(opts.taxRate, 0, 0.25, base.options.taxRate),
+    },
     units: raw.units === 'cm' ? 'cm' : 'in',
     items,
     selected: null,

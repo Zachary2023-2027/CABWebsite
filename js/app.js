@@ -34,6 +34,18 @@ const toDisplay = (inches) =>
   state.units === 'cm' ? Math.round(inches * CM * 10) / 10 : Math.round(inches * 10) / 10;
 const fromDisplay = (v) => (state.units === 'cm' ? Number(v) / CM : Number(v));
 
+// Inch bounds for the two wall inputs, mirrored from index.html.
+const WALL_W = { min: 24, max: 600 };
+const WALL_H = { min: 72, max: 144 };
+const PRESETS = new Set([96, 120, 144, 168, 192]);
+
+/** Restate an input's inch bounds in whatever unit is on display. */
+function applyBounds(node, { min, max }) {
+  node.min = String(toDisplay(min));
+  node.max = String(toDisplay(max));
+  node.step = state.units === 'cm' ? '0.1' : '1';
+}
+
 // ---- one-time setup -----------------------------------------------------
 
 function fillSelect(node, list, labelFn = (o) => o.name) {
@@ -65,13 +77,29 @@ function syncControls() {
   el.counterOn.checked = state.counter.enabled;
   el.installOn.checked = state.options.install;
   el.taxRate.value = Math.round(state.options.taxRate * 10000) / 100;
+
+  // min/max/step are authored in inches. In cm the *value* is converted but
+  // the attributes were not, so every cm figure fell outside the stated range
+  // and the browser marked the field invalid and stepped by 1cm.
+  applyBounds(el.wallW, WALL_W);
+  applyBounds(el.wallH, WALL_H);
   el.wallW.value = toDisplay(state.wall.width);
   el.wallH.value = toDisplay(state.wall.height);
-  el.preset.value = String(state.wall.width);
-  el.units.textContent = state.units;
 
+  // A custom width matches no preset; without a placeholder the select would
+  // blank out rather than say what the wall is.
+  el.preset.value = PRESETS.has(state.wall.width) ? String(state.wall.width) : '';
+
+  el.units.textContent = state.units;
+  el.units.setAttribute('aria-label', `Display units: ${state.units}`);
+
+  // A radiogroup is a single tab stop whose members are reached with the arrow
+  // keys. Every swatch was independently tabbable, which is neither what the
+  // role promises nor what a screen reader announces.
   for (const s of el.finishes.querySelectorAll('.swatch')) {
-    s.setAttribute('aria-checked', String(s.dataset.finish === state.style.finish));
+    const on = s.dataset.finish === state.style.finish;
+    s.setAttribute('aria-checked', String(on));
+    s.tabIndex = on ? 0 : -1;
   }
 }
 
@@ -107,7 +135,11 @@ function renderItems(sum) {
 
   el.items.innerHTML = sum.lines.map((l, i) => {
     const { type: t, item: it } = l;
-    const opts = (values, current) => values
+    // A width from an older save (or a hand-edited export) may not be in the
+    // type's list. Carry it as its own option rather than letting the select
+    // fall back to the first entry and misreport the size.
+    const opts = (values, current) => (values.includes(current) ? values : [...values, current])
+      .sort((a, b) => a - b)
       .map((v) => `<option value="${v}"${v === current ? ' selected' : ''}>${esc(fmtLen(v, state.units))}</option>`)
       .join('');
 
@@ -125,8 +157,8 @@ function renderItems(sum) {
       ${heightSel}
       <span class="iprice">${t.appliance ? '—' : esc(fmtMoney(l.total))}</span>
       <span class="iacts">
-        <button type="button" data-act="up"   data-uid="${esc(it.uid)}" title="Move left"  aria-label="Move ${esc(t.name)} left">↑</button>
-        <button type="button" data-act="down" data-uid="${esc(it.uid)}" title="Move right" aria-label="Move ${esc(t.name)} right">↓</button>
+        <button type="button" data-act="up"   data-uid="${esc(it.uid)}" title="Move left"  aria-label="Move ${esc(t.name)} left">←</button>
+        <button type="button" data-act="down" data-uid="${esc(it.uid)}" title="Move right" aria-label="Move ${esc(t.name)} right">→</button>
         <button type="button" data-act="dup"  data-uid="${esc(it.uid)}" title="Duplicate"  aria-label="Duplicate ${esc(t.name)}">⧉</button>
         <button type="button" data-act="del"  data-uid="${esc(it.uid)}" title="Remove"     aria-label="Remove ${esc(t.name)}">✕</button>
       </span>
@@ -189,9 +221,28 @@ function renderQuote(sum) {
   el.quote.innerHTML = head + body + foot;
 }
 
+/**
+ * Identify a focused control well enough to find it again after its container
+ * has been replaced. Every control this app rebuilds is addressable by the
+ * item it belongs to plus its role within that item.
+ */
+function focusKey(node) {
+  if (!node || node === document.body) return null;
+  const uid = node.dataset?.uid;
+  if (!uid) return null;
+  if (node.dataset.size) return `[data-size="${node.dataset.size}"][data-uid="${uid}"]`;
+  if (node.dataset.act) return `[data-act="${node.dataset.act}"][data-uid="${uid}"]`;
+  return null;
+}
+
 function render() {
   const lay = layout(state.items, state.wall);
   const sum = summarize(state, lay);
+
+  // renderItems replaces the list wholesale, which drops focus to <body> and
+  // strands anyone driving the run from the keyboard. Re-find the same control
+  // afterwards; if the item is gone (deleted), fall back to the list itself.
+  const key = focusKey(document.activeElement);
 
   renderPalette();
   el.preview.innerHTML = scene(state, lay);
@@ -201,6 +252,12 @@ function render() {
   renderSummary(sum);
   renderQuote(sum);
   el.itemCount.textContent = sum.lines.length ? `· ${sum.lines.length}` : '';
+
+  if (key) {
+    const again = el.items.querySelector(key);
+    if (again) again.focus();
+    else (el.items.querySelector('[data-act]') || el.items).focus?.();
+  }
 
   S.save(state);
 }
@@ -246,12 +303,33 @@ el.preview.addEventListener('click', (e) => {
   render();
 });
 
-el.finishes.addEventListener('click', (e) => {
-  const sw = e.target.closest('[data-finish]');
-  if (!sw) return;
-  state.style.finish = sw.dataset.finish;
+function selectFinish(id, focus) {
+  state.style.finish = id;
   syncControls();
   render();
+  if (focus) el.finishes.querySelector(`[data-finish="${id}"]`)?.focus();
+}
+
+el.finishes.addEventListener('click', (e) => {
+  const sw = e.target.closest('[data-finish]');
+  if (sw) selectFinish(sw.dataset.finish, false);
+});
+
+const ARROW = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+
+el.finishes.addEventListener('keydown', (e) => {
+  const swatches = [...el.finishes.querySelectorAll('.swatch')];
+  const i = swatches.indexOf(e.target.closest('.swatch'));
+  if (i < 0) return;
+
+  if (e.key in ARROW) {
+    e.preventDefault();
+    const n = swatches.length;
+    selectFinish(swatches[(i + ARROW[e.key] + n) % n].dataset.finish, true);
+  } else if (e.key === 'Home' || e.key === 'End') {
+    e.preventDefault();
+    selectFinish(swatches[e.key === 'Home' ? 0 : swatches.length - 1].dataset.finish, true);
+  }
 });
 
 el.doorStyle.addEventListener('change', () => { state.style.door = el.doorStyle.value; render(); });
@@ -293,13 +371,20 @@ el.units.addEventListener('click', () => {
   render();
 });
 
-el.theme.addEventListener('click', () => {
+function syncThemeButton() {
   const root = document.documentElement;
   const dark = root.dataset.theme
     ? root.dataset.theme === 'dark'
     : matchMedia('(prefers-color-scheme: dark)').matches;
-  root.dataset.theme = dark ? 'light' : 'dark';
+  el.theme.setAttribute('aria-pressed', String(dark));
+  return dark;
+}
+
+el.theme.addEventListener('click', () => {
+  const root = document.documentElement;
+  root.dataset.theme = syncThemeButton() ? 'light' : 'dark';
   localStorage.setItem('kcb.theme', root.dataset.theme);
+  syncThemeButton();
 });
 
 $('#reset').addEventListener('click', () => {
@@ -341,5 +426,6 @@ document.addEventListener('keydown', (e) => {
 
 initTheme();
 initControls();
+syncThemeButton();
 syncControls();
 render();
