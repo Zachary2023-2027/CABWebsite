@@ -164,7 +164,10 @@ function PartCard({ part }) {
 
 function CabinetDetail({ unit, label, resolvedTheme }) {
   const [explode, setExplode] = useState(0);
-  const [doors, setDoors] = useState('closed');
+  /* Open, not closed. This screen is for looking at how one cabinet is built,
+     and a shut cabinet is a box: the shelves, the drawer boxes and the runners
+     you came here to see are all behind a door. */
+  const [doors, setDoors] = useState('open');
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [ghostMode, setGhostMode] = useState(false);
@@ -213,9 +216,13 @@ function CabinetDetail({ unit, label, resolvedTheme }) {
                      style={{ '--pct': `${explode}%` }} aria-label="Exploded view"
                      onChange={(e) => setExplode(+e.target.value)} />
             </div>
+            {/* It said Drawers and it has never only been drawers: it opens
+                and hides every front on the cabinet, doors included. On a
+                pantry that made it look broken, because pressing Open on a
+                control named after a drawer did nothing you could see. */}
             <div className="ctl-row">
-              <span className="field__label">Drawers</span>
-              <div className="seg" role="group" aria-label="Drawers">
+              <span className="field__label">Fronts</span>
+              <div className="seg" role="group" aria-label="Doors and drawer fronts">
                 {['closed', 'open', 'hidden'].map((v) => (
                   <button key={v} className="seg__item" aria-pressed={doors === v}
                           onClick={() => setDoors(v)}>{v[0].toUpperCase() + v.slice(1)}</button>

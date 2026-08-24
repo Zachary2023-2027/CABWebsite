@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { bounds } from './cabinet.js';
+import { openingSide } from './draw2d.js';
 
 /* Materials. Matte, close to the real board. Doors sit one value off the
    carcass so the eye separates them without needing the outline to do it.
@@ -63,7 +64,8 @@ export function cssVar(name, fallback) {
 
 /* --- one part ------------------------------------------------------------ */
 
-export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, showLabel, warn }) {
+export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, clip, showLabel,
+                       warn, swing }) {
   const { box: geo, edges } = boxGeo(p.size[0], p.size[1], p.size[2]);
 
   const tone = surfaceFor(p);
@@ -75,8 +77,9 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
 
   if (hidden) return null;
 
-  return (
-    <group position={centre}>
+  const body = (
+    <group position={swing ? [centre[0] - swing.pivot[0], centre[1], centre[2] - swing.pivot[1]]
+      : centre}>
       <mesh
         geometry={geo}
         /* Every panel casts and takes a shadow. Without this a kitchen is lit
@@ -114,6 +117,17 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
           <span className="pt-label">{p.code.split('-').slice(1).join('-')}</span>
         </Html>
       )}
+    </group>
+  );
+
+  /* A door does not slide open, it swings, so opening one is a rotation about
+     its hinge stile. The outer group stands on the hinge and turns; the inner
+     group carries the panel back out to where it really is. Without a swing
+     there is no outer group at all and this is the same node it always was. */
+  if (!swing) return body;
+  return (
+    <group position={[swing.pivot[0], 0, swing.pivot[1]]} rotation={[0, swing.angle, 0]}>
+      {body}
     </group>
   );
 }
@@ -232,17 +246,37 @@ function Scene({
   const bAss = useMemo(() => bounds(cabinet, 0), [cabinet]);
   const bExp = useMemo(() => bounds(cabinet, 1), [cabinet]);
 
+  /* How far in front of the carcass an open cabinet reaches: a door swung
+     back stands out by its own width, a drawer by its runner travel. The
+     frame has to allow for it or opening the cabinet pushes half of it off
+     screen. */
+  const openReach = useMemo(() => {
+    if (doors !== 'open') return 0;
+    let reach = 0;
+    for (const q of cabinet.parts) {
+      if (q.group !== 'front') continue;
+      if (q.drawer) reach = Math.max(reach, cabinet.cfg.runnerLength);
+      else if (!q.code.endsWith('-BLIND') && !q.code.endsWith('-FALSE')) {
+        reach = Math.max(reach, q.size[0]);
+      }
+    }
+    return reach;
+  }, [cabinet, doors]);
+
   const target = useMemo(() => [
     bAss.min[0] + bAss.size[0] / 2 - W / 2,
     bAss.min[1] + bAss.size[1] / 2,
-    bAss.min[2] + bAss.size[2] / 2 - D / 2,
-  ], [bAss, W, D]);
+    /* An open cabinet reaches forward, so the middle of what you are looking
+       at is in front of the middle of the carcass. */
+    bAss.min[2] + bAss.size[2] / 2 - D / 2 + openReach * (1 - t) / 2,
+  ], [bAss, W, D, openReach, t]);
 
   const distance = useMemo(() => {
     const now = [0, 1, 2].map((i) => bAss.size[i] + (bExp.size[i] - bAss.size[i]) * t);
+    now[2] += openReach * (1 - t);
     const radius = Math.max(...now) * 0.5 * 1.42;
     return radius / Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2);
-  }, [bAss, bExp, t, camera]);
+  }, [bAss, bExp, t, camera, openReach]);
 
   const dimColor = cssVar('--dw-dim', '#7A736A');
   const groundColor = cssVar('--sunken', '#EAE7E1');
@@ -283,6 +317,33 @@ function Scene({
     if (p.group === 'hardware' && !show.hardware) return true;
     if (p.group === 'front' && doors === 'hidden') return true;
     return false;
+  };
+
+  /* Opening a cabinet means opening all of it. A drawer runs out on its
+     runners, which the offset above already does, and a door turns on its
+     hinges, which is this. Without it, Open did nothing at all to a cabinet
+     with no drawers in it: you pressed it on a pantry and watched a sealed
+     box stay sealed.
+
+     The hinges are on the stile away from the handle, which is the rule the
+     elevation already uses to decide where to draw the handle, so the two
+     views agree about which way a door opens. A blind panel and a false
+     front are screwed on and do not move.
+
+     Nothing swings while the cabinet is exploded: the parts are flying apart
+     to be looked at individually and turning one of them as it goes reads as
+     a glitch. */
+  const swingOf = (p) => {
+    if (!openAmt || t > 0.02) return null;
+    if (p.group !== 'front' || p.drawer) return null;
+    if (p.code.endsWith('-BLIND') || p.code.endsWith('-FALSE')) return null;
+
+    const hinge = openingSide(p.pos[0], p.size[0], W) === 'right' ? 'left' : 'right';
+    const pivotX = hinge === 'left' ? p.pos[0] : p.pos[0] + p.size[0];
+    /* Just under a right angle. A door drawn at exactly 90 degrees lines up
+       edge on with the carcass side and disappears. */
+    const angle = THREE.MathUtils.degToRad(95) * (hinge === 'left' ? -1 : 1);
+    return { hinge, pivot: [pivotX, p.pos[2] + p.size[2] / 2], angle };
   };
 
   return (
@@ -344,6 +405,7 @@ function Scene({
             onSelect={(pp) => setSelected(selected === pp.code ? null : pp.code)}
             clip={clip}
             showLabel={show.labels}
+            swing={swingOf(p)}
           />
         ))}
       </group>
