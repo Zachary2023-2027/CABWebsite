@@ -128,6 +128,16 @@ export const PROJECT = {
   boxFinish: '',
   kickFinish: '',
   panelFinish: '',
+  /* The benchtop has no board species to guess from, so empty here means
+     stone rather than whatever the carcass is. */
+  benchFinish: '',
+
+  /* How the drawing shows a front, and what the handles look like on it.
+     Both are drawing settings. A shaker door is still one rectangle of board
+     on the cut list, and every door and drawer already takes one handle in
+     the fittings, so neither moves a part, a hole or a price. */
+  doorStyle: 'shaker',
+  handle: 'bar',
 
   /* The clearances the checks screen measures against. Every one is a
      starting point rather than a rule this app is asserting: they vary by

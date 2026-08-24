@@ -1,81 +1,62 @@
 # Kitchen Cabinet Builder
 
+Design a kitchen, then build it. Lay out a run of frameless cabinets, watch it draw
+itself to scale and stand up in 3D, and walk away with a cut list, sheet layouts, a
+drilling schedule, a hardware list and what the whole thing costs.
+
+Live at <https://zachary2023-2027.github.io/CABWebsite/>.
+
 ## What is in here
 
 | Path | What it is |
 | --- | --- |
-| `index.html` | The front page. Explains what the site does and links into the app. Static: `assets/home.css`, `js/home.js`, and the typefaces already in `design/fonts`. |
-| `app/` | The planner. Design a kitchen and get the cut list, sheet layouts, drilling schedule, hardware, costing and print pack. Vite, React, three.js. Documented in [`docs/CONTEXT.md`](docs/CONTEXT.md). |
-| `viewer.html` | The original single-page estimator, described below. Unchanged, it just no longer sits at the site root. |
+| `index.html` | The front page. Says what the site does and links into the app. Static: `assets/home.css`, `js/home.js`, and the typefaces already in `design/fonts`. |
+| `app/` | The planner, and the only application on the site. Vite, React, three.js. Documented in [`docs/CONTEXT.md`](docs/CONTEXT.md). |
 | `design/` | Design tokens and the component reference pages. |
+| `docs/` | The context document and the original build prompt. |
 
-The front page uses the same warm neutral ramp, oiled hardwood and eucalyptus accent as
-`design/tokens.css`, so it looks like the same workshop as the app. Its motion is CSS
-scroll-driven animation behind `@supports`, with an `IntersectionObserver` fallback in
-`js/home.js` for browsers that do not have it. Content is visible in the markup and the
-page reads with JavaScript off.
+There used to be a second, simpler estimator at the site root. It has been removed: its
+drawing style now lives in the planner's elevation, and the planner is the only way in.
 
----
+## Running it
 
-## The quick estimator (`viewer.html`)
-
-An interactive kitchen cabinet configurator. Lay out a wall of cabinets, choose door
-style, finish and hardware, and get a live to-scale elevation drawing with a running
-price estimate you can print as a quote.
-
-No build step, no framework, no dependencies — plain HTML, CSS, and ES modules.
-
-### Running it
-
-ES modules need to be served over HTTP (opening `viewer.html` from the filesystem will
-not work):
+The front page is static, so any file server will do:
 
 ```sh
 python3 -m http.server 8000
-# then open http://localhost:8000 for the front page,
-# or http://localhost:8000/viewer.html for the estimator
+# then open http://localhost:8000
 ```
 
-Deploying is a file copy: the whole directory is static and makes zero network requests
-after load, so GitHub Pages or any static host serves it unchanged.
+The planner is a Vite app:
 
-### What it does
+```sh
+cd app
+npm install
+npm run dev     # development server
+npm test        # the full suite
+npm run build   # production build into app/dist
+```
 
-- **Catalog** — 18 cabinet types across base, wall, and tall rows, plus range,
-  dishwasher, and refrigerator placeholders. Palette icons are drawn with the same
-  renderer as the elevation, so they always reflect the current door style and finish.
-- **Layout** — cabinets are an ordered run, not fixed coordinates. Positions come from a
-  single walk with independent base and wall cursors; a pantry or fridge advances both,
-  so it correctly blocks the run above and below.
-- **Elevation** — inline SVG whose `viewBox` is authored in inches, so it scales to any
-  container and every stroke width is a real measurement. Draws toe kicks, door and
-  drawer fronts, per-style panel detail, hardware, countertops, appliances, and a
-  dimension line.
-- **Pricing** — per-unit prices scale with width, height, door style, and finish;
-  hardware is priced per pull. Countertop, installation, and tax are optional lines.
-- **Warnings** — run overruns, cabinets past the ceiling, a missing sink base, an
-  uncovered range, excess filler.
-- **Persistence** — autosaves to `localStorage`; Export writes the layout as JSON; Print
-  quote renders the drawing plus an itemised table on white.
+Deploying is a build plus a file copy, done by `.github/workflows/deploy.yml` on push.
+Nothing on the site makes a network request after load.
 
-Keyboard: `Delete` removes the selected cabinet, `←` / `→` move it along the run.
+## The front page
 
-### Layout of the code
+Same warm neutral ramp, oiled hardwood and eucalyptus accent as `design/tokens.css`, so
+it looks like the same workshop as the app. Its motion is CSS scroll-driven animation
+behind `@supports`, with an `IntersectionObserver` fallback in `js/home.js` for browsers
+that do not have it. Content is visible in the markup and the page reads with JavaScript
+off.
 
-| File | Responsibility |
-| --- | --- |
-| `js/catalog.js` | Dimensional constants, cabinet types, styles, finishes, hardware, countertops |
-| `js/state.js` | State shape, defaults, `localStorage`, mutations |
-| `js/layout.js` | Two-cursor layout engine, countertop segmentation, design warnings |
-| `js/pricing.js` | Pure pricing functions and the quote rollup |
-| `js/preview.js` | SVG renderer — elevation scene and palette icons |
-| `js/format.js` | Money, length, and percentage formatting (inch ↔ cm is display-only) |
-| `js/app.js` | DOM wiring and the render loop |
+## The planner
 
-`layout.js` and `pricing.js` are pure and DOM-free — they can be imported and tested
-under Node directly.
+Eleven screens over one project: Planner, Cabinet, Checks, Reference, Cut list, Nesting,
+Drilling, Hardware, Workshop, Costing, Order list, Print and Settings. Everything reads
+one part list, so the drawing, the nest, the holes and the price cannot disagree.
 
-Measurements are stored in inches throughout; the unit toggle only changes display.
+All dimensions are millimetres and all money is AUD. Projects autosave to the browser
+and export as a `.kcb.json` file. There is no server and no account.
 
-See [`docs/BUILD_PROMPT.md`](docs/BUILD_PROMPT.md) for the specification this was built
-from, including a note on its provenance.
+See [`docs/CONTEXT.md`](docs/CONTEXT.md) for a full description of the model, the
+screens and the invariants, and [`docs/BUILD_PROMPT.md`](docs/BUILD_PROMPT.md) for the
+specification the original estimator was built from, including a note on its provenance.

@@ -344,10 +344,11 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
     [lay.wall.length, depth, bar.side, bar.depth, cfg.benchOverhang],
   );
 
-  /* The benchtop is bought rather than made, so it has no board and no finish
-     to follow. Stone. The kickboard is cut from board like everything else, so
-     it takes the colour the project says it is. */
-  const benchCol = SURFACE.stone.color;
+  /* The benchtop is bought rather than made, so it has no board to guess a
+     colour from. It has a colour you can set, though, and the elevation reads
+     the same one: a benchtop that is walnut in the drawing and stone in the
+     room is two answers to one question. Left alone it is stone. */
+  const benchCol = finishFor('bench', cfg)?.hex || SURFACE.stone.color;
   const kickCol = finishFor('kick', cfg)?.hex || '#4A453D';
   /* Glazed splashback. Cooler and glossier than the plaster behind it. */
   const splashCol = '#DCE3E0';

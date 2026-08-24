@@ -1,8 +1,8 @@
 /* ===========================================================================
    Kitchen Cabinet Builder. Front page.
 
-   Standalone from assets/styles.css (the quick estimator) and from the app in
-   /app, which this file must never affect. Colours are lifted from
+   Standalone from the app in /app, which this file must never affect. The
+   front page is static: no build step, no framework. Colours are lifted from
    design/tokens.css so the marketing page and the application look like the
    same workshop: a warm neutral ramp, oiled hardwood as the brand mark, and
    eucalyptus green as the only accent.

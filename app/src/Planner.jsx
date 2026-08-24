@@ -5,6 +5,7 @@ import { finishFor } from './finishes.js';
 import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
+import Appearance from './Appearance.jsx';
 import { Board, Choice, Close, Num, Pick, Section, Warn } from './Fields.jsx';
 import { RUNNERS } from './hardware.js';
 import { OBSTACLE_LIST, natureOf, newObstacle, obstacleKind } from './obstacles.js';
@@ -381,7 +382,6 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
 export default function Planner({ project, setProject, onOpen3D, arrangement, setArrangement }) {
   const [selected, setSelected] = useState(null);
   const [hovered, setHovered] = useState(null);
-  const [drawerOpen, setDrawerOpen] = useState(true);
   const [preset, setPreset] = useState('Iso');
   const [nonce, setNonce] = useState(0);
   const [eye, setEye] = useState(false);
@@ -417,6 +417,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [side, setSide] = useState('front');
   const [wallsOpen, setWallsOpen] = useState(false);
   const [advOpen, setAdvOpen] = useState(false);
+  const [lookOpen, setLookOpen] = useState(false);
   const [selDrawer, setSelDrawer] = useState(null);
   const [opt, setOpt] = useState(null);
   const [optBusy, setOptBusy] = useState(false);
@@ -1017,13 +1018,15 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
         <div className="wall-len">
           <div className="seg" role="group" aria-label="Arrangement">
-            {[['split', 'Split'], ['drawer', 'Drawer'], ['focus', 'Focus']].map(([k, label]) => (
+            {[['plan', '2D'], ['focus', 'Focus']].map(([k, label]) => (
               <button key={k} className="seg__item" aria-pressed={arrangement === k}
                       onClick={() => setArrangement(k)}>{label}</button>
             ))}
           </div>
           <button className="btn btn--ghost" onClick={closeGaps}
                   title="Unpin every cabinet on this wall and pack them back together">Close gaps</button>
+          <button className="btn btn--ghost" onClick={() => setLookOpen(true)}
+                  title="Colours, door style and handles">Appearance</button>
           <button className="btn btn--ghost" onClick={() => setAdvOpen(true)}>Advanced design</button>
           <button className="btn btn--ghost" onClick={runOptimise} disabled={optBusy}>
             {optBusy ? 'Working' : 'Optimise'}
@@ -1039,32 +1042,17 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
         </aside>
 
         <section className="canvas-area">
-          {arrangement === 'split' && (
-            <div className="split">
-              {elevation}
-              {view3d}
-            </div>
-          )}
-
-          {arrangement === 'drawer' && (
-            <div className="drawer-arr">
-              {elevation}
-              <div className={`bottom-drawer ${drawerOpen ? 'is-open' : ''}`}>
-                <button className="drawer-handle" onClick={() => setDrawerOpen((o) => !o)}
-                        aria-expanded={drawerOpen}>
-                  <span>3D</span>
-                  <span className="drawer-caret">{drawerOpen ? 'Hide' : 'Show'}</span>
-                </button>
-                {drawerOpen && view3d}
-              </div>
-            </div>
-          )}
-
-          {arrangement === 'focus' && (
+          {/* Two arrangements, and they are the two jobs. 2D is the drawing on
+              its own, which is what you work in and what you print, and it
+              mounts no 3D at all. Focus is the room, with the drawing kept in
+              the corner so you can still see where you are. */}
+          {arrangement === 'focus' ? (
             <div className="focus-arr">
               {view3d}
               <div className="inset">{elevation}</div>
             </div>
+          ) : (
+            <div className="plan-arr">{elevation}</div>
           )}
 
           {(notice || wallWarns.length > 0) && (
@@ -1102,6 +1090,10 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                      onOpen3D={onOpen3D} onClose={() => pickUnit(null)} />
         </aside>
       </div>
+
+      {lookOpen && (
+        <Appearance cfg={project.cfg} onChange={setCfg} onClose={() => setLookOpen(false)} />
+      )}
 
       {advOpen && (
         <Advanced cfg={project.cfg} onChange={setCfg} onReset={resetCfg}

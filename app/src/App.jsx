@@ -431,7 +431,7 @@ export default function App() {
   const history = useProjectHistory(project, setProjectRaw);
   const setProject = history.setProject;
   const [screen, setScreen] = useState('planner');
-  const [arrangement, setArrangement] = useState('drawer');
+  const [arrangement, setArrangement] = useState('plan');
   const [detailUid, setDetailUid] = useState(null);
   const [cut, setCut] = useState(() => new Set());
   const [quoted, setQuoted] = useState('');
@@ -580,7 +580,7 @@ export default function App() {
     switch (screen) {
       case 'planner':
         return <Planner project={project} setProject={setProject} onOpen3D={openDetail}
-                        arrangement={webgl ? arrangement : 'drawer'} setArrangement={setArrangement} />;
+                        arrangement={webgl ? arrangement : 'plan'} setArrangement={setArrangement} />;
       case 'cabinet':
         return detail
           ? <CabinetDetail unit={detail.unit} label={detail.label} resolvedTheme={resolvedTheme} />

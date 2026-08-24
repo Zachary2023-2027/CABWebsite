@@ -51,7 +51,6 @@ These are user-imposed rules that apply to any new work:
 
 ```
 /index.html           the front page, static, marketing only
-/viewer.html          older single-page vanilla-JS viewer
 /app                  the real application (this document describes /app)
   /src                all application code
   vite.config.js      base './', SINGLE=1 env builds a self-contained HTML file
@@ -76,12 +75,13 @@ These are user-imposed rules that apply to any new work:
 | `optimise.js` | Width search per wall, and project-wide material and build plans |
 | `storage.js` | localStorage, snapshots, validation on load, file import and export |
 | `cabinet.js` | Helpers for the single-cabinet viewer: bounds, `cutSize`, `fmt` |
+| `draw2d.js` | Front detail for the elevation: door styles, handles, panels, grain, appliance glyphs. Geometry only, in millimetres |
 
 **Screens (React):** `App.jsx` (shell, rail, top strip, undo, start screen),
 `Planner.jsx`, `Elevation.jsx`, `Kitchen3D.jsx`, `Viewer.jsx`, `Advanced.jsx`,
 `Fields.jsx`, `Screen.jsx`, `CutList.jsx`, `Nesting.jsx`, `Drilling.jsx`,
 `Hardware.jsx`, `Costing.jsx`, `Settings.jsx`, `Reference.jsx`,
-`Workshop.jsx`, `Print.jsx`, `app.css`.
+`Workshop.jsx`, `Print.jsx`, `Appearance.jsx`, `app.css`.
 
 ---
 
@@ -259,11 +259,18 @@ The main screen. A cabinet picker on the left (searchable, grouped, with
 line-drawing glyphs), a 2D elevation and a 3D view in the middle, an inspector
 on the right.
 
-- **Arrangements**: Split (elevation and 3D side by side), Drawer (elevation
-  with the 3D in a collapsible tray), Focus (3D large with the elevation
-  inset).
+- **Arrangements**: two. *2D* is the elevation alone filling the canvas, and
+  mounts no 3D at all. *Focus* is the 3D large with the elevation inset in the
+  corner. 2D is the default and the fallback when WebGL is unavailable.
 - **Elevation** is drawn to scale from the same part list as the 3D, so door
-  and drawer divisions cannot disagree. Click to select, click a drawer front
+  and drawer divisions cannot disagree. Fronts carry the detail the project's
+  door style implies (slab, shaker, raised, glass, beadboard), a handle in the
+  chosen style on the opening stile of a door or centred on a drawer, and
+  grain on a timber finish. A handle sits at the end of the door you reach
+  for: low on a wall cabinet, high on a base one. Appliance cavities are drawn
+  as the appliance, still dashed because nothing in them is supplied. All of
+  that geometry lives in `draw2d.js`, which decorates rectangles the part list
+  already placed and never invents or moves one. Click to select, click a drawer front
   to select that drawer, drag to move with snapping. Shows kickboard,
   benchtop, obstacles, cabinet numbers and widths, and dimension lines.
 - **3D** shows the whole joined run for an L or U, not one wall at a time.
@@ -280,6 +287,11 @@ on the right.
   any typed thickness; a full drawer-box section (sides board and thickness,
   base board and thickness, box height, runner length, clearance, setback,
   groove, reveal); Lock width; delete; move left and right; open in 3D.
+- **Appearance** pop-up holds what the kitchen looks like: the colour of the
+  fronts, carcass, kickboard and benchtop as swatches, plus door style and
+  handle style. Colour is real and carries to the cut list and the print pack.
+  Door style and handle style are drawing settings and the panel says so: the
+  part list, the nest, the drilling and the price do not move.
 - **Advanced design** pop-up holds the project defaults: room shape and wall
   lengths, back type, drawer base fixing, the five board species, and all
   thickness, height, depth and gap numbers.

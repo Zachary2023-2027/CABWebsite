@@ -169,6 +169,12 @@
   --dw-line: #2A2722;
   --dw-dim: #6E675E;
   --dw-hatch: #B4AB9C;
+  /* Front detail. A handle is the one thing on a cabinet that is not board,
+     and a glazed door is the one thing you see through, so both need a colour
+     of their own rather than borrowing the carcass. */
+  --dw-metal: #8A8A8E;
+  --dw-glass: #CFE0E6;
+  --dw-glass-dark: #2A2E33;
 }
 
 /* --- Semantic mapping, dark. Not an inversion. --------------------------
@@ -223,6 +229,9 @@
     --dw-line: #C9C3B8;
     --dw-dim: #8A8378;
     --dw-hatch: #5A5248;
+    --dw-metal: #A8A8AE;
+    --dw-glass: #35505C;
+    --dw-glass-dark: #101215;
   }
 }
 
@@ -272,6 +281,9 @@
   --dw-line: #C9C3B8;
   --dw-dim: #8A8378;
   --dw-hatch: #5A5248;
+  --dw-metal: #A8A8AE;
+  --dw-glass: #35505C;
+  --dw-glass-dark: #101215;
 }
 
 /* Forced theme scopes. Used to show both palettes at once, and by the print

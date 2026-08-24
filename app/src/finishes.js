@@ -139,7 +139,10 @@ export function finishFromName(boardName) {
    for.
    --------------------------------------------------------------------------- */
 
-export const ROLES = ['carcass', 'front', 'back', 'box', 'kick', 'panel'];
+/* `bench` is here so the benchtop can be a colour you choose rather than one
+   fixed grey. It is a drawing and 3D role only: no part is ever built into it,
+   so `roleOf` below never returns it and the cut list cannot see it. */
+export const ROLES = ['carcass', 'front', 'back', 'box', 'kick', 'panel', 'bench'];
 
 /** The board species a role uses, so the guess has something to read. */
 const BOARD_KEY = {
@@ -173,6 +176,11 @@ export function finishFor(role, P = {}) {
      carcass coloured rather than defaulting to white beside a navy kitchen. */
   const follows = { kick: 'carcass', panel: 'front' }[role];
   if (follows) return finishFor(follows, P);
+
+  /* A benchtop is not cut from your cabinet board and never was, so it does
+     not follow the carcass. Left alone it is stone, which is what most of
+     them are. */
+  if (role === 'bench') return FINISHES.stone;
 
   return finish(finishFromName(P.carcassBoard));
 }
@@ -259,3 +267,38 @@ export const inkOn = (hex) =>
 
 /** True when a finish is dark enough that light ink reads better on it. */
 export const isDark = (hex) => inkOn(hex) === INK_LIGHT;
+
+/* ---------------------------------------------------------------------------
+   Shading a finish.
+
+   A panelled door is one colour with a shadow in it. Rather than carrying a
+   second and third hex on every finish, the shadow is derived: the same
+   colour, moved toward black by a fraction. That way a finish added later
+   needs one hex and still draws a shaker door correctly.
+   --------------------------------------------------------------------------- */
+
+/** The same colour, darker by `amount` (0 to 1). */
+export function darken(hex, amount = 0.22) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const k = Math.max(0, Math.min(1, 1 - amount));
+  const ch = (shift) => Math.round(((n >> shift) & 255) * k);
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The same colour, lighter by `amount` (0 to 1). */
+export function lighten(hex, amount = 0.16) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex));
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  const k = Math.max(0, Math.min(1, amount));
+  const ch = (shift) => {
+    const v = (n >> shift) & 255;
+    return Math.round(v + (255 - v) * k);
+  };
+  return `#${[16, 8, 0].map((s) => ch(s).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** True when a finish is a timber, so the drawing should show grain. */
+export const isTimber = (f) => f?.group === 'Timber';
