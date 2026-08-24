@@ -13,7 +13,7 @@ Live at <https://zachary2023-2027.github.io/CABWebsite/>.
 | `index.html` | The front page. Says what the site does and links into the app. Static: `assets/home.css`, `js/home.js`, and the typefaces already in `design/fonts`. |
 | `app/` | The planner, and the only application on the site. Vite, React, three.js. Documented in [`docs/CONTEXT.md`](docs/CONTEXT.md). |
 | `design/` | Design tokens and the component reference pages. |
-| `docs/` | The context document and the original build prompt. |
+| `docs/` | The context document, the original build prompt, and the Blender asset pipeline. |
 
 There used to be a second, simpler estimator at the site root. It has been removed: its
 drawing style now lives in the planner's elevation, and the planner is the only way in.
