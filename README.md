@@ -1,25 +1,45 @@
 # Kitchen Cabinet Builder
 
+## What is in here
+
+| Path | What it is |
+| --- | --- |
+| `index.html` | The front page. Explains what the site does and links into the app. Static: `assets/home.css`, `js/home.js`, and the typefaces already in `design/fonts`. |
+| `app/` | The planner. Design a kitchen and get the cut list, sheet layouts, drilling schedule, hardware, costing and print pack. Vite, React, three.js. Documented in [`docs/CONTEXT.md`](docs/CONTEXT.md). |
+| `viewer.html` | The original single-page estimator, described below. Unchanged, it just no longer sits at the site root. |
+| `design/` | Design tokens and the component reference pages. |
+
+The front page uses the same warm neutral ramp, oiled hardwood and eucalyptus accent as
+`design/tokens.css`, so it looks like the same workshop as the app. Its motion is CSS
+scroll-driven animation behind `@supports`, with an `IntersectionObserver` fallback in
+`js/home.js` for browsers that do not have it. Content is visible in the markup and the
+page reads with JavaScript off.
+
+---
+
+## The quick estimator (`viewer.html`)
+
 An interactive kitchen cabinet configurator. Lay out a wall of cabinets, choose door
 style, finish and hardware, and get a live to-scale elevation drawing with a running
 price estimate you can print as a quote.
 
 No build step, no framework, no dependencies — plain HTML, CSS, and ES modules.
 
-## Running it
+### Running it
 
-ES modules need to be served over HTTP (opening `index.html` from the filesystem will
+ES modules need to be served over HTTP (opening `viewer.html` from the filesystem will
 not work):
 
 ```sh
 python3 -m http.server 8000
-# then open http://localhost:8000
+# then open http://localhost:8000 for the front page,
+# or http://localhost:8000/viewer.html for the estimator
 ```
 
 Deploying is a file copy: the whole directory is static and makes zero network requests
 after load, so GitHub Pages or any static host serves it unchanged.
 
-## What it does
+### What it does
 
 - **Catalog** — 18 cabinet types across base, wall, and tall rows, plus range,
   dishwasher, and refrigerator placeholders. Palette icons are drawn with the same
@@ -40,7 +60,7 @@ after load, so GitHub Pages or any static host serves it unchanged.
 
 Keyboard: `Delete` removes the selected cabinet, `←` / `→` move it along the run.
 
-## Layout of the code
+### Layout of the code
 
 | File | Responsibility |
 | --- | --- |

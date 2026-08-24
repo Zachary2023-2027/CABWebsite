@@ -50,7 +50,8 @@ These are user-imposed rules that apply to any new work:
 - Deployed to GitHub Pages by `.github/workflows/deploy.yml` on push.
 
 ```
-/                     older single-page vanilla-JS viewer, still served at the site root
+/index.html           the front page, static, marketing only
+/viewer.html          older single-page vanilla-JS viewer
 /app                  the real application (this document describes /app)
   /src                all application code
   vite.config.js      base './', SINGLE=1 env builds a self-contained HTML file

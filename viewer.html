@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Static page, no back end, no third party anything. Declared here because
+     GitHub Pages cannot set response headers. The favicon is a data: URI, so
+     img-src has to allow that one scheme. -->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  font-src 'self';
+  connect-src 'self';
+  object-src 'none';
+  base-uri 'none';
+  form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Kitchen Cabinet Builder</title>
+<meta name="description" content="Lay out a wall of kitchen cabinets, choose door style, finish and hardware, and get a live to-scale elevation with a running price estimate.">
+<link rel="stylesheet" href="assets/styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23b4632b'/><rect x='3' y='3.5' width='4.2' height='9' rx='.6' fill='%23f1efe9'/><rect x='8.8' y='3.5' width='4.2' height='9' rx='.6' fill='%23f1efe9'/></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <h1>Kitchen Cabinet Builder</h1>
+  </div>
+
+  <div class="topbar-controls">
+    <label class="field compact">
+      <span>Wall run</span>
+      <select id="preset">
+        <option value="96">8 ft</option>
+        <option value="120">10 ft</option>
+        <option value="144">12 ft</option>
+        <option value="168">14 ft</option>
+        <option value="192">16 ft</option>
+      </select>
+    </label>
+    <button type="button" id="units" class="btn ghost" aria-label="Toggle display units">in</button>
+    <button type="button" id="theme" class="btn ghost" aria-label="Toggle colour theme">◐</button>
+    <button type="button" id="reset" class="btn ghost">Reset</button>
+    <button type="button" id="export" class="btn ghost">Export</button>
+    <button type="button" id="print" class="btn primary">Print quote</button>
+  </div>
+</header>
+
+<main class="layout">
+
+  <!-- ---------- catalog ---------- -->
+  <aside class="pane catalog" aria-label="Cabinet catalog">
+    <h2 class="pane-title">Catalog</h2>
+    <p class="pane-hint">Click to add to the end of the run.</p>
+    <div id="palette"></div>
+  </aside>
+
+  <!-- ---------- stage ---------- -->
+  <section class="pane stage" aria-label="Elevation preview">
+    <div class="stage-head">
+      <h2 class="pane-title">Elevation</h2>
+      <div class="wallsize">
+        <label class="field compact">
+          <span>Wall width</span>
+          <input type="number" id="wallW" min="24" max="600" step="1">
+        </label>
+        <label class="field compact">
+          <span>Ceiling</span>
+          <input type="number" id="wallH" min="72" max="144" step="1">
+        </label>
+      </div>
+    </div>
+
+    <div id="preview" class="preview"></div>
+
+    <div id="warnings" class="warnings" role="status" aria-live="polite"></div>
+
+    <dl class="stats" id="stats"></dl>
+  </section>
+
+  <!-- ---------- configure ---------- -->
+  <aside class="pane config" aria-label="Configuration and pricing">
+    <h2 class="pane-title print-hide">Finish</h2>
+
+    <label class="field">
+      <span>Door style</span>
+      <select id="doorStyle"></select>
+    </label>
+
+    <fieldset class="field swatches">
+      <legend>Finish</legend>
+      <div id="finishes" class="swatch-grid" role="radiogroup" aria-label="Cabinet finish"></div>
+    </fieldset>
+
+    <label class="field">
+      <span>Hardware</span>
+      <select id="hardware"></select>
+    </label>
+
+    <label class="field">
+      <span>Countertop</span>
+      <select id="countertop"></select>
+    </label>
+
+    <div class="toggles">
+      <label class="check"><input type="checkbox" id="counterOn"> Include countertop</label>
+      <label class="check"><input type="checkbox" id="installOn"> Include installation</label>
+      <label class="field compact inline">
+        <span>Tax rate</span>
+        <input type="number" id="taxRate" min="0" max="25" step="0.05">
+        <span class="suffix">%</span>
+      </label>
+    </div>
+
+    <h2 class="pane-title spaced print-hide">Run <span class="count" id="itemCount"></span></h2>
+    <ol id="items" class="items"></ol>
+
+    <h2 class="pane-title spaced">Estimate</h2>
+    <table class="summary" id="summary"></table>
+    <p class="disclaimer">Budget estimate only. Excludes delivery, trim, and appliances.</p>
+  </aside>
+</main>
+
+<!-- print-only itemised quote -->
+<section class="quote-sheet" aria-hidden="true">
+  <h2>Itemised quote</h2>
+  <table id="quote"></table>
+</section>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

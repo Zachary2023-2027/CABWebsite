@@ -45,7 +45,7 @@ jobs:
       - name: Assemble the site
         run: |
           mkdir -p _site
-          cp -r index.html assets js design docs .nojekyll _site/
+          cp -r index.html viewer.html assets js design docs .nojekyll _site/
           mkdir -p _site/app
           cp -r app/dist/* _site/app/
           ls -R _site | head -40

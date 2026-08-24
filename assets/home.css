@@ -1,0 +1,740 @@
+/* ===========================================================================
+   Kitchen Cabinet Builder. Front page.
+
+   Standalone from assets/styles.css (the quick estimator) and from the app in
+   /app, which this file must never affect. Colours are lifted from
+   design/tokens.css so the marketing page and the application look like the
+   same workshop: a warm neutral ramp, oiled hardwood as the brand mark, and
+   eucalyptus green as the only accent.
+   =========================================================================== */
+
+/* --- Type. Local files, same ones the app uses, no network request. ------- */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../design/fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../design/fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../design/fonts/inter-latin-600-normal.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../design/fonts/jetbrains-mono-latin-400-normal.woff2') format('woff2');
+}
+
+:root {
+  /* Warm neutrals: raw board and sanded MDF. */
+  --n-00: #FBFAF7;
+  --n-05: #F4F2EE;
+  --n-10: #EAE7E1;
+  --n-20: #DFDAD2;
+  --n-30: #96908A;
+  --n-50: #6A645B;
+  --n-60: #443F38;
+  --n-70: #2D2A25;
+  --n-80: #1C1A17;
+  --n-90: #131210;
+
+  /* Oiled hardwood. The brand colour, used flat. */
+  --w-50: #8A5A32;
+  --w-60: #A66E3E;
+  --w-70: #C08A56;
+  --w-80: #D9A876;
+
+  /* Eucalyptus. The only accent. */
+  --a-50: #2C6046;
+  --a-60: #356F51;
+  --a-70: #6FA588;
+  --a-80: #8CBCA1;
+
+  --ink: var(--n-80);
+  --ink-soft: var(--n-50);
+  --paper: var(--n-00);
+  --rule: var(--n-20);
+
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --gutter: clamp(20px, 5vw, 64px);
+  --wrap: 1180px;
+  --nav-h: 56px;
+
+  color-scheme: light;
+}
+
+/* --- Reset and base ------------------------------------------------------ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  /* Anchors land below the sticky bar rather than under it. */
+  scroll-padding-top: calc(var(--nav-h) + 16px);
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  /* A sticky centrepiece dies quietly if any ancestor clips overflow. */
+  overflow-x: clip;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.022em; line-height: 1.08; }
+p { margin: 0; }
+img, svg { max-width: 100%; }
+code { font-family: var(--mono); font-size: 0.9em; }
+
+a { color: var(--a-50); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+:focus-visible {
+  outline: 2px solid var(--a-60);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 100;
+  background: var(--n-90);
+  color: var(--n-05);
+  padding: 10px 16px;
+  border-radius: 8px;
+}
+.skip:focus { left: 12px; }
+
+/* --- Buttons ------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+.btn--primary { background: var(--a-60); color: #fff; }
+.btn--primary:hover { background: var(--a-50); transform: translateY(-1px); }
+.btn--ghost {
+  border: 1px solid currentColor;
+  color: var(--ink);
+  background: transparent;
+}
+.btn--ghost:hover { transform: translateY(-1px); }
+.btn--sm { padding: 9px 18px; font-size: 14px; }
+.btn--lg { padding: 16px 34px; font-size: 18px; }
+
+/* On the dark beats the ghost button borrows the light ink. */
+.hook .btn--ghost, .close .btn--ghost { color: var(--n-05); }
+
+/* --- Scroll progress ----------------------------------------------------- */
+
+.progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 60;
+  background: transparent;
+  pointer-events: none;
+}
+.progress__bar {
+  display: block;
+  height: 100%;
+  background: var(--w-60);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+}
+@supports (animation-timeline: scroll()) {
+  .progress__bar {
+    animation: grow linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+@keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* --- Nav ----------------------------------------------------------------- */
+
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: var(--nav-h);
+  padding-inline: var(--gutter);
+  background: color-mix(in srgb, var(--n-90) 88%, transparent);
+  backdrop-filter: saturate(160%) blur(14px);
+  color: var(--n-05);
+}
+.nav__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font-weight: 500;
+  font-size: 15px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav__mark { width: 22px; height: 22px; color: var(--w-60); flex: none; }
+.nav__links {
+  display: flex;
+  gap: 26px;
+  margin-inline: auto;
+  font-size: 14px;
+}
+.nav__links a {
+  color: color-mix(in srgb, var(--n-05) 76%, transparent);
+  text-decoration: none;
+}
+.nav__links a:hover { color: var(--n-05); }
+.nav .btn--primary { margin-left: auto; }
+.nav__links + .btn--primary { margin-left: 0; }
+
+@media (max-width: 860px) {
+  .nav__links { display: none; }
+  .nav__brand span { font-size: 14px; }
+}
+
+/* --- 1. Hook ------------------------------------------------------------- */
+
+.hook {
+  position: relative;
+  isolation: isolate;
+  padding: clamp(64px, 11vh, 120px) 0 0;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #2A241E 0%, transparent 60%),
+    linear-gradient(180deg, var(--n-90) 0%, var(--n-80) 100%);
+  color: var(--n-05);
+  overflow: hidden;
+  text-align: center;
+}
+
+/* Grain: a stack of very low contrast timber-toned stripes drifting slowly as
+   the page scrolls. Decorative, transform only. */
+.hook__grain {
+  position: absolute;
+  inset: -20% -10%;
+  z-index: -1;
+  opacity: .3;
+  background: repeating-linear-gradient(
+    97deg,
+    transparent 0 22px,
+    color-mix(in srgb, var(--w-50) 22%, transparent) 22px 23px,
+    transparent 23px 60px,
+    color-mix(in srgb, var(--w-70) 10%, transparent) 60px 61px
+  );
+}
+@supports (animation-timeline: view()) {
+  .hook__grain {
+    animation: drift-slow linear both;
+    animation-timeline: view();
+    animation-range: cover;
+  }
+}
+@keyframes drift-slow { to { transform: translate3d(0, 8%, 0); } }
+
+.hook__inner {
+  max-width: 900px;
+  margin-inline: auto;
+  padding-inline: var(--gutter);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--w-80);
+  margin-bottom: 22px;
+}
+.context .eyebrow, .features .eyebrow { color: var(--w-50); }
+
+.hook__title {
+  font-size: clamp(38px, 6.6vw, 76px);
+  letter-spacing: -0.035em;
+}
+.hook__title .line { display: block; }
+.hook__title .line--accent {
+  color: var(--w-70);
+}
+
+.hook__lede {
+  max-width: 640px;
+  margin: 28px auto 0;
+  font-size: clamp(17px, 2.1vw, 21px);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--n-05) 76%, transparent);
+}
+
+.hook__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  margin-top: 34px;
+}
+.hook__note {
+  margin-top: 18px;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--n-05) 52%, transparent);
+}
+
+.hook__stage {
+  margin-top: clamp(40px, 7vw, 80px);
+  padding-inline: var(--gutter);
+  padding-bottom: clamp(40px, 7vw, 90px);
+}
+.hook__art {
+  display: block;
+  width: 100%;
+  max-width: 1100px;
+  margin-inline: auto;
+  height: auto;
+}
+.hook__art .art-layer rect,
+.hook__art .art-layer line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--n-05) 44%, transparent);
+  stroke-width: 1.5;
+}
+.hook__art .art-layer .kick {
+  fill: color-mix(in srgb, var(--w-50) 34%, transparent);
+  stroke: color-mix(in srgb, var(--w-70) 30%, transparent);
+}
+.hook__art .art-layer .bench { fill: url(#bench); stroke: none; }
+.hook__art .art-layer .pull {
+  stroke: var(--w-70);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.hook__art .art-dim line { stroke: var(--a-70); stroke-width: 1; }
+.hook__art .art-dim text {
+  fill: var(--a-80);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+/* Three speeds, small distances. Depth reads from the difference, not the
+   size, and body copy never moves. */
+@supports (animation-timeline: view()) {
+  .hook__art .art-layer {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: cover;
+  }
+  .hook__art .art-layer--back  { --shift: 26px; }
+  .hook__art .art-layer--mid   { --shift: 14px; }
+  .hook__art .art-layer--front { --shift: 4px; }
+}
+@keyframes rise { to { transform: translate3d(0, calc(var(--shift, 10px) * -1), 0); } }
+
+/* --- Shared reveal ------------------------------------------------------- */
+
+/* Content is visible in the markup. The animation layer is what hides it, and
+   only where the browser can actually run the timeline. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 32%;
+  }
+}
+@keyframes reveal {
+  from { opacity: 0; transform: translate3d(0, 34px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* --- 2. Context ---------------------------------------------------------- */
+
+.context { padding: clamp(90px, 14vw, 170px) 0; }
+
+.big {
+  font-size: clamp(30px, 4.6vw, 54px);
+  max-width: 24ch;
+}
+.context .big, .features .big, .precision .big, .private .big { margin-bottom: 26px; }
+.muted { color: #8A847C; }
+.precision .muted { color: color-mix(in srgb, var(--n-05) 44%, transparent); }
+
+.lede {
+  max-width: 62ch;
+  font-size: clamp(17px, 1.7vw, 20px);
+  color: var(--ink-soft);
+}
+
+.tally {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 20px;
+  list-style: none;
+  margin: clamp(44px, 6vw, 72px) 0 0;
+  padding: 28px 0 0;
+  border-top: 1px solid var(--rule);
+}
+.tally li { display: flex; flex-direction: column; gap: 4px; }
+.tally strong {
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--w-50);
+  line-height: 1;
+}
+.tally span { font-size: 14px; color: var(--ink-soft); }
+
+/* --- 3. Journey. The centrepiece. --------------------------------------- */
+
+.journey {
+  position: relative;
+  background: linear-gradient(180deg, var(--n-80) 0%, var(--n-90) 100%);
+  color: var(--n-05);
+  padding: clamp(70px, 10vw, 110px) var(--gutter);
+}
+
+@media (min-width: 900px) {
+  .journey {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: clamp(40px, 6vw, 90px);
+    align-items: start;
+    /* Full bleed dark, columns still lined up with every other section. */
+    padding-inline: max(var(--gutter), calc((100% - var(--wrap)) / 2));
+  }
+  .journey__title { grid-column: 1 / -1; }
+  .journey__visual {
+    position: sticky;
+    top: calc(var(--nav-h) + 6vh);
+  }
+}
+
+.journey__frame {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  max-height: 68vh;
+  border: 1px solid color-mix(in srgb, var(--n-05) 12%, transparent);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--w-50) 10%, transparent), transparent 60%),
+    #17150F;
+  overflow: hidden;
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 4%;
+  opacity: 0;
+  transform: scale(.985);
+  transition: opacity .5s ease, transform .5s ease;
+}
+.journey[data-step="0"] .frame[data-frame="0"],
+.journey[data-step="1"] .frame[data-frame="1"],
+.journey[data-step="2"] .frame[data-frame="2"],
+.journey[data-step="3"] .frame[data-frame="3"] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Line drawing language for every frame. */
+.frame rect, .frame line, .frame circle {
+  fill: none;
+  stroke: color-mix(in srgb, var(--n-05) 40%, transparent);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+.frame .room, .frame .floor { stroke: color-mix(in srgb, var(--n-05) 20%, transparent); }
+.frame .bench { fill: var(--w-60); stroke: none; }
+.frame .kick { fill: color-mix(in srgb, var(--w-50) 40%, transparent); stroke: none; }
+.frame .obstacle { stroke: var(--w-70); stroke-dasharray: 5 4; }
+.frame .sheet { stroke: color-mix(in srgb, var(--n-05) 22%, transparent); fill: #100F0B; }
+.frame .part rect { fill: color-mix(in srgb, var(--w-50) 26%, transparent); stroke: var(--w-70); }
+.frame .offcut rect { stroke: var(--a-70); stroke-dasharray: 4 4; }
+.frame .panel { fill: color-mix(in srgb, var(--w-50) 16%, transparent); stroke: var(--w-70); }
+.frame .holes circle { stroke: var(--a-70); fill: #17150F; }
+.frame .snap line { stroke: var(--a-70); stroke-dasharray: 6 5; }
+.frame .art-dim line { stroke: var(--a-70); stroke-width: 1; }
+.frame .art-dim text, .frame .tag, .frame .snap text {
+  fill: var(--a-80);
+  font-family: var(--mono);
+  font-size: 13px;
+  text-anchor: middle;
+  stroke: none;
+}
+.frame .tag { fill: color-mix(in srgb, var(--n-05) 55%, transparent); }
+.frame .rot { transform: rotate(-90deg); transform-origin: 34px 200px; }
+
+.journey__title {
+  font-size: clamp(26px, 3.6vw, 42px);
+  max-width: 18ch;
+  margin-bottom: clamp(28px, 4vw, 52px);
+}
+
+.step {
+  padding: clamp(28px, 4vw, 44px) 0;
+  border-top: 1px solid color-mix(in srgb, var(--n-05) 12%, transparent);
+}
+.step:first-of-type { border-top: 0; }
+.step__num {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: var(--w-70);
+  margin-bottom: 12px;
+}
+.step h3 { font-size: clamp(21px, 2.4vw, 27px); margin-bottom: 12px; }
+.step p {
+  color: color-mix(in srgb, var(--n-05) 66%, transparent);
+  max-width: 46ch;
+}
+
+/* The steps are the readable content, so they carry the state cue: the one
+   the visual is showing is at full strength, the rest sit back. Gentler on a
+   phone, where the dimmed copy is a lot closer to your eye. */
+.step { opacity: .55; transition: opacity .45s ease; }
+.journey[data-step="0"] .step[data-index="0"],
+.journey[data-step="1"] .step[data-index="1"],
+.journey[data-step="2"] .step[data-index="2"],
+.journey[data-step="3"] .step[data-index="3"] { opacity: 1; }
+@media (min-width: 900px) { .step { opacity: .42; } }
+
+/* Under 900px the two columns stack, but the visual still holds its place at
+   the top of the screen while the steps run under it. Same beat, a third of
+   the height, and the frame is opaque so nothing shows through. */
+@media (max-width: 899px) {
+  .journey__visual {
+    position: sticky;
+    /* Flush under the bar, so the copy running underneath has no gap to
+       show through. */
+    top: var(--nav-h);
+    z-index: 2;
+    margin-bottom: 26px;
+  }
+  .journey__frame { max-height: 34vh; }
+  .journey__title { margin-bottom: 22px; }
+}
+
+/* --- 4. Features --------------------------------------------------------- */
+
+.features {
+  padding: clamp(90px, 14vw, 170px) 0;
+  background: var(--n-05);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  margin-top: clamp(40px, 6vw, 64px);
+}
+@media (min-width: 900px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+  .card--wide { grid-column: span 2; }
+}
+
+.card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  padding: clamp(22px, 2.6vw, 30px);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 34px -22px rgba(28, 26, 23, .55);
+}
+.card__icon {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 16px;
+  fill: none;
+  stroke: var(--w-50);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.card h3 { font-size: 20px; margin-bottom: 10px; }
+.card p { color: var(--ink-soft); font-size: 16px; }
+
+.bullets {
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.bullets li { padding-left: 20px; position: relative; margin-top: 7px; }
+.bullets li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: .62em;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--a-70);
+}
+
+/* --- 5. Precision -------------------------------------------------------- */
+
+.precision {
+  padding: clamp(90px, 14vw, 170px) 0;
+  background: linear-gradient(180deg, var(--n-90), #1A1611);
+  color: var(--n-05);
+}
+.precision .eyebrow { color: var(--w-70); }
+.precision .lede { color: color-mix(in srgb, var(--n-05) 66%, transparent); }
+
+.specs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1px;
+  margin-top: clamp(46px, 6vw, 76px);
+  background: color-mix(in srgb, var(--n-05) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--n-05) 12%, transparent);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.spec {
+  background: #17150F;
+  padding: clamp(24px, 3vw, 34px);
+}
+.spec dt {
+  font-weight: 500;
+  font-size: 17px;
+  margin-bottom: 10px;
+  color: var(--w-70);
+}
+.spec dd {
+  margin: 0;
+  font-size: 15px;
+  color: color-mix(in srgb, var(--n-05) 62%, transparent);
+}
+
+/* --- 6. Private ---------------------------------------------------------- */
+
+.private { padding: clamp(90px, 14vw, 170px) 0; }
+.private code {
+  background: var(--n-10);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 34px;
+}
+.pill {
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  background: var(--n-05);
+}
+
+/* --- 7. Close ------------------------------------------------------------ */
+
+.close {
+  padding: clamp(90px, 13vw, 150px) 0;
+  background:
+    radial-gradient(90% 120% at 50% 0%, color-mix(in srgb, var(--w-50) 45%, transparent), transparent 65%),
+    var(--n-90);
+  color: var(--n-05);
+  text-align: center;
+}
+.close__title {
+  font-size: clamp(30px, 5.4vw, 60px);
+  letter-spacing: -0.03em;
+}
+.close__lede {
+  margin: 20px auto 0;
+  max-width: 46ch;
+  color: color-mix(in srgb, var(--n-05) 70%, transparent);
+  font-size: clamp(16px, 1.8vw, 19px);
+}
+
+/* --- Footer -------------------------------------------------------------- */
+
+.foot {
+  background: var(--n-90);
+  color: color-mix(in srgb, var(--n-05) 56%, transparent);
+  padding: 46px 0;
+  font-size: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--n-05) 10%, transparent);
+}
+.foot__inner { display: grid; gap: 14px; }
+.foot__brand { color: var(--n-05); font-weight: 500; }
+.foot__links { display: flex; flex-wrap: wrap; gap: 20px; }
+.foot__links a { color: inherit; text-decoration: none; }
+.foot__links a:hover { color: var(--n-05); text-decoration: underline; }
+.foot__note { color: color-mix(in srgb, var(--n-05) 50%, transparent); }
+
+/* --- Reduced motion ------------------------------------------------------ */
+
+/* Content is visible by default and only the animation layer moves it, so
+   switching every animation off lands on a static, fully readable page. The
+   centrepiece keeps its state changes, without the crossfade. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .hook__grain,
+  .hook__art .art-layer,
+  .progress__bar { animation: none; }
+  .progress__bar { transform: scaleX(0); }
+  .frame, .step, .card, .btn { transition: none; }
+}
+
+/* --- Reveal fallback ----------------------------------------------------- */
+
+/* Only ever applied by js/home.js, and only once it has established that it
+   can also remove it. Browsers without scroll-driven CSS never see the class,
+   so a JS failure leaves the content where it started: visible. */
+.js-reveal .reveal {
+  opacity: 0;
+  transform: translate3d(0, 34px, 0);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.js-reveal .reveal.is-in { opacity: 1; transform: none; }

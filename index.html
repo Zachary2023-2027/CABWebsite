@@ -1,12 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-AU">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <!-- Static page, no back end, no third party anything. Declared here because
-     GitHub Pages cannot set response headers. The favicon is a data: URI, so
-     img-src has to allow that one scheme. -->
+     GitHub Pages cannot set response headers. -->
 <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
   script-src 'self';
@@ -18,119 +17,492 @@
   base-uri 'none';
   form-action 'none'">
 <meta name="referrer" content="no-referrer">
+
 <title>Kitchen Cabinet Builder</title>
-<meta name="description" content="Lay out a wall of kitchen cabinets, choose door style, finish and hardware, and get a live to-scale elevation with a running price estimate.">
-<link rel="stylesheet" href="assets/styles.css">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%23b4632b'/><rect x='3' y='3.5' width='4.2' height='9' rx='.6' fill='%23f1efe9'/><rect x='8.8' y='3.5' width='4.2' height='9' rx='.6' fill='%23f1efe9'/></svg>">
+<meta name="description" content="Design a kitchen, then build it. Draw the run, see it in 3D, and get a cut list, sheet layouts, a drilling schedule and a costed shopping list. Runs in your browser, no account, no server.">
+<meta name="color-scheme" content="light">
+<link rel="stylesheet" href="assets/home.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%238A5A32'/><rect x='3' y='3.5' width='4.2' height='9' rx='.6' fill='%23F4F2EE'/><rect x='8.8' y='3.5' width='4.2' height='9' rx='.6' fill='%23F4F2EE'/></svg>">
 </head>
 <body>
 
-<header class="topbar">
-  <div class="brand">
-    <span class="mark" aria-hidden="true"></span>
-    <h1>Kitchen Cabinet Builder</h1>
-  </div>
+<a class="skip" href="#hook">Skip to content</a>
 
-  <div class="topbar-controls">
-    <label class="field compact">
-      <span>Wall run</span>
-      <select id="preset">
-        <option value="96">8 ft</option>
-        <option value="120">10 ft</option>
-        <option value="144">12 ft</option>
-        <option value="168">14 ft</option>
-        <option value="192">16 ft</option>
-      </select>
-    </label>
-    <button type="button" id="units" class="btn ghost" aria-label="Toggle display units">in</button>
-    <button type="button" id="theme" class="btn ghost" aria-label="Toggle colour theme">◐</button>
-    <button type="button" id="reset" class="btn ghost">Reset</button>
-    <button type="button" id="export" class="btn ghost">Export</button>
-    <button type="button" id="print" class="btn primary">Print quote</button>
-  </div>
+<div class="progress" aria-hidden="true"><span class="progress__bar"></span></div>
+
+<header class="nav">
+  <a class="nav__brand" href="#hook">
+    <svg class="nav__mark" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="1" y="1" width="22" height="22" rx="4" fill="currentColor"/>
+      <rect x="5" y="5.5" width="5.6" height="13" rx="1" fill="#F4F2EE"/>
+      <rect x="13.4" y="5.5" width="5.6" height="13" rx="1" fill="#F4F2EE"/>
+    </svg>
+    <span>Kitchen Cabinet Builder</span>
+  </a>
+  <nav class="nav__links" aria-label="Sections">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#precision">Precision</a>
+    <a href="#private">Private</a>
+  </nav>
+  <a class="btn btn--primary btn--sm" href="app/">Open the planner</a>
 </header>
 
-<main class="layout">
+<main>
 
-  <!-- ---------- catalog ---------- -->
-  <aside class="pane catalog" aria-label="Cabinet catalog">
-    <h2 class="pane-title">Catalog</h2>
-    <p class="pane-hint">Click to add to the end of the run.</p>
-    <div id="palette"></div>
-  </aside>
+<!-- ===================== 1. Hook ===================== -->
+<section class="hook" id="hook">
+  <div class="hook__grain" aria-hidden="true"></div>
 
-  <!-- ---------- stage ---------- -->
-  <section class="pane stage" aria-label="Elevation preview">
-    <div class="stage-head">
-      <h2 class="pane-title">Elevation</h2>
-      <div class="wallsize">
-        <label class="field compact">
-          <span>Wall width</span>
-          <input type="number" id="wallW" min="24" max="600" step="1">
-        </label>
-        <label class="field compact">
-          <span>Ceiling</span>
-          <input type="number" id="wallH" min="72" max="144" step="1">
-        </label>
-      </div>
+  <div class="hook__inner">
+    <p class="eyebrow">Frameless cabinets. 32mm system. Millimetres and dollars.</p>
+    <h1 class="hook__title">
+      <span class="line">Design the kitchen.</span>
+      <span class="line line--accent">Then go and build it.</span>
+    </h1>
+    <p class="hook__lede">
+      Lay out a wall of cabinets, watch it draw itself to scale and stand up in 3D, and walk
+      away with the cut list, the sheet layouts, the drilling schedule and what the whole
+      thing costs. It all runs in your browser.
+    </p>
+    <div class="hook__cta">
+      <a class="btn btn--primary" href="app/">Open the planner</a>
+      <a class="btn btn--ghost" href="#how">See how it works</a>
     </div>
+    <p class="hook__note">Free. No account, no sign up, nothing leaves your machine.</p>
+  </div>
 
-    <div id="preview" class="preview"></div>
+  <div class="hook__stage" aria-hidden="true">
+    <svg class="hook__art" viewBox="0 0 1200 460" role="presentation">
+      <defs>
+        <linearGradient id="bench" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#C08A56"/>
+          <stop offset="1" stop-color="#8A5A32"/>
+        </linearGradient>
+      </defs>
 
-    <div id="warnings" class="warnings" role="status" aria-live="polite"></div>
+      <!-- wall cabinets -->
+      <g class="art-layer art-layer--back">
+        <rect x="120" y="40"  width="150" height="150" rx="3"/>
+        <rect x="276" y="40"  width="150" height="150" rx="3"/>
+        <line x1="351" y1="40" x2="351" y2="190"/>
+        <rect x="600" y="40"  width="200" height="80"  rx="3"/>
+        <rect x="806" y="40"  width="150" height="150" rx="3"/>
+        <rect x="962" y="40"  width="118" height="150" rx="3"/>
+        <g class="pull">
+          <line x1="258" y1="150" x2="258" y2="178"/>
+          <line x1="288" y1="150" x2="288" y2="178"/>
+          <line x1="414" y1="150" x2="414" y2="178"/>
+          <line x1="818" y1="150" x2="818" y2="178"/>
+          <line x1="944" y1="150" x2="944" y2="178"/>
+          <line x1="974" y1="150" x2="974" y2="178"/>
+        </g>
+      </g>
 
-    <dl class="stats" id="stats"></dl>
-  </section>
+      <!-- benchtop -->
+      <g class="art-layer art-layer--mid">
+        <rect class="bench" x="100" y="278" width="990" height="16" rx="2"/>
+      </g>
 
-  <!-- ---------- configure ---------- -->
-  <aside class="pane config" aria-label="Configuration and pricing">
-    <h2 class="pane-title print-hide">Finish</h2>
+      <!-- base cabinets -->
+      <g class="art-layer art-layer--front">
+        <rect x="120" y="294" width="150" height="120" rx="3"/>
+        <line x1="120" y1="334" x2="270" y2="334"/>
+        <line x1="120" y1="374" x2="270" y2="374"/>
+        <rect x="276" y="294" width="200" height="120" rx="3"/>
+        <line x1="376" y1="294" x2="376" y2="414"/>
+        <rect x="482" y="294" width="112" height="120" rx="3"/>
+        <rect x="600" y="294" width="200" height="120" rx="3"/>
+        <line x1="700" y1="294" x2="700" y2="414"/>
+        <rect x="806" y="294" width="150" height="120" rx="3"/>
+        <line x1="806" y1="334" x2="956" y2="334"/>
+        <rect x="962" y="294" width="118" height="120" rx="3"/>
+        <g class="pull">
+          <line x1="180" y1="314" x2="210" y2="314"/>
+          <line x1="180" y1="354" x2="210" y2="354"/>
+          <line x1="180" y1="394" x2="210" y2="394"/>
+          <line x1="361" y1="310" x2="361" y2="340"/>
+          <line x1="391" y1="310" x2="391" y2="340"/>
+          <line x1="523" y1="310" x2="523" y2="340"/>
+          <line x1="685" y1="310" x2="685" y2="340"/>
+          <line x1="715" y1="310" x2="715" y2="340"/>
+          <line x1="866" y1="314" x2="896" y2="314"/>
+          <line x1="866" y1="354" x2="896" y2="354"/>
+          <line x1="1006" y1="310" x2="1006" y2="340"/>
+        </g>
+        <!-- kickboard -->
+        <rect x="120" y="414" width="960" height="22" rx="1" class="kick"/>
+      </g>
 
-    <label class="field">
-      <span>Door style</span>
-      <select id="doorStyle"></select>
-    </label>
-
-    <fieldset class="field swatches">
-      <legend>Finish</legend>
-      <div id="finishes" class="swatch-grid" role="radiogroup" aria-label="Cabinet finish"></div>
-    </fieldset>
-
-    <label class="field">
-      <span>Hardware</span>
-      <select id="hardware"></select>
-    </label>
-
-    <label class="field">
-      <span>Countertop</span>
-      <select id="countertop"></select>
-    </label>
-
-    <div class="toggles">
-      <label class="check"><input type="checkbox" id="counterOn"> Include countertop</label>
-      <label class="check"><input type="checkbox" id="installOn"> Include installation</label>
-      <label class="field compact inline">
-        <span>Tax rate</span>
-        <input type="number" id="taxRate" min="0" max="25" step="0.05">
-        <span class="suffix">%</span>
-      </label>
-    </div>
-
-    <h2 class="pane-title spaced print-hide">Run <span class="count" id="itemCount"></span></h2>
-    <ol id="items" class="items"></ol>
-
-    <h2 class="pane-title spaced">Estimate</h2>
-    <table class="summary" id="summary"></table>
-    <p class="disclaimer">Budget estimate only. Excludes delivery, trim, and appliances.</p>
-  </aside>
-</main>
-
-<!-- print-only itemised quote -->
-<section class="quote-sheet" aria-hidden="true">
-  <h2>Itemised quote</h2>
-  <table id="quote"></table>
+      <!-- dimension line -->
+      <g class="art-dim">
+        <line x1="120" y1="452" x2="1080" y2="452"/>
+        <line x1="120" y1="444" x2="120" y2="460"/>
+        <line x1="1080" y1="444" x2="1080" y2="460"/>
+        <text x="600" y="447">3600</text>
+      </g>
+    </svg>
+  </div>
 </section>
 
-<script type="module" src="js/app.js"></script>
+<!-- ===================== 2. Context ===================== -->
+<section class="context" id="context">
+  <div class="wrap">
+    <h2 class="big reveal">
+      A drawing is the easy half.<br>
+      <span class="muted">This one carries all the way to the saw.</span>
+    </h2>
+    <p class="lede reveal">
+      Every part in the kitchen is a rectangle with a length, a width and a thickness. The
+      elevation, the 3D model, the nest and the cut list all read that same list, so they
+      cannot disagree with each other. Move one cabinet and the sheet count, the hole
+      positions and the price all move with it.
+    </p>
+
+    <ul class="tally reveal">
+      <li><strong>21</strong><span>cabinet families</span></li>
+      <li><strong>11</strong><span>screens, one project</span></li>
+      <li><strong>32mm</strong><span>system drilling</span></li>
+      <li><strong>0</strong><span>network calls</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== 3. Journey (centrepiece) ===================== -->
+<section class="journey" id="how" data-step="0">
+  <h2 class="journey__title">From a bare wall to a stack of parts</h2>
+
+  <div class="journey__visual" aria-hidden="true">
+    <div class="journey__frame">
+
+      <!-- state 0: the empty wall -->
+      <svg class="frame" data-frame="0" viewBox="18 22 534 358" role="presentation">
+        <rect class="room" x="60" y="60" width="480" height="270" rx="2"/>
+        <line class="floor" x1="60" y1="330" x2="540" y2="330"/>
+        <g class="art-dim">
+          <line x1="60" y1="360" x2="540" y2="360"/>
+          <line x1="60" y1="352" x2="60" y2="368"/>
+          <line x1="540" y1="352" x2="540" y2="368"/>
+          <text x="300" y="355">3600</text>
+        </g>
+        <g class="art-dim">
+          <line x1="34" y1="60" x2="34" y2="330"/>
+          <line x1="26" y1="60" x2="42" y2="60"/>
+          <line x1="26" y1="330" x2="42" y2="330"/>
+          <text x="34" y="200" class="rot">2400</text>
+        </g>
+        <rect class="obstacle" x="330" y="90" width="120" height="90" rx="2"/>
+        <text class="tag" x="390" y="140">window</text>
+      </svg>
+
+      <!-- state 1: cabinets placed -->
+      <svg class="frame" data-frame="1" viewBox="48 52 504 292" role="presentation">
+        <rect class="room" x="60" y="60" width="480" height="270" rx="2"/>
+        <g class="art-layer">
+          <rect x="72" y="80" width="90" height="86" rx="2"/>
+          <rect x="168" y="80" width="90" height="86" rx="2"/>
+          <rect x="330" y="80" width="120" height="48" rx="2"/>
+          <rect x="456" y="80" width="72" height="86" rx="2"/>
+        </g>
+        <rect x="66" y="222" width="468" height="10" rx="2" class="bench"/>
+        <g class="art-layer">
+          <rect x="72" y="232" width="90" height="72" rx="2"/>
+          <line x1="72" y1="256" x2="162" y2="256"/>
+          <line x1="72" y1="280" x2="162" y2="280"/>
+          <rect x="168" y="232" width="120" height="72" rx="2"/>
+          <line x1="228" y1="232" x2="228" y2="304"/>
+          <rect x="294" y="232" width="60" height="72" rx="2"/>
+          <rect x="360" y="232" width="96" height="72" rx="2"/>
+          <rect x="462" y="232" width="66" height="72" rx="2"/>
+          <rect x="72" y="304" width="456" height="14" rx="1" class="kick"/>
+        </g>
+        <g class="snap">
+          <line x1="294" y1="200" x2="294" y2="330"/>
+          <text x="300" y="196">butted</text>
+        </g>
+      </svg>
+
+      <!-- state 2: the nest -->
+      <svg class="frame" data-frame="2" viewBox="58 48 484 326" role="presentation">
+        <rect class="sheet" x="70" y="60" width="460" height="280" rx="2"/>
+        <g class="part">
+          <rect x="80" y="70" width="150" height="120" rx="1"/>
+          <rect x="236" y="70" width="150" height="120" rx="1"/>
+          <rect x="392" y="70" width="128" height="120" rx="1"/>
+          <rect x="80" y="196" width="200" height="66" rx="1"/>
+          <rect x="286" y="196" width="200" height="66" rx="1"/>
+          <rect x="80" y="268" width="96" height="62" rx="1"/>
+          <rect x="182" y="268" width="96" height="62" rx="1"/>
+          <rect x="284" y="268" width="140" height="40" rx="1"/>
+        </g>
+        <g class="offcut">
+          <rect x="430" y="268" width="90" height="62" rx="1"/>
+        </g>
+        <text class="tag" x="300" y="360">Sheet 1 of 4 &#183; 12% waste &#183; one offcut worth keeping</text>
+      </svg>
+
+      <!-- state 3: the bench -->
+      <svg class="frame" data-frame="3" viewBox="124 18 392 372" role="presentation">
+        <rect class="panel" x="150" y="60" width="300" height="280" rx="3"/>
+        <g class="holes">
+          <circle cx="187" cy="100" r="5"/><circle cx="187" cy="132" r="5"/>
+          <circle cx="187" cy="196" r="5"/><circle cx="187" cy="228" r="5"/>
+          <circle cx="187" cy="292" r="5"/><circle cx="187" cy="324" r="5"/>
+          <circle cx="413" cy="100" r="5"/><circle cx="413" cy="132" r="5"/>
+          <circle cx="413" cy="196" r="5"/><circle cx="413" cy="228" r="5"/>
+          <circle cx="413" cy="292" r="5"/><circle cx="413" cy="324" r="5"/>
+        </g>
+        <g class="art-dim">
+          <line x1="150" y1="46" x2="187" y2="46"/>
+          <line x1="150" y1="38" x2="150" y2="54"/>
+          <line x1="187" y1="38" x2="187" y2="54"/>
+          <text x="168" y="34">37</text>
+        </g>
+        <g class="art-dim">
+          <line x1="470" y1="100" x2="470" y2="132"/>
+          <line x1="462" y1="100" x2="478" y2="100"/>
+          <line x1="462" y1="132" x2="478" y2="132"/>
+          <text x="492" y="120">32</text>
+        </g>
+        <text class="tag" x="300" y="372">A1 &#183; Left side &#183; 720 &#215; 560 &#215; 16</text>
+      </svg>
+
+    </div>
+  </div>
+
+  <div class="journey__steps">
+    <article class="step" data-index="0">
+      <span class="step__num">01</span>
+      <h3>Start with the room</h3>
+      <p>
+        Straight, L or U. Type the wall lengths, mark the window, the meter box or the pipe
+        that is already there, and set the heights you build to. Australian defaults are in
+        already: 900 bench over a 150 kick, 560 base, 320 wall.
+      </p>
+    </article>
+
+    <article class="step" data-index="1">
+      <span class="step__num">02</span>
+      <h3>Fill it with cabinets</h3>
+      <p>
+        Pick from 21 families and they flow along the run in order. Drag one and it pins to
+        the millimetre, snapping to its neighbours, the wall ends and a blind corner. The
+        elevation redraws to scale as you go and the 3D view stands the whole run up beside
+        it.
+      </p>
+    </article>
+
+    <article class="step" data-index="2">
+      <span class="step__num">03</span>
+      <h3>Nest it onto real sheets</h3>
+      <p>
+        Every part is packed onto the sheets you actually stock, with blade width and edge
+        trim taken off, in a guillotine-friendly order a table saw can follow. Waste, keepable
+        offcuts and the cutting sequence come with each sheet.
+      </p>
+    </article>
+
+    <article class="step" data-index="3">
+      <span class="step__num">04</span>
+      <h3>Take it to the bench</h3>
+      <p>
+        Hole positions on the 32mm system, panel by panel, drawn flat as the board sits in
+        front of you. Then a workshop view built for a phone in a shed: three numbers, big,
+        one part at a time, tick and swipe.
+      </p>
+    </article>
+  </div>
+</section>
+
+<!-- ===================== 4. Features ===================== -->
+<section class="features" id="features">
+  <div class="wrap">
+    <p class="eyebrow reveal">Eleven screens, one project</p>
+    <h2 class="big reveal">Everything the build needs, in one place.</h2>
+
+    <div class="grid">
+
+      <article class="card card--wide reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12h20M6 12V6h5v6M13 12V8h5v4"/></svg>
+        <h3>Planner</h3>
+        <p>
+          The main screen. A searchable cabinet picker, a to-scale elevation and a live 3D
+          room side by side, and an inspector for every number on the cabinet you have
+          selected: width, height, depth, doors, drawers, shelves, drawer heights, blind
+          corner, board species and thickness for that one cabinet alone.
+        </p>
+        <ul class="bullets">
+          <li>Snapping drags and pinned positions</li>
+          <li>Warnings drawn on the cabinet: overlaps, shelf spans, doors too wide, gaps</li>
+          <li>Walk the room in first person at eye height</li>
+        </ul>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM5 9h14M12 3v18"/></svg>
+        <h3>Cabinet</h3>
+        <p>
+          One cabinet in 3D. Explode it, open or remove the doors, cut a section on any axis
+          and read the part table beside it.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        <h3>Cut list</h3>
+        <p>
+          Every part in the project, grouped by cabinet or material, filtered how you like.
+          Tick parts off as you cut them. Export CSV.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v16H3zM3 11h18M11 4v7M15 11v9"/></svg>
+        <h3>Nesting</h3>
+        <p>
+          A to-scale layout per sheet with waste, offcuts and a cutting sequence. Set your
+          kerf, trim and smallest useful offcut once and every screen agrees.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM9 7v.01M9 12v.01M9 17v.01M15 7v.01M15 12v.01M15 17v.01"/></svg>
+        <h3>Drilling</h3>
+        <p>
+          Shelf pins at 32mm pitch, hinge cups at 35mm, construction holes, setbacks and
+          depths, drawn for every panel that has any.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h10a3 3 0 1 1 0 6H4zM4 6v12"/></svg>
+        <h3>Hardware</h3>
+        <p>
+          Hinges, runner pairs, handles and bin runners totalled with the cabinets they belong
+          to, plus room for the fittings only you know about.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v6H4zM4 14h16v6H4zM9 7h6M9 17h6"/></svg>
+        <h3>Workshop</h3>
+        <p>
+          Full screen, one part at a time, for a phone on the bench. The three numbers you are
+          about to set on the saw, and nothing else.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/></svg>
+        <h3>Costing</h3>
+        <p>
+          Board as actually nested, hardware, benchtop and kick, split per cabinet and per
+          linear metre. Put a quote beside it and see the difference in dollars and percent.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h15l-1.5 9h-12zM6 6L5 3H2M9 20a1 1 0 100-2 1 1 0 000 2zM17 20a1 1 0 100-2 1 1 0 000 2z"/></svg>
+        <h3>Order list</h3>
+        <p>
+          What to actually buy: sheets, fittings, edge tape, benchtop and kickboard, as plain
+          text you can copy into a message.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z"/></svg>
+        <h3>Print pack</h3>
+        <p>
+          Elevations, cut list, sheet layouts, drilling schedule and shopping list, on A4 or
+          Letter, black on white, paginated so the preview matches the paper.
+        </p>
+      </article>
+
+      <article class="card reveal">
+        <svg class="card__icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12l5 5L21 5"/></svg>
+        <h3>Checks &amp; Reference</h3>
+        <p>
+          A pass over the whole project before you cut, and the workshop numbers worth having
+          on hand: spans, sheet sizes, runner lengths, appliance cavities.
+        </p>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 5. Climax: precision ===================== -->
+<section class="precision" id="precision">
+  <div class="wrap">
+    <p class="eyebrow reveal">Where it earns its keep</p>
+    <h2 class="big reveal">
+      The optimiser looks for the kitchen<br>
+      <span class="muted">that comes off fewer sheets.</span>
+    </h2>
+    <p class="lede reveal">
+      Keep your cabinet types and your count, hold the ones you have locked, and let it search
+      the widths that still fit the wall. Every candidate is nested and costed for real, not
+      guessed at. Same for materials: plans that consolidate the whole kitchen onto one or two
+      boards, and build plans that swap full backs for rails or round your thicknesses to
+      stock. Nothing changes until you press Apply.
+    </p>
+
+    <div class="specs">
+      <div class="spec reveal"><dt>Everything in millimetres</dt><dd>One unit, everywhere, all the way to the hole depth. No fractions, no conversions, nothing to get wrong at the saw.</dd></div>
+      <div class="spec reveal"><dt>Prices in AUD</dt><dd>Seeded and fully editable: sheets, hinges, runners, handles, bin runners, bench and kick per metre. Labelled as estimates wherever they appear.</dd></div>
+      <div class="spec reveal"><dt>Cuts you can follow</dt><dd>The nest is guillotine friendly on purpose. Every cut runs the full width of the piece, because a perfect nest needing plunge cuts is no use in a shed.</dd></div>
+      <div class="spec reveal"><dt>Nothing dropped silently</dt><dd>A part too big for any sheet you stock is reported with the size it would need, never quietly binned and never charged for.</dd></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 6. Private ===================== -->
+<section class="private" id="private">
+  <div class="wrap">
+    <h2 class="big reveal">No account. No server. No one watching.</h2>
+    <p class="lede reveal">
+      The whole thing runs in the browser on your machine. Your kitchen autosaves locally as
+      you work, and a project file is a plain <code>.kcb.json</code> you keep wherever you keep
+      your files. Share a design as a link and the design travels in the link itself.
+    </p>
+    <div class="pills reveal">
+      <span class="pill">Works offline</span>
+      <span class="pill">Autosaves as you go</span>
+      <span class="pill">Undo and redo</span>
+      <span class="pill">Import and export files</span>
+      <span class="pill">Nothing sent anywhere</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 7. Resolution ===================== -->
+<section class="close">
+  <div class="wrap">
+    <h2 class="close__title">Open it and put a wall in.</h2>
+    <p class="close__lede">Nothing to install. It starts with a kitchen already on screen.</p>
+    <div class="hook__cta">
+      <a class="btn btn--primary btn--lg" href="app/">Open the planner</a>
+      <a class="btn btn--ghost btn--lg" href="viewer.html">Try the quick estimator</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot__inner">
+    <p class="foot__brand">Kitchen Cabinet Builder</p>
+    <nav class="foot__links" aria-label="More">
+      <a href="app/">Planner</a>
+      <a href="viewer.html">Quick estimator</a>
+      <a href="design/components.html">Design system</a>
+      <a href="docs/CONTEXT.md">Documentation</a>
+    </nav>
+    <p class="foot__note">All prices are estimates. Measure your own room before you cut anything.</p>
+  </div>
+</footer>
+
+<script src="js/home.js" defer></script>
 </body>
 </html>
