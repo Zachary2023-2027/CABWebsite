@@ -133,6 +133,7 @@ describe('the deduction is a value you can set', () => {
 describe('nominal lengths', () => {
   it('only lengths that are actually sold are legal', () => {
     expect(isLegalLength(500, tandem)).toBe(true);
+    expect(isLegalLength(250, tandem)).toBe(true);
     expect(isLegalLength(520, tandem)).toBe(false);
     expect(isLegalLength(480, tandem)).toBe(false);
   });
@@ -140,14 +141,14 @@ describe('nominal lengths', () => {
   it('an odd typed length snaps to the nearest one sold', () => {
     expect(nearestLength(520, tandem)).toBe(500);
     expect(nearestLength(530, tandem)).toBe(550);
-    expect(nearestLength(10, tandem)).toBe(270);
+    expect(nearestLength(10, tandem)).toBe(250);
     expect(nearestLength(9999, tandem)).toBe(650);
   });
 
   it('the longest that fits leaves room behind it', () => {
     expect(longestFitting(540, tandem)).toBe(500);
     expect(longestFitting(400, tandem)).toBe(350);
-    expect(longestFitting(100, tandem)).toBe(270);   // nothing fits, offer the shortest
+    expect(longestFitting(100, tandem)).toBe(250);   // nothing fits, offer the shortest
   });
 });
 

@@ -24,7 +24,7 @@
    =========================================================================== */
 
 /** Nominal lengths Blum sells TANDEM and LEGRABOX in. */
-export const NOMINAL_LENGTHS = [270, 300, 350, 400, 450, 500, 550, 600, 650];
+export const NOMINAL_LENGTHS = [250, 270, 300, 350, 400, 450, 500, 550, 600, 650];
 
 /**
  * How much internal cabinet depth a nominal length needs.
