@@ -298,3 +298,57 @@ describe('a retired preset is kept but not offered', () => {
     expect(u.parts.length).toBeGreaterThan(0);
   });
 });
+
+/* The drawer base is cut to the inside of the box whichever way it is fixed.
+   A screwed base is pocket screwed into the sides, so it is NOT the box
+   footprint hung underneath them: that cuts it 2 x the side thickness too big
+   in both directions and stands the box proud of its runner. */
+describe('the drawer base is fixed inside the box', () => {
+  const drawerFamily = FAMILIES.find((f) => !f.cavity
+    && buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
+
+  const baseAndSides = (cfg) => {
+    const u = buildUnit('T1', drawerFamily.id, {}, cfg);
+    return {
+      base: u.parts.find((p) => /DRWR\d+-BASE$/.test(p.code)),
+      side: u.parts.find((p) => /DRWR\d+-SIDE-L$/.test(p.code)),
+      front: u.parts.find((p) => /DRWR\d+-FRONT$/.test(p.code)),
+    };
+  };
+
+  it('a family with drawers exists to test', () => {
+    expect(drawerFamily).toBeTruthy();
+  });
+
+  for (const fix of ['dado', 'screwed']) {
+    it(`${fix}: the base is cut to the inside of the box`, () => {
+      const { base, side, front } = baseAndSides({ ...PROJECT, boxBaseFix: fix });
+      // As wide as the box is inside, which is what the front and back are.
+      expect(base.L).toBe(front.L);
+      // As long as the runner less the front and the back.
+      expect(base.W).toBe(side.L - 2 * PROJECT.boxSideThk);
+    });
+
+    it(`${fix}: the base sits between the sides, not outside them`, () => {
+      const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: fix });
+      expect(base.pos[0]).toBeGreaterThan(side.pos[0]);
+      expect(base.pos[0] + base.size[0])
+        .toBeLessThanOrEqual(side.pos[0] + PROJECT.boxSideThk + base.L + 0.001);
+    });
+  }
+
+  it('a screwed base sits flush with the bottom of the sides', () => {
+    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'screwed' });
+    expect(base.pos[1]).toBe(side.pos[1]);
+  });
+
+  it('a dado base sits up the side by the groove height', () => {
+    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'dado' });
+    expect(base.pos[1]).toBe(side.pos[1] + PROJECT.baseGroove);
+  });
+
+  it('a screwed base never hangs below the sides', () => {
+    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'screwed' });
+    expect(base.pos[1]).toBeGreaterThanOrEqual(side.pos[1]);
+  });
+});

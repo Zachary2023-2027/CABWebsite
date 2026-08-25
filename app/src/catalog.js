@@ -910,17 +910,20 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
       push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ], [0, 0, -150], MAT.box);
 
-      if (dado) {
-        // Base captured in a groove, so it is the inside size and sits up a little.
-        push('BASE', 'base', boxInnerW, RL - 2 * BST, P.boxBaseThk,
-          [boxInnerW, P.boxBaseThk, RL - 2 * BST],
-          [T + boxSide + BST, by + P.baseGroove, boxZ + BST], [0, -150, 0], MAT.boxBase);
-      } else {
-        // Screwed on underneath, so it is the full box footprint.
-        push('BASE', 'base, screwed under', boxW, RL, P.boxBaseThk,
-          [boxW, P.boxBaseThk, RL],
-          [T + boxSide, by - P.boxBaseThk, boxZ], [0, -150, 0], MAT.boxBase);
-      }
+      /* The base is the same panel whichever way it is fixed: cut to the
+         inside of the box, between the front and the back. Only how high it
+         sits differs. A dado base is captured in a groove run up the side;
+         a screwed base is pocket screwed into the sides and sits flush with
+         their bottom edge. Cutting the screwed one to the box footprint and
+         hanging it under the sides, as this did, is wrong twice over: the
+         panel is 2 x BST too wide and too long, and the box then stands a
+         base thickness proud of the runner it is supposed to sit on. */
+      const baseW = boxInnerW;
+      const baseD = RL - 2 * BST;
+      push('BASE', dado ? 'base' : 'base, pocket screwed', baseW, baseD, P.boxBaseThk,
+        [baseW, P.boxBaseThk, baseD],
+        [T + boxSide + BST, dado ? by + P.baseGroove : by, boxZ + BST],
+        [0, -150, 0], MAT.boxBase);
 
       fittings.push({ type: 'runnerPair', qty: 1, code: code(`RUNNER-${num}`), length: RL });
       fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-D${num}`) });
