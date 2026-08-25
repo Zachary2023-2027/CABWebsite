@@ -7,11 +7,11 @@ import {
   unitWarnings, wallWarnings,
 } from '../project.js';
 import { nestProject } from '../nesting.js';
-import { PROJECT } from '../catalog.js';
+import { PROJECT, drawerSetout } from '../catalog.js';
 
 const DEPS = {
   floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
-  unitWarnings, wallWarnings,
+  unitWarnings, wallWarnings, drawerSetout,
 };
 
 const shaped = (room) => {
@@ -196,6 +196,36 @@ describe('everything the app knew, gathered in one place', () => {
     const over = runChecks(p, DEPS).filter((f) => f.rule === 'oversize');
     expect(over.length).toBeGreaterThan(0);
     expect(over[0].level).toBe('error');
+  });
+
+  /* The builder shrinks the box to hold the gaps, so this only fires once
+     the opening cannot give them at all. Asking for a gap far bigger than
+     any drawer row is the way to force that. */
+  it('says so when the opening cannot give the box its clearance', () => {
+    const p = starterProject();
+    p.cfg = { ...p.cfg, boxClearTop: 400, boxClearBottom: 400 };
+    const tight = runChecks(p, DEPS).filter((f) => f.rule === 'drawer-clearance');
+    expect(tight.length).toBeGreaterThan(0);
+    expect(tight[0].level).toBe('warn');
+    expect(tight[0].where).toBeTruthy();
+  });
+
+  it('says nothing about clearance when the openings can afford it', () => {
+    const p = starterProject();
+    const quiet = runChecks(p, DEPS).filter((f) => f.rule === 'drawer-clearance');
+    expect(quiet).toHaveLength(0);
+  });
+
+  /* A butted base reaches lower than a recessed one, so it is the fixing
+     most likely to run out of opening. It must not do so silently. */
+  it('a butted base that will not fit is reported, not squeezed', () => {
+    const p = starterProject();
+    const room = { ...p.cfg, boxClearTop: 400, boxClearBottom: 400 };
+    const recessed = runChecks({ ...p, cfg: { ...room, boxBaseFix: 'dado' } }, DEPS)
+      .filter((f) => f.rule === 'drawer-clearance');
+    const butted = runChecks({ ...p, cfg: { ...room, boxBaseFix: 'butted' } }, DEPS)
+      .filter((f) => f.rule === 'drawer-clearance');
+    expect(butted.length).toBeGreaterThanOrEqual(recessed.length);
   });
 
   it('summarises by the worst thing in it', () => {

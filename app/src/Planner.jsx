@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
 import { finishFor } from './finishes.js';
-import { FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost } from './catalog.js';
+import {
+  BASE_FIXES, BOX_CLEAR, FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost,
+} from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
 import Appearance from './Appearance.jsx';
@@ -133,7 +135,8 @@ function Picker({ onAdd, cfg }) {
 /* The overrides that live in the drawer box section, so it can tell whether
    this cabinet has departed from the project in there. */
 const BOX_KEYS = ['boxBoard', 'boxSideThk', 'boxBaseBoard', 'boxBaseThk', 'boxHeight',
-  'runnerDeduction', 'runnerLength', 'boxSetback', 'baseGroove', 'reveal'];
+  'runnerDeduction', 'runnerLength', 'boxSetback', 'baseGroove', 'reveal',
+  'boxClearTop', 'boxClearBottom'];
 
 /* --- inspector ------------------------------------------------------------ */
 
@@ -282,7 +285,7 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                         onChange={(v) => onOverride(item.uid, { backType: v })} />
                 {fronts.length > 0 && (
                   <Choice label="Drawer base" value={eff('boxBaseFix') || 'dado'}
-                          options={[{ value: 'dado', label: 'Dado' }, { value: 'screwed', label: 'Screwed' }]}
+                          options={BASE_FIXES.map((b) => ({ value: b.id, label: b.name }))}
                           onChange={(v) => onOverride(item.uid, { boxBaseFix: v })} />
                 )}
               </div>
@@ -335,6 +338,10 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                        onChange={(v) => onOverride(item.uid, { boxSetback: v ?? cfg.boxSetback })} />
                   <Num label="Base groove from the bottom" value={eff('baseGroove')}
                        onChange={(v) => onOverride(item.uid, { baseGroove: v ?? cfg.baseGroove })} />
+                  <Num label="Gap above the box" value={eff('boxClearTop') ?? BOX_CLEAR.top}
+                       onChange={(v) => onOverride(item.uid, { boxClearTop: v ?? cfg.boxClearTop ?? BOX_CLEAR.top })} />
+                  <Num label="Gap below the box" value={eff('boxClearBottom') ?? BOX_CLEAR.bottom}
+                       onChange={(v) => onOverride(item.uid, { boxClearBottom: v ?? cfg.boxClearBottom ?? BOX_CLEAR.bottom })} />
                   <Num label="Gap between fronts" value={eff('reveal')}
                        onChange={(v) => onOverride(item.uid, { reveal: v ?? cfg.reveal })} />
                 </div>

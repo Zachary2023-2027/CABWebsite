@@ -174,7 +174,9 @@ function CabinetDetail({ unit, label, resolvedTheme }) {
   const [preset, setPreset] = useState('Iso');
   const [nonce, setNonce] = useState(0);
   const [section, setSection] = useState({ on: false, axis: 'z', pos: 50 });
-  const [show, setShow] = useState({ back: true, hardware: true, dims: false, labels: false, grid: false });
+  const [show, setShow] = useState({
+    back: true, hardware: true, dims: false, setout: false, labels: false, grid: false,
+  });
   const reduced = useMemo(
     () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 760, []);
 
@@ -196,7 +198,7 @@ function CabinetDetail({ unit, label, resolvedTheme }) {
               ))}
             </div>
             <span className="vp-toolbar__sep" />
-            {[['dims', 'Dims'], ['labels', 'Labels'], ['grid', 'Grid'], ['back', 'Back'], ['hardware', 'Hardware']].map(([k, l]) => (
+            {[['dims', 'Dims'], ['setout', 'Setout'], ['labels', 'Labels'], ['grid', 'Grid'], ['back', 'Back'], ['hardware', 'Hardware']].map(([k, l]) => (
               <button key={k} className="seg__item" aria-pressed={show[k]}
                       onClick={() => setShow((s) => ({ ...s, [k]: !s[k] }))}>{l}</button>
             ))}

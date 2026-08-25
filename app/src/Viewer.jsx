@@ -4,6 +4,8 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { bounds } from './cabinet.js';
+import { drawerSetout } from './catalog.js';
+import { chainStops, dimLines, levelOff, mmLabel } from './dim.js';
 import { openingSide } from './draw2d.js';
 
 /* Materials. Matte, close to the real board. Doors sit one value off the
@@ -132,28 +134,92 @@ export function Part({ p, offset, selected, ghosted, hidden, onHover, onSelect, 
   );
 }
 
-/* --- dimension annotation ------------------------------------------------ */
+/* --- dimension annotation -------------------------------------------------
+   The geometry, and the drawing conventions behind it, are in dim.js so they
+   can be checked without a browser. This is only the drawing of them.
+   --------------------------------------------------------------------------- */
 
-function Dim({ from, to, label, dimColor }) {
-  const mid = from.map((v, i) => (v + to[i]) / 2);
+function Dim({ a, b, dir, off, label, dimColor }) {
+  const g = dimLines(a, b, dir, off);
+  if (!g) return null;      // nothing to measure, and no room to say so
   return (
     <group>
-      <Line points={[from, to]} color={dimColor} lineWidth={1} />
-      <Html center position={mid} zIndexRange={[20, 10]} style={{ pointerEvents: 'none' }}>
+      {g.witness.map((seg, i) => (
+        <Line key={`w${i}`} points={seg} color={dimColor} lineWidth={1} />
+      ))}
+      <Line points={g.line} color={dimColor} lineWidth={1} />
+      {g.arrows.map((seg, i) => (
+        <Line key={`a${i}`} points={seg} color={dimColor} lineWidth={1} />
+      ))}
+      <Html center position={g.mid} zIndexRange={[20, 10]} style={{ pointerEvents: 'none' }}>
         <span className="dim-label">{label}</span>
       </Html>
     </group>
   );
 }
 
-function Dimensions({ size, dimColor }) {
-  const [W, H, D] = size;
-  const o = 90;
+/* A continuous chain: each link starts where the last one ended, so the parts
+   add up to the whole by construction. */
+function DimChain({ at, point, dir, off, dimColor }) {
   return (
     <group>
-      <Dim from={[-W / 2, 2, D / 2 + o]} to={[W / 2, 2, D / 2 + o]} label={`${W}`} dimColor={dimColor} />
-      <Dim from={[-W / 2 - o, 0, D / 2]} to={[-W / 2 - o, H, D / 2]} label={`${H}`} dimColor={dimColor} />
-      <Dim from={[W / 2 + o, 2, -D / 2]} to={[W / 2 + o, 2, D / 2]} label={`${D}`} dimColor={dimColor} />
+      {at.slice(0, -1).map((v, i) => (
+        <Dim key={`${v}-${at[i + 1]}`} a={point(v)} b={point(at[i + 1])}
+             dir={dir} off={off} dimColor={dimColor}
+             label={mmLabel(at[i + 1] - v)} />
+      ))}
+    </group>
+  );
+}
+
+/* The overall sizes. `level` steps them outwards so a detail chain can sit
+   inside them, which is the order a drawing puts them in. */
+function Dimensions({ size, dimColor, level = 0 }) {
+  const [W, H, D] = size;
+  const off = levelOff(level);
+  return (
+    <group>
+      <Dim a={[-W / 2, 2, D / 2]} b={[W / 2, 2, D / 2]} dir={[0, 0, 1]} off={off}
+           label={mmLabel(W)} dimColor={dimColor} />
+      <Dim a={[-W / 2, 0, D / 2]} b={[-W / 2, H, D / 2]} dir={[-1, 0, 0]} off={off}
+           label={mmLabel(H)} dimColor={dimColor} />
+      <Dim a={[W / 2, 2, -D / 2]} b={[W / 2, 2, D / 2]} dir={[1, 0, 0]} off={off}
+           label={mmLabel(D)} dimColor={dimColor} />
+    </group>
+  );
+}
+
+/* --- where the drawer boxes sit ------------------------------------------
+   Read off the finished part list, so a dimension cannot disagree with the
+   box it points at. Two chains, both in the front plane:
+
+   - up the left, every drawer in the cabinet: the floor to the underside of
+     the first box, the box itself, the gap to the next, and so on to the top.
+     The gaps ARE the clearances, so a box being squeezed shows it here.
+   - across the bottom, the side setout. Every drawer in a cabinet shares it,
+     so it is drawn once off the lowest box rather than repeated up the run.
+   --------------------------------------------------------------------------- */
+
+function DrawerDims({ cabinet, dimColor }) {
+  const setout = useMemo(() => drawerSetout(cabinet), [cabinet]);
+  if (!setout.length) return null;
+
+  const [W, H, D] = cabinet.size;
+  /* The parts are drawn inside a group shifted to centre the cabinet, so the
+     dimensions are shifted the same way and can be written in the cabinet's
+     own coordinates, which is what the setout is in. */
+  const onLeft = (y) => [-W / 2, y, D / 2];
+  const onFloor = (x) => [x - W / 2, 0, D / 2];
+
+  const up = chainStops(0, H, setout.flatMap((d) => [d.bottom, d.top]));
+  const across = chainStops(0, W, [setout[0].left, setout[0].right]);
+
+  return (
+    <group>
+      <DimChain at={up} point={onLeft} dir={[-1, 0, 0]}
+                off={levelOff(0)} dimColor={dimColor} />
+      <DimChain at={across} point={onFloor} dir={[0, -1, 0]}
+                off={levelOff(0)} dimColor={dimColor} />
     </group>
   );
 }
@@ -410,7 +476,10 @@ function Scene({
         ))}
       </group>
 
-      {show.dims && <Dimensions size={cabinet.size} dimColor={dimColor} />}
+      {show.dims && (
+        <Dimensions size={cabinet.size} dimColor={dimColor} level={show.setout ? 1 : 0} />
+      )}
+      {show.setout && <DrawerDims cabinet={cabinet} dimColor={dimColor} />}
 
       {/* The part name and size used to hang over the model on a leader, which
           covered the very thing you were pointing at. It is a fixed panel in

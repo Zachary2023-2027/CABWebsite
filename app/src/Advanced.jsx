@@ -7,7 +7,9 @@
    =========================================================================== */
 
 import { useState } from 'react';
-import { FAMILY, PROJECT, boardNames } from './catalog.js';
+import {
+  BASE_FIXES, BOX_CLEAR, FAMILY, PROJECT, baseFixOf, boardNames,
+} from './catalog.js';
 import {
   HINGE_LIST, boringInRange, cupCentre, hingeProfile,
   longestFitting, runnerProfile,
@@ -237,9 +239,21 @@ export function Advanced({ cfg, onChange, onReset, onClose }) {
                       options={[{ value: 'full', label: 'Full panel' }, { value: 'rail', label: 'Rail only' }]}
                       onChange={(v) => onChange({ backType: v })} />
               <Choice label="Drawer base" value={cfg.boxBaseFix || 'dado'}
-                      options={[{ value: 'dado', label: 'Dado' }, { value: 'screwed', label: 'Screwed' }]}
+                      options={BASE_FIXES.map((b) => ({ value: b.id, label: b.name }))}
                       onChange={(v) => onChange({ boxBaseFix: v })} />
             </div>
+            <p className="note">{baseFixOf(cfg.boxBaseFix).note}</p>
+            <div className="settings-grid">
+              <Num label="Gap above the box" value={cfg.boxClearTop ?? BOX_CLEAR.top} min={0} max={120}
+                   onChange={(v) => onChange({ boxClearTop: v ?? BOX_CLEAR.top })} />
+              <Num label="Gap below the box" value={cfg.boxClearBottom ?? BOX_CLEAR.bottom} min={0} max={120}
+                   onChange={(v) => onChange({ boxClearBottom: v ?? BOX_CLEAR.bottom })} />
+            </div>
+            <p className="note">
+              {baseFixOf(cfg.boxBaseFix).recessed
+                ? `The box is as tall as its sides, so it sits ${cfg.boxClearBottom ?? BOX_CLEAR.bottom}mm up off the bottom of its opening with ${cfg.boxClearTop ?? BOX_CLEAR.top}mm over it.`
+                : `A butted base reaches ${cfg.boxBaseThk}mm below the sides. The gap is measured to the underside of the base, not to the sides, so the box still clears its opening by ${cfg.boxClearBottom ?? BOX_CLEAR.bottom}mm underneath and ${cfg.boxClearTop ?? BOX_CLEAR.top}mm over.`}
+            </p>
             <div className="settings-grid">
               {[['carcassBoard', 'Carcass board', ''], ['frontBoard', 'Front board', ''],
                 ['backBoard', 'Back board', ''], ['boxBoard', 'Drawer box sides board', ''],

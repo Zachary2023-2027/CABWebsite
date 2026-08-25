@@ -14,13 +14,14 @@ import {
   allParts, barBrackets, barSeats, floorPlan, layoutFor, nestCfg, roomOffsets,
   unitWarnings, wallWarnings,
 } from './project.js';
+import { drawerSetout } from './catalog.js';
 import { nestProject } from './nesting.js';
 import { Num } from './Fields.jsx';
 import { fmt } from './mm.js';
 
 const DEPS = {
   floorPlan, layoutFor, roomOffsets, allParts, nestProject, nestCfg,
-  unitWarnings, wallWarnings, barSeats, barBrackets,
+  unitWarnings, wallWarnings, barSeats, barBrackets, drawerSetout,
 };
 
 const LEVEL_NAME = {

@@ -36,6 +36,7 @@
    =========================================================================== */
 
 import { BAR_RULES } from './bar.js';
+import { BOX_CLEAR } from './catalog.js';
 import { round1, whole } from './mm.js';
 import { FULL_SWING, degrees, largestSwing } from './motion.js';
 import { natureOf, obstacleKind, overlaps } from './obstacles.js';
@@ -272,6 +273,30 @@ export function runChecks(project, deps) {
       for (const text of unitWarnings(p, lay, cfg)) {
         out.push(finding('error', 'cabinet', text, `${wall.name}, ${p.label || p.unit.family.name}`));
       }
+      /* The drawer box has to have air above and below it inside its own
+         opening. The builder sizes the box down to hold the gaps, so this
+         only fires once the opening is too short to give them at all and
+         the box has bottomed out on its minimum height. A butted base is
+         the usual reason: it reaches a base thickness lower than the sides,
+         so it needs that much more opening than a recessed one. */
+      if (deps.drawerSetout) {
+        const pcfg = p.unit.cfg || cfg;
+        const wantTop = pcfg.boxClearTop ?? BOX_CLEAR.top;
+        const wantBot = pcfg.boxClearBottom ?? BOX_CLEAR.bottom;
+        const where = `${wall.name}, ${p.label || p.unit.family.name}`;
+        for (const d of deps.drawerSetout(p.unit)) {
+          if (d.clearAbove === null || d.clearBelow === null) continue;
+          /* Positive is a shortfall: what was asked for, less what the box
+             actually got. Either end being short is worth saying. */
+          const short = Math.max(wantTop - d.clearAbove, wantBot - d.clearBelow);
+          if (short > 0.5) {
+            out.push(finding('warn', 'drawer-clearance',
+              `Drawer ${d.n} has only ${whole(d.clearAbove)}mm over the box and ${whole(d.clearBelow)}mm under it, against the ${whole(wantTop)} and ${whole(wantBot)} asked for. The opening is too short to give both, so the box is already down to its minimum height. Give the row more height, or take the box height down.`,
+              where));
+          }
+        }
+      }
+
       /* A front that does not add up is an error you can see on the drawing
          and miss anyway, because it looks like a design decision. */
       if (p.unit.stack) {

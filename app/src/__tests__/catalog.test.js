@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { FAMILIES, FAMILY, PROJECT, buildUnit, sheetFor } from '../catalog.js';
+import {
+  BOX_CLEAR, FAMILIES, FAMILY, PROJECT, buildUnit, drawerSetout, sheetFor,
+} from '../catalog.js';
 import { fmt } from '../mm.js';
 
 const real = FAMILIES.filter((f) => !f.cavity && f.kind !== 'filler');
@@ -299,20 +301,24 @@ describe('a retired preset is kept but not offered', () => {
   });
 });
 
-/* The drawer base is cut to the inside of the box whichever way it is fixed.
-   A screwed base is pocket screwed into the sides, so it is NOT the box
-   footprint hung underneath them: that cuts it 2 x the side thickness too big
-   in both directions and stands the box proud of its runner. */
-describe('the drawer base is fixed inside the box', () => {
+/* Three ways to hold the drawer bottom. Two are recessed and cut to the
+   inside of the box; the butted one is the full footprint under the sides.
+   Whichever is chosen the carcass keeps the same air above and below. */
+describe('the drawer base, three ways of holding it', () => {
   const drawerFamily = FAMILIES.find((f) => !f.cavity
     && buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
 
-  const baseAndSides = (cfg) => {
+  const box = (boxBaseFix) => {
+    const cfg = { ...PROJECT, boxBaseFix };
     const u = buildUnit('T1', drawerFamily.id, {}, cfg);
+    const find = (re) => u.parts.find((p) => re.test(p.code));
     return {
-      base: u.parts.find((p) => /DRWR\d+-BASE$/.test(p.code)),
-      side: u.parts.find((p) => /DRWR\d+-SIDE-L$/.test(p.code)),
-      front: u.parts.find((p) => /DRWR\d+-FRONT$/.test(p.code)),
+      cfg,
+      base: find(/DRWR\d+-BASE$/),
+      side: find(/DRWR\d+-SIDE-L$/),
+      right: find(/DRWR\d+-SIDE-R$/),
+      front: find(/DRWR\d+-FRONT$/),
+      face: find(/DRWR-F\d+$/),
     };
   };
 
@@ -322,33 +328,180 @@ describe('the drawer base is fixed inside the box', () => {
 
   for (const fix of ['dado', 'screwed']) {
     it(`${fix}: the base is cut to the inside of the box`, () => {
-      const { base, side, front } = baseAndSides({ ...PROJECT, boxBaseFix: fix });
-      // As wide as the box is inside, which is what the front and back are.
+      const { base, side, front } = box(fix);
       expect(base.L).toBe(front.L);
-      // As long as the runner less the front and the back.
       expect(base.W).toBe(side.L - 2 * PROJECT.boxSideThk);
     });
 
-    it(`${fix}: the base sits between the sides, not outside them`, () => {
-      const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: fix });
-      expect(base.pos[0]).toBeGreaterThan(side.pos[0]);
+    it(`${fix}: the base sits up the side by the groove height`, () => {
+      const { base, side } = box(fix);
+      expect(base.pos[1]).toBe(side.pos[1] + PROJECT.baseGroove);
+    });
+
+    it(`${fix}: the base is between the sides, not outside them`, () => {
+      const { base, side, right } = box(fix);
+      expect(base.pos[0]).toBeGreaterThanOrEqual(side.pos[0] + PROJECT.boxSideThk);
       expect(base.pos[0] + base.size[0])
-        .toBeLessThanOrEqual(side.pos[0] + PROJECT.boxSideThk + base.L + 0.001);
+        .toBeLessThanOrEqual(right.pos[0] + 0.001);
     });
   }
 
-  it('a screwed base sits flush with the bottom of the sides', () => {
-    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'screwed' });
-    expect(base.pos[1]).toBe(side.pos[1]);
+  it('butted: the base is the whole box footprint', () => {
+    const { base, side, right } = box('butted');
+    // Spans the outside of both sides, not the gap between them.
+    expect(base.pos[0]).toBe(side.pos[0]);
+    expect(base.pos[0] + base.size[0])
+      .toBeCloseTo(right.pos[0] + PROJECT.boxSideThk, 6);
+    // As long as the runner, front and back sitting on top of it.
+    expect(base.W).toBe(side.L);
   });
 
-  it('a dado base sits up the side by the groove height', () => {
-    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'dado' });
-    expect(base.pos[1]).toBe(side.pos[1] + PROJECT.baseGroove);
+  it('butted: the base hangs below the bottom edge of the sides', () => {
+    const { base, side } = box('butted');
+    expect(base.pos[1]).toBeCloseTo(side.pos[1] - PROJECT.boxBaseThk, 6);
   });
 
-  it('a screwed base never hangs below the sides', () => {
-    const { base, side } = baseAndSides({ ...PROJECT, boxBaseFix: 'screwed' });
-    expect(base.pos[1]).toBeGreaterThanOrEqual(side.pos[1]);
+  it('an unknown fixing falls back to a dado rather than drawing nothing', () => {
+    const odd = box('nonsense');
+    const dado = box('dado');
+    expect(odd.base.L).toBe(dado.base.L);
+    expect(odd.base.W).toBe(dado.base.W);
+    expect(odd.base.pos[1]).toBe(dado.base.pos[1]);
+  });
+});
+
+/* The point of the clearance settings: the carcass gives the box the same
+   air above and below whichever way the bottom is held. A butted base comes
+   off the box height, not out of the gap under the box. */
+describe('the carcass clears the drawer box top and bottom', () => {
+  const drawerFamily = FAMILIES.find((f) => !f.cavity
+    && buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
+
+  const envelope = (cfg) => {
+    const u = buildUnit('T1', drawerFamily.id, {}, cfg);
+    const side = u.parts.find((p) => /DRWR\d+-SIDE-L$/.test(p.code));
+    const base = u.parts.find((p) => /DRWR\d+-BASE$/.test(p.code));
+    const face = u.parts.find((p) => /DRWR-F\d+$/.test(p.code));
+    const lo = Math.min(side.pos[1], base.pos[1]);
+    const hi = Math.max(side.pos[1] + side.size[1], base.pos[1] + base.size[1]);
+    return { lo, hi, face, below: lo - face.pos[1], above: (face.pos[1] + face.size[1]) - hi };
+  };
+
+  for (const fix of ['dado', 'screwed', 'butted']) {
+    it(`${fix}: keeps the asked-for gap above and below`, () => {
+      const cfg = { ...PROJECT, boxBaseFix: fix };
+      const e = envelope(cfg);
+      expect(e.below).toBeCloseTo(cfg.boxClearBottom, 6);
+      expect(e.above).toBeGreaterThanOrEqual(cfg.boxClearTop - 0.001);
+    });
+  }
+
+  /* Asked for explicitly: 5mm under the box, surface to surface, whatever is
+     holding the bottom on. Measured to the underside of a butted base and to
+     the bottom edge of the sides when the base is recessed. */
+  it('leaves 5mm under the lowest surface of the box, every fixing', () => {
+    expect(BOX_CLEAR.bottom).toBe(5);
+    for (const fix of ['dado', 'screwed', 'butted']) {
+      const e = envelope({ ...PROJECT, boxBaseFix: fix });
+      expect(e.below, fix).toBeCloseTo(5, 6);
+    }
+  });
+
+  it('a butted base costs its thickness off the top, never off the gap below', () => {
+    const recessed = envelope({ ...PROJECT, boxBaseFix: 'dado' });
+    const under = envelope({ ...PROJECT, boxBaseFix: 'butted' });
+    // The air under the lowest part of the box is the same either way.
+    expect(under.below).toBeCloseTo(recessed.below, 6);
+    /* In an opening with room to spare the sides stay the height you asked
+       for, so the whole box reaches exactly a base thickness higher. */
+    expect(under.hi - under.lo).toBeCloseTo((recessed.hi - recessed.lo) + PROJECT.boxBaseThk, 6);
+    expect(under.above).toBeCloseTo(recessed.above - PROJECT.boxBaseThk, 6);
+  });
+
+  /* The clamp only bites once the opening is the binding constraint rather
+     than boxHeight, so the clearance is driven up past it to prove it. */
+  const rowHeight = envelope(PROJECT).face.size[1];
+
+  it('a clearance the opening cannot afford shortens the box, not the gap', () => {
+    const C = Math.round((rowHeight - PROJECT.boxHeight) / 2) + 10;
+    const tight = envelope({ ...PROJECT, boxClearTop: C, boxClearBottom: C });
+    const roomy = envelope({ ...PROJECT, boxClearTop: 20, boxClearBottom: 20 });
+    expect(tight.below).toBeCloseTo(C, 6);
+    expect(tight.above).toBeGreaterThanOrEqual(C - 0.001);
+    expect(tight.hi - tight.lo).toBeLessThan(roomy.hi - roomy.lo);
+  });
+
+  it('a butted base in a tight opening still keeps both gaps', () => {
+    const C = Math.round((rowHeight - PROJECT.boxHeight) / 2) + 10;
+    const e = envelope({ ...PROJECT, boxClearTop: C, boxClearBottom: C, boxBaseFix: 'butted' });
+    expect(e.below).toBeCloseTo(C, 6);
+    expect(e.above).toBeGreaterThanOrEqual(C - 0.001);
+  });
+});
+
+/* The setout the drawing dimensions off. Its whole job is that the numbers
+   close: a chain that does not add up to the overall is a drawing that sends
+   someone to the saw with the wrong figure. */
+describe('the drawer setout closes', () => {
+  const withDrawers = FAMILIES.filter((f) => !f.cavity
+    && buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
+
+  it('there are drawer families to measure', () => {
+    expect(withDrawers.length).toBeGreaterThan(0);
+  });
+
+  for (const fix of ['dado', 'screwed', 'butted']) {
+    it(`${fix}: every chain adds up to the cabinet it is in`, () => {
+      for (const f of withDrawers) {
+        const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
+        const [W, H] = u.size;
+        const setout = drawerSetout(u);
+        expect(setout.length, f.id).toBeGreaterThan(0);
+        for (const d of setout) {
+          expect(d.fromBottom + d.height + d.fromTop, `${f.id} drawer ${d.n} height`)
+            .toBeCloseTo(H, 3);
+          expect(d.fromLeft + d.width + d.fromRight, `${f.id} drawer ${d.n} width`)
+            .toBeCloseTo(W, 3);
+        }
+      }
+    });
+  }
+
+  it('the box is inside the cabinet on every side', () => {
+    for (const f of withDrawers) {
+      const u = buildUnit('T1', f.id, {}, PROJECT);
+      for (const d of drawerSetout(u)) {
+        for (const k of ['fromLeft', 'fromRight', 'fromBottom', 'fromTop', 'fromFront']) {
+          expect(d[k], `${f.id} drawer ${d.n} ${k}`).toBeGreaterThanOrEqual(0);
+        }
+      }
+    }
+  });
+
+  it('the envelope takes in a butted base, which reaches lower than the sides', () => {
+    const f = withDrawers[0];
+    const lowOf = (fix) => drawerSetout(
+      buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix }))[0].bottom;
+    const sideOf = (fix) => buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix })
+      .parts.find((p) => /DRWR\d+-SIDE-L$/.test(p.code)).pos[1];
+    // Recessed: the lowest thing on the box IS the side.
+    expect(lowOf('dado')).toBeCloseTo(sideOf('dado'), 6);
+    // Butted: the base hangs below it, and the envelope follows the base.
+    expect(lowOf('butted')).toBeCloseTo(sideOf('butted') - PROJECT.boxBaseThk, 6);
+  });
+
+  it('drawers come back in order, bottom to top of the cabinet', () => {
+    for (const f of withDrawers) {
+      const setout = drawerSetout(buildUnit('T1', f.id, {}, PROJECT));
+      const ns = setout.map((d) => d.n);
+      expect(ns, f.id).toEqual([...ns].sort((a, b) => a - b));
+    }
+  });
+
+  it('a cabinet with no drawers has no setout rather than throwing', () => {
+    const none = FAMILIES.find((f) => !f.cavity
+      && !buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
+    if (none) expect(drawerSetout(buildUnit('T1', none.id, {}, PROJECT))).toEqual([]);
+    expect(drawerSetout(null)).toEqual([]);
   });
 });
