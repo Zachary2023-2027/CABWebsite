@@ -153,7 +153,7 @@ cut: [keys], prices, quoted }`.
 | Depths | `baseDepth 560`, `wallDepth 320`, `benchDepth 600` |
 | Thickness | `carcassThk 16`, `backThk 6`, `frontThk 18`, `boxSideThk 16`, `boxBaseThk 6` |
 | Boards | `carcassBoard`, `frontBoard`, `backBoard`, `boxBoard`, `boxBaseBoard` (empty means follow the sides) |
-| Build | `backType 'full' \| 'rail'`, `backRailHeight 120`, `boxBaseFix 'dado' \| 'screwed' \| 'butted'` |
+| Build | `backType 'full' \| 'rail'`, `backRailHeight 120`, `boxBaseFix 'screwed' \| 'butted'` |
 | Drawers | `runnerLength 500`, `runnerClearance 21`, `boxHeight 140`, `boxSetback 20`, `baseGroove 10`, `boxClearTop 20`, `boxClearBottom 5` |
 | Gaps | `reveal 3`, `shelfSetback 20`, `blindClearance 50` |
 | Saw | `kerf 3.2`, `trim 10`, `minOffcut 150` |

@@ -25,14 +25,15 @@ export const BOX_CLEAR = { top: 20, bottom: 5 };
    cut to the inside of the box and sits up the side, a butted one is the
    whole footprint underneath it. */
 export const BASE_FIXES = [
-  { id: 'dado', name: 'Recessed in a dado', recessed: true,
-    note: 'Captured in a groove run up the inside of each side.' },
   { id: 'screwed', name: 'Recessed, screwed', recessed: true,
-    note: 'Pocket screwed into the sides, sitting up the side by the same amount a groove would.' },
+    note: 'Cut to the inside of the box and pocket screwed into the sides, sitting up off their bottom edge by the base setback.' },
   { id: 'butted', name: 'Butted to the bottom', recessed: false,
     note: 'The whole box footprint, butted up under the bottom edge of the sides. The box reaches a base thickness lower and the carcass gives it that much more room.' },
 ];
 
+/* Anything unrecognised resolves to the first, which is the recessed one.
+   That is also the migration for a project saved when a dado was on offer:
+   its base was recessed, and recessed is what it stays. */
 export const baseFixOf = (id) => BASE_FIXES.find((b) => b.id === id) || BASE_FIXES[0];
 
 export const PROJECT = {
@@ -113,14 +114,13 @@ export const PROJECT = {
   backType: 'full',       // 'full' or 'rail', a rail saves a sheet of back
   backRailHeight: 120,
   /* How the drawer bottom is held, and so where it sits in the box.
-       dado    - recessed, captured in a groove run up the side
        screwed - recessed, pocket screwed into the sides
        butted  - butted up under the bottom edge of the sides
-     The two recessed fixings sit the base up the side by baseGroove and cut
-     it to the inside of the box. A butted base is the full box footprint and
-     hangs below the sides, so it makes the box boxBaseThk taller overall and
-     the carcass has to give it that much more room. See the drawer builder. */
-  boxBaseFix: 'dado',
+     A recessed base sits up the side by baseGroove and is cut to the inside
+     of the box. A butted base is the full box footprint and hangs below the
+     sides, so it makes the box boxBaseThk taller overall and the carcass has
+     to give it that much more room. See the drawer builder. */
+  boxBaseFix: 'screwed',
   /* The gap kept between the drawer box and whatever is above and below it
      inside the carcass, measured surface to surface: to the underside of a
      butted base, or to the bottom edge of the sides when the base is
@@ -911,17 +911,28 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     const boxInnerW = box.insideWidth;
     const boxSide = (internalW - boxW) / 2;   // clearance beside each box side
     const boxZ = D - P.boxSetback - RL;
-    /* Three ways to hold the bottom, and only one of them changes the size
-       of the box. 'dado' and 'screwed' are both recessed: the panel is cut
-       to the inside of the box and sits up the side by baseGroove, so the
-       box is exactly as tall as its sides. 'butted' is the full footprint
-       under the sides, so the box hangs a base thickness lower. */
+    /* Two ways to hold the bottom, and only one of them changes the size of
+       the box. Recessed, the panel is cut to the inside of the box and sits
+       up the side by baseGroove, so the box is exactly as tall as its sides.
+       Butted, it is the full footprint under the sides, so the box hangs a
+       base thickness lower and needs that much more opening. */
     const baseFix = baseFixOf(P.boxBaseFix);
     const butted = !baseFix.recessed;
     /* How far the box reaches below the bottom edge of its sides. */
     const baseDrop = butted ? P.boxBaseThk : 0;
     const clearTop = P.boxClearTop ?? BOX_CLEAR.top;
     const clearBot = P.boxClearBottom ?? BOX_CLEAR.bottom;
+    /* The box lives inside the CARCASS, not inside the front.
+
+       A frameless front runs past the carcass and covers the edge of the
+       bottom, so a box set out from the bottom of its front starts a board
+       thickness inside the bottom panel: at 16mm board and 5mm clearance the
+       bottom box was buried 11mm in the bottom of the cabinet. The opening a
+       drawer really has is its front row clipped to the carcass interior -
+       the top face of the bottom, and the underside of the top or the top
+       rails, each a board thickness in from the outside of the cabinet. */
+    const interiorLo = T;
+    const interiorHi = H - T;
 
     let top = y + h;
     for (let i = 0; i < n; i++) {
@@ -940,15 +951,23 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         edging: 'All four edges',
       }));
 
-      /* The box never stands taller than its own front, and the carcass has
-         to give it room above and below. The clearance is measured to the
-         lowest and highest thing on the box, so a butted base is taken off
-         the height rather than eating into the gap under the box: whichever
-         fixing you choose, the same air is left top and bottom. */
-      const BH = Math.max(60, Math.min(P.boxHeight, each - clearTop - clearBot - baseDrop));
-      /* The bottom edge of the SIDES. The base, when butted, hangs baseDrop
-         below this, which is what puts its underside on the clearance. */
-      const by = fy + clearBot + baseDrop;
+      /* This drawer's real opening: its front row, clipped to the carcass
+         interior. For every drawer but the bottom and top one these are the
+         same thing; for those two the board is what it runs into. */
+      const openLo = Math.max(fy, interiorLo);
+      const openHi = Math.min(fy + each, interiorHi);
+      /* The lowest surface of the box - the underside of a butted base, the
+         bottom edge of the sides when it is recessed - set the clearance up
+         off whatever the opening's floor is. */
+      const boxLow = openLo + clearBot;
+      /* What is left for the box itself once both gaps are taken out. The
+         whole envelope has to fit it, so a butted base comes off the height
+         rather than out of a gap. */
+      const room = (openHi - clearTop) - boxLow;
+      const BH = Math.max(60, Math.min(P.boxHeight, room - baseDrop));
+      /* The bottom edge of the SIDES. A butted base hangs baseDrop below it,
+         which is what puts the base underside on the clearance. */
+      const by = boxLow + baseDrop;
       const sh = [0, 0, 170];
       const BST = P.boxSideThk;
       const push = (sfx, nm, L, Wd, Th, size, pos, ex, mat) => parts.push(mkPart({
@@ -967,10 +986,15 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
          the whole box footprint and goes under the sides, so it is wider and
          longer by the thickness of the panels it covers, and sits a base
          thickness below their bottom edge. */
+      /* Recessed: cut to the bare inside of the box, landing on the faces of
+         the sides, front and back, and sitting up off their bottom edge by
+         baseGroove. Butted: the whole box footprint, so it is wider and
+         longer by the panels it covers, and it sits a base thickness below
+         their bottom edge. */
       const baseW = butted ? boxW : boxInnerW;
       const baseD = butted ? RL : RL - 2 * BST;
-      const baseName = { dado: 'base', screwed: 'base, pocket screwed', butted: 'base, butted under' };
-      push('BASE', baseName[baseFix.id], baseW, baseD, P.boxBaseThk,
+      push('BASE', butted ? 'base, butted under' : 'base, pocket screwed',
+        baseW, baseD, P.boxBaseThk,
         [baseW, P.boxBaseThk, baseD],
         [T + boxSide + (butted ? 0 : BST),
           butted ? by - P.boxBaseThk : by + P.baseGroove,
@@ -1096,6 +1120,36 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
    base underside when the base is butted, and the side underside when it is
    recessed.
    --------------------------------------------------------------------------- */
+
+/**
+ * The inside faces of the carcass, read off the panels themselves rather than
+ * recomputed from the thickness setting, so a dimension cannot disagree with
+ * the board it is measuring to.
+ *
+ * These are what a drawer box is actually set out from. Measuring it from the
+ * front instead is what used to bury the bottom box in the bottom panel: a
+ * frameless front runs past the carcass and covers that panel's edge, so the
+ * front starts a board thickness BELOW the floor the box has to sit on.
+ */
+export function carcassInterior(unit) {
+  if (!unit || !unit.parts) return null;
+  const [W, H] = unit.size;
+  const at = (re) => unit.parts.filter((p) => re.test(p.code)
+    && (p.group === 'carcass' || p.group === 'back'));
+  const bot = at(/-BOT$/)[0];
+  const above = at(/-(TOP|RAIL-TB|RAIL-TF)$/);
+  const left = at(/-SIDE-L$/)[0];
+  const right = at(/-SIDE-R$/)[0];
+  return {
+    /* Top face of the bottom panel, and the underside of the top or of the
+       lowest top rail. Falling back to the outside only if a family has no
+       such panel at all, so a chain still closes. */
+    floor: bot ? bot.pos[1] + bot.size[1] : 0,
+    ceiling: above.length ? Math.min(...above.map((p) => p.pos[1])) : H,
+    left: left ? left.pos[0] + left.size[0] : 0,
+    right: right ? right.pos[0] : W,
+  };
+}
 
 export function drawerSetout(unit) {
   if (!unit || !unit.parts) return [];

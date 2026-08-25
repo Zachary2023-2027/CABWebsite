@@ -238,7 +238,7 @@ export function Advanced({ cfg, onChange, onReset, onClose }) {
               <Choice label="Back" value={cfg.backType || 'full'}
                       options={[{ value: 'full', label: 'Full panel' }, { value: 'rail', label: 'Rail only' }]}
                       onChange={(v) => onChange({ backType: v })} />
-              <Choice label="Drawer base" value={cfg.boxBaseFix || 'dado'}
+              <Choice label="Drawer base" value={baseFixOf(cfg.boxBaseFix).id}
                       options={BASE_FIXES.map((b) => ({ value: b.id, label: b.name }))}
                       onChange={(v) => onChange({ boxBaseFix: v })} />
             </div>

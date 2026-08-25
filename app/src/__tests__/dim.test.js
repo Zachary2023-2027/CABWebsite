@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DIM, MIN_INWARD, chainStops, dimLines, levelOff, mmLabel, vLen, vSub,
 } from '../dim.js';
-import { FAMILIES, PROJECT, buildUnit, drawerSetout } from '../catalog.js';
+import {
+  FAMILIES, PROJECT, buildUnit, carcassInterior, drawerSetout,
+} from '../catalog.js';
 
 const A = [0, 0, 0];
 const B = [0, 500, 0];
@@ -138,7 +140,7 @@ describe('the drawer setout chain, on real cabinets', () => {
     expect(withDrawers.length).toBeGreaterThan(0);
   });
 
-  for (const fix of ['dado', 'screwed', 'butted']) {
+  for (const fix of ['screwed', 'butted']) {
     it(`${fix}: the chain up the cabinet closes on its height`, () => {
       for (const f of withDrawers) {
         const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
@@ -174,6 +176,91 @@ describe('the drawer setout chain, on real cabinets', () => {
       const g = dimLines([0, up[i - 1], D / 2], [0, up[i], D / 2], [-1, 0, 0], levelOff(0));
       expect(g, `${up[i - 1]} to ${up[i]}`).not.toBeNull();
       expect(g.arrows).toHaveLength(4);
+    }
+  });
+});
+
+/* The board has to be visible in the drawing, not swallowed into the gap next
+   to it. The chain reads outside, panel, clearance, box - so the thickness of
+   the carcass is a number you can read off, and the clearance next to it is
+   the real one rather than the panel and the gap added together. */
+describe('the drawing shows the board, not just the air', () => {
+  const withDrawers = FAMILIES.filter((f) => !f.cavity
+    && drawerSetout(buildUnit('T1', f.id, {}, PROJECT)).length > 0);
+
+  const chainUp = (u) => {
+    const inside = carcassInterior(u);
+    return chainStops(0, u.size[1], [
+      inside.floor, inside.ceiling,
+      ...drawerSetout(u).flatMap((d) => [d.bottom, d.top]),
+    ]);
+  };
+
+  for (const fix of ['screwed', 'butted']) {
+    it(`${fix}: the carcass faces are stops in the chain`, () => {
+      for (const f of withDrawers) {
+        const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
+        const inside = carcassInterior(u);
+        const up = chainUp(u);
+        expect(up, `${f.id} floor`).toContain(inside.floor);
+        expect(up, `${f.id} ceiling`).toContain(inside.ceiling);
+      }
+    });
+
+    it(`${fix}: the first link up the cabinet is the bottom panel itself`, () => {
+      for (const f of withDrawers) {
+        const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
+        const inside = carcassInterior(u);
+        const up = chainUp(u);
+        // 0 to the top face of the bottom panel: the board, on its own.
+        expect(up[0], f.id).toBe(0);
+        expect(up[1], f.id).toBeCloseTo(inside.floor, 6);
+        expect(up[1] - up[0], `${f.id} is the board thickness`)
+          .toBeCloseTo(u.cfg.carcassThk, 6);
+      }
+    });
+
+    /* On a cabinet whose bottom row IS a drawer, the link above the board is
+       the clearance and nothing else. On one with a door below the drawers
+       it is the door's share of the cabinet, which is not the clearance and
+       should not be read as one - so the claim is only that the board is
+       never lumped in with whatever comes next. */
+    it(`${fix}: the board is never lumped in with the gap above it`, () => {
+      let sawADrawerOnTheFloor = false;
+      for (const f of withDrawers) {
+        const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
+        const up = chainUp(u);
+        const gap = up[2] - up[1];
+        expect(gap, `${f.id}`).toBeGreaterThanOrEqual(u.cfg.boxClearBottom - 0.001);
+        if (Math.abs(gap - u.cfg.boxClearBottom) < 0.001) sawADrawerOnTheFloor = true;
+      }
+      // At least one family stands its lowest box straight on the clearance.
+      expect(sawADrawerOnTheFloor).toBe(true);
+    });
+  }
+
+  it('the chain still closes once the carcass faces are in it', () => {
+    for (const f of withDrawers) {
+      for (const fix of ['screwed', 'butted']) {
+        const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
+        const up = chainUp(u);
+        const links = up.slice(0, -1).map((v, i) => up[i + 1] - v);
+        expect(links.reduce((a, b) => a + b, 0), f.id).toBeCloseTo(u.size[1], 6);
+      }
+    }
+  });
+
+  it('across the cabinet, the side panel is its own dimension', () => {
+    for (const f of withDrawers) {
+      const u = buildUnit('T1', f.id, {}, PROJECT);
+      const inside = carcassInterior(u);
+      const d = drawerSetout(u)[0];
+      const across = chainStops(0, u.size[0], [inside.left, inside.right, d.left, d.right]);
+      expect(across[0]).toBe(0);
+      expect(across[1] - across[0], `${f.id} left side board`)
+        .toBeCloseTo(u.cfg.carcassThk, 6);
+      expect(across[across.length - 1] - across[across.length - 2], `${f.id} right side board`)
+        .toBeCloseTo(u.cfg.carcassThk, 6);
     }
   });
 });

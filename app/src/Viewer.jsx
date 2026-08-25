@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows, Grid, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { bounds } from './cabinet.js';
-import { drawerSetout } from './catalog.js';
+import { carcassInterior, drawerSetout } from './catalog.js';
 import { chainStops, dimLines, levelOff, mmLabel } from './dim.js';
 import { openingSide } from './draw2d.js';
 
@@ -211,8 +211,18 @@ function DrawerDims({ cabinet, dimColor }) {
   const onLeft = (y) => [-W / 2, y, D / 2];
   const onFloor = (x) => [x - W / 2, 0, D / 2];
 
-  const up = chainStops(0, H, setout.flatMap((d) => [d.bottom, d.top]));
-  const across = chainStops(0, W, [setout[0].left, setout[0].right]);
+  /* The carcass faces are stops in their own right, so the board thickness
+     is a dimension you can read rather than something swallowed into the gap
+     next to it: outside, the panel, the clearance, then the box. */
+  const inside = carcassInterior(cabinet);
+  const up = chainStops(0, H, [
+    ...(inside ? [inside.floor, inside.ceiling] : []),
+    ...setout.flatMap((d) => [d.bottom, d.top]),
+  ]);
+  const across = chainStops(0, W, [
+    ...(inside ? [inside.left, inside.right] : []),
+    setout[0].left, setout[0].right,
+  ]);
 
   return (
     <group>

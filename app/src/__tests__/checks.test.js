@@ -221,7 +221,7 @@ describe('everything the app knew, gathered in one place', () => {
   it('a butted base that will not fit is reported, not squeezed', () => {
     const p = starterProject();
     const room = { ...p.cfg, boxClearTop: 400, boxClearBottom: 400 };
-    const recessed = runChecks({ ...p, cfg: { ...room, boxBaseFix: 'dado' } }, DEPS)
+    const recessed = runChecks({ ...p, cfg: { ...room, boxBaseFix: 'screwed' } }, DEPS)
       .filter((f) => f.rule === 'drawer-clearance');
     const butted = runChecks({ ...p, cfg: { ...room, boxBaseFix: 'butted' } }, DEPS)
       .filter((f) => f.rule === 'drawer-clearance');

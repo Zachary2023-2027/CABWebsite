@@ -3,7 +3,8 @@ import Elevation from './Elevation.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
 import { finishFor } from './finishes.js';
 import {
-  BASE_FIXES, BOX_CLEAR, FAMILIES, FAMILY, GROUPS, PROJECT, boardNames, buildUnit, unitCost,
+  BASE_FIXES, BOX_CLEAR, FAMILIES, FAMILY, GROUPS, PROJECT, baseFixOf, boardNames, buildUnit,
+  unitCost,
 } from './catalog.js';
 import { optimiseProject, optimiseWall } from './optimise.js';
 import { Advanced, OptimiseResult } from './Advanced.jsx';
@@ -284,7 +285,7 @@ function Inspector({ placed, lay, cfg, selDrawer, setSelDrawer, locked, onLock,
                         options={[{ value: 'full', label: 'Full panel' }, { value: 'rail', label: 'Rail only' }]}
                         onChange={(v) => onOverride(item.uid, { backType: v })} />
                 {fronts.length > 0 && (
-                  <Choice label="Drawer base" value={eff('boxBaseFix') || 'dado'}
+                  <Choice label="Drawer base" value={baseFixOf(eff('boxBaseFix')).id}
                           options={BASE_FIXES.map((b) => ({ value: b.id, label: b.name }))}
                           onChange={(v) => onOverride(item.uid, { boxBaseFix: v })} />
                 )}

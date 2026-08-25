@@ -304,7 +304,7 @@ describe('a retired preset is kept but not offered', () => {
 /* Three ways to hold the drawer bottom. Two are recessed and cut to the
    inside of the box; the butted one is the full footprint under the sides.
    Whichever is chosen the carcass keeps the same air above and below. */
-describe('the drawer base, three ways of holding it', () => {
+describe('the drawer base, two ways of holding it', () => {
   const drawerFamily = FAMILIES.find((f) => !f.cavity
     && buildUnit('T1', f.id, {}, PROJECT).parts.some((p) => /DRWR\d+-BASE$/.test(p.code)));
 
@@ -326,47 +326,30 @@ describe('the drawer base, three ways of holding it', () => {
     expect(drawerFamily).toBeTruthy();
   });
 
-  for (const fix of ['dado', 'screwed']) {
-    it(`${fix}: the base is cut to the inside of the box`, () => {
-      const { base, side, front } = box(fix);
-      expect(base.L).toBe(front.L);
-      expect(base.W).toBe(side.L - 2 * PROJECT.boxSideThk);
-    });
-
-    it(`${fix}: the base sits up the side by the groove height`, () => {
-      const { base, side } = box(fix);
-      expect(base.pos[1]).toBe(side.pos[1] + PROJECT.baseGroove);
-    });
-
-    it(`${fix}: the base is between the sides, not outside them`, () => {
-      const { base, side, right } = box(fix);
-      expect(base.pos[0]).toBeGreaterThanOrEqual(side.pos[0] + PROJECT.boxSideThk);
-      expect(base.pos[0] + base.size[0])
-        .toBeLessThanOrEqual(right.pos[0] + 0.001);
-    });
-  }
-
-  it('butted: the base is the whole box footprint', () => {
-    const { base, side, right } = box('butted');
-    // Spans the outside of both sides, not the gap between them.
-    expect(base.pos[0]).toBe(side.pos[0]);
-    expect(base.pos[0] + base.size[0])
-      .toBeCloseTo(right.pos[0] + PROJECT.boxSideThk, 6);
-    // As long as the runner, front and back sitting on top of it.
-    expect(base.W).toBe(side.L);
+  it('screwed: the base sits up off the bottom edge of the sides', () => {
+    const { base, side } = box('screwed');
+    expect(base.pos[1]).toBe(side.pos[1] + PROJECT.baseGroove);
   });
 
-  it('butted: the base hangs below the bottom edge of the sides', () => {
-    const { base, side } = box('butted');
-    expect(base.pos[1]).toBeCloseTo(side.pos[1] - PROJECT.boxBaseThk, 6);
+  /* Pocket screwed into the sides, so it stops at the face of them. */
+  it('screwed: the base is cut to the bare inside of the box', () => {
+    const { base, side, front, right } = box('screwed');
+    expect(base.L).toBe(front.L);
+    expect(base.W).toBe(side.L - 2 * PROJECT.boxSideThk);
+    expect(base.pos[0]).toBeCloseTo(side.pos[0] + PROJECT.boxSideThk, 6);
+    expect(base.pos[0] + base.size[0]).toBeCloseTo(right.pos[0], 6);
   });
 
-  it('an unknown fixing falls back to a dado rather than drawing nothing', () => {
-    const odd = box('nonsense');
-    const dado = box('dado');
-    expect(odd.base.L).toBe(dado.base.L);
-    expect(odd.base.W).toBe(dado.base.W);
-    expect(odd.base.pos[1]).toBe(dado.base.pos[1]);
+  /* Including 'dado', which a project saved before it was dropped will still
+     carry. Its base was recessed, and recessed is what it stays. */
+  it('an unrecognised fixing falls back to the recessed one', () => {
+    for (const odd of ['nonsense', 'dado']) {
+      const a = box(odd);
+      const b = box('screwed');
+      expect(a.base.L, odd).toBe(b.base.L);
+      expect(a.base.W, odd).toBe(b.base.W);
+      expect(a.base.pos[1], odd).toBe(b.base.pos[1]);
+    }
   });
 });
 
@@ -387,7 +370,7 @@ describe('the carcass clears the drawer box top and bottom', () => {
     return { lo, hi, face, below: lo - face.pos[1], above: (face.pos[1] + face.size[1]) - hi };
   };
 
-  for (const fix of ['dado', 'screwed', 'butted']) {
+  for (const fix of ['screwed', 'butted']) {
     it(`${fix}: keeps the asked-for gap above and below`, () => {
       const cfg = { ...PROJECT, boxBaseFix: fix };
       const e = envelope(cfg);
@@ -401,7 +384,7 @@ describe('the carcass clears the drawer box top and bottom', () => {
      the bottom edge of the sides when the base is recessed. */
   it('leaves 5mm under the lowest surface of the box, every fixing', () => {
     expect(BOX_CLEAR.bottom).toBe(5);
-    for (const fix of ['dado', 'screwed', 'butted']) {
+    for (const fix of ['screwed', 'butted']) {
       const e = envelope({ ...PROJECT, boxBaseFix: fix });
       expect(e.below, fix).toBeCloseTo(5, 6);
     }
@@ -450,7 +433,7 @@ describe('the drawer setout closes', () => {
     expect(withDrawers.length).toBeGreaterThan(0);
   });
 
-  for (const fix of ['dado', 'screwed', 'butted']) {
+  for (const fix of ['screwed', 'butted']) {
     it(`${fix}: every chain adds up to the cabinet it is in`, () => {
       for (const f of withDrawers) {
         const u = buildUnit('T1', f.id, {}, { ...PROJECT, boxBaseFix: fix });
@@ -490,7 +473,7 @@ describe('the drawer setout closes', () => {
     expect(lowOf('butted')).toBeCloseTo(sideOf('butted') - PROJECT.boxBaseThk, 6);
   });
 
-  it('drawers come back in order, bottom to top of the cabinet', () => {
+  it('drawers come back in their numbered order, which runs down the cabinet', () => {
     for (const f of withDrawers) {
       const setout = drawerSetout(buildUnit('T1', f.id, {}, PROJECT));
       const ns = setout.map((d) => d.n);
