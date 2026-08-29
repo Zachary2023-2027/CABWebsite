@@ -15,7 +15,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
-import { ROOM_SHAPES, allParts } from './project.js';
+import { EXTRA_KIND_IDS, ROOM_SHAPES, allParts } from './project.js';
 import { migrateRunnerClearance } from './hardware.js';
 import { cleanStack } from './stack.js';
 import { cleanObstacle } from './obstacles.js';
@@ -163,6 +163,28 @@ export function hydrate(raw) {
       name: String(e.name ?? ''),
       qty: Number.isFinite(Number(e.qty)) ? Number(e.qty) : 0,
       cost: Number.isFinite(Number(e.cost)) ? Number(e.cost) : 0,
+      /* What sort of thing it is. Everything typed in before this existed was
+         hardware, which is what it opens as. */
+      kind: EXTRA_KIND_IDS.has(e.kind) ? e.kind : 'hardware',
+      note: String(e.note ?? '').slice(0, 200),
+    })) : [];
+
+  const notes = cleanNotes(p.notes);
+  /* Rows on the order list you have crossed off because you already own them.
+     Kept against the row's own name, which is what the order list makes them
+     from, so it survives a cabinet being added or deleted. */
+  const ordered = Array.isArray(p.ordered)
+    ? [...new Set(p.ordered.map(String).filter(Boolean))].slice(0, 400) : [];
+
+  /* Lines you typed onto the order list yourself: the tap, the delivery, the
+     day somebody spends templating the stone. */
+  const orderExtras = Array.isArray(p.orderExtras)
+    ? p.orderExtras.filter((e) => e && typeof e === 'object').slice(0, 200).map((e) => ({
+      id: String(e.id || newId()),
+      what: String(e.what ?? '').slice(0, 120),
+      unit: String(e.unit ?? 'each').slice(0, 16),
+      qty: Number.isFinite(Number(e.qty)) ? Number(e.qty) : 0,
+      each: Number.isFinite(Number(e.each)) ? Number(e.each) : 0,
     })) : [];
 
   /* Runner clearance became a runner profile. Twice 21 is 42, the TANDEM
@@ -187,6 +209,9 @@ export function hydrate(raw) {
       walls,
       locked,
       extras,
+      notes,
+      ordered,
+      orderExtras,
       /* A file written before room shapes existed has no room, and one wall
          is what it was, so that is what it opens as. */
       room: ROOM_SHAPES.some((s) => s.id === p.room) ? p.room : 'straight',
@@ -283,6 +308,46 @@ function cleanCfg(cfg) {
   return out;
 }
 
+/* ---------------------------------------------------------------------------
+   Notes.
+
+   Free text the app cannot derive: the measurement you took on site, the
+   thing the plumber said, what you decided about the corner and why. Sections
+   with lines in them, and a line can be ticked off, because half of what goes
+   in a list like this is a thing to do rather than a thing to remember.
+
+   Everything is clamped on the way in. A note is the one part of a project
+   that is not a number, so it is the one place a file can carry something
+   arbitrarily long, and a heading the width of a wall breaks the screen it is
+   drawn on.
+   --------------------------------------------------------------------------- */
+
+export const NOTE_LIMITS = {
+  sections: 40,
+  lines: 200,
+  heading: 120,
+  text: 2000,
+};
+
+export function cleanNotes(notes) {
+  if (!Array.isArray(notes)) return [];
+  return notes
+    .filter((n) => n && typeof n === 'object')
+    .slice(0, NOTE_LIMITS.sections)
+    .map((n) => ({
+      id: String(n.id || newId()),
+      heading: String(n.heading ?? '').slice(0, NOTE_LIMITS.heading),
+      lines: (Array.isArray(n.lines) ? n.lines : [])
+        .filter((l) => l && typeof l === 'object')
+        .slice(0, NOTE_LIMITS.lines)
+        .map((l) => ({
+          id: String(l.id || newId()),
+          text: String(l.text ?? '').slice(0, NOTE_LIMITS.text),
+          done: l.done === true,
+        })),
+    }));
+}
+
 /* The breakfast bar on an island: one side and one number, both checked.
 
    The sides are listed here rather than imported from the model, because this
@@ -293,9 +358,18 @@ const BAR_SIDE_NAMES = new Set(['front', 'back', 'left', 'right']);
 function cleanBar(bar) {
   if (!bar || typeof bar !== 'object') return null;
   if (!BAR_SIDE_NAMES.has(bar.side)) return null;
+  /* Where along the side it starts and how much of it it runs along. Both
+     optional: a file saved before a bar could be part of a side has neither,
+     and reads back as a bar along the whole side, which is what it was. */
+  const from = Number(bar.from);
+  const length = Number(bar.length);
+  const span = {
+    ...(Number.isFinite(from) && from > 0 ? { from: Math.min(9000, from) } : {}),
+    ...(Number.isFinite(length) && length > 0 ? { length: Math.min(9000, length) } : {}),
+  };
   const depth = Number(bar.depth);
   if (!Number.isFinite(depth) || depth <= 0) return null;
-  return { side: bar.side, depth: Math.min(1200, depth) };
+  return { side: bar.side, depth: Math.min(1200, depth), ...span };
 }
 
 /* Per cabinet settings are free form, because a family decides what it reads.

@@ -269,10 +269,20 @@ describe('a preset with no stack of its own', () => {
     expect(resolveStack(stack, 2100, cfg()).errors).toEqual([]);
   });
 
-  it('gives a sink a false front over a pair of doors', () => {
+  /* A pair of doors and nothing over them. The 150mm plank that used to run
+     across the top is what a drawer bank has instead of a drawer, and a sink
+     base has no use for one: the bowl hangs below the benchtop and the doors
+     run past it. Anyone who wants one adds a false front row. */
+  it('gives a sink two full height doors and no plank across the top', () => {
     const stack = defaultStackFor(FAMILY['base-sink'], {}, 720, cfg());
-    expect(stack.map((r) => r.type)).toEqual(['false', 'doors']);
-    expect(resolveStack(stack, 720, cfg()).errors).toEqual([]);
+    expect(stack.map((r) => r.type)).toEqual(['doors']);
+    expect(stack[0].doors).toBe(2);
+    expect(stack[0].height).toBe('fill');
+
+    const done = resolveStack(stack, 720, cfg());
+    expect(done.errors).toEqual([]);
+    // And it fills the opening, so the reveal accounting still adds up.
+    expect(done.rows[0].height).toBe(done.available);
   });
 });
 

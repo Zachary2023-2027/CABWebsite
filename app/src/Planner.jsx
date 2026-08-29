@@ -16,13 +16,15 @@ import { fmt, round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  BAR_SIDES, ROOM_SHAPES, WALL_KINDS, barBrackets, barSeats, barSpan, floorPlan,
+  BAR_SIDES, ROOM_SHAPES, WALL_KINDS, barBrackets, barIsWholeSide, barRange, barSeats,
+  barSideLength, barSpan, floorPlan,
   isIsland, islandAt, islandBar, islandDepth, layoutFor, money, placeOnRun,
   roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
 import { BAR_RULES } from './bar.js';
 import { CLEARANCE_DEFAULTS } from './checks.js';
 import { clearanceFindings, findingsForWall } from './clearance.js';
+import { walkways } from './checks.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -437,8 +439,12 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [opt, setOpt] = useState(null);
   const [optBusy, setOptBusy] = useState(false);
   const [notice, setNotice] = useState(null);
-  /* Folded when there is a lot of it. Errors and warnings are always shown:
-     a warning you have to press a button to see is a warning nobody reads. */
+  /* The strip under the drawing folds to a single bar with the counts on it.
+     Open by default while something is actually wrong, because a warning you
+     have to go looking for is a warning nobody reads, and shut once it is all
+     notes, because the drawing is what you came here for. Once you have
+     touched it, it stays where you put it. */
+  const [warnsOpen, setWarnsOpen] = useState(null);
   const [allWarns, setAllWarns] = useState(false);
 
   const reduced = useMemo(
@@ -489,6 +495,11 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     warn: findings.filter((f) => f.level === 'warn').length,
     note: findings.filter((f) => f.level === 'note').length,
   }), [findings]);
+
+  /* Open while something is actually wrong, shut once it is all notes. Null
+     means you have not touched it, so it follows the kitchen; once you have,
+     it stays where you put it. */
+  const showWarns = warnsOpen ?? (counts.error > 0 || counts.warn > 0);
   /* The whole joined run, so the 3D can show the corner rather than one wall
      at a time. A straight kitchen has nothing to join, so it stays as it was. */
   /* What the 3D shows.
@@ -1116,7 +1127,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
           )}
 
           {(notice || findings.length > 0) && (
-            <div className="wall-warnings">
+            <div className={`wall-warnings ${showWarns ? '' : 'is-shut'}`}>
               {notice && (
                 <div className="warn-inline warn-inline--note">
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -1127,7 +1138,14 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
               )}
 
               {findings.length > 0 && (
-                <div className="warn-summary">
+                <button className="warn-summary" aria-expanded={showWarns}
+                        onClick={() => setWarnsOpen(!showWarns)}
+                        title={showWarns ? 'Close this' : 'Open this'}>
+                  <svg className={`warn-caret ${showWarns ? 'is-open' : ''}`} viewBox="0 0 16 16"
+                       width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"
+                       strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 4l4 4-4 4" />
+                  </svg>
                   <span className="field__label">On this wall</span>
                   {counts.error > 0 && (
                     <span className="badge badge--warn badge--num">{counts.error} to fix</span>
@@ -1138,15 +1156,18 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                   {counts.note > 0 && (
                     <span className="badge badge--neutral badge--num">{counts.note} to know</span>
                   )}
-                  {findings.length > WARN_FOLD && (
-                    <button className="btn btn--ghost" onClick={() => setAllWarns((v) => !v)}>
-                      {allWarns ? 'Show fewer' : `Show all ${findings.length}`}
-                    </button>
-                  )}
-                </div>
+                  {!showWarns && <span className="note warn-summary__hint">Open</span>}
+                </button>
               )}
 
-              {(allWarns ? findings : findings.slice(0, WARN_FOLD)).map((w, i) => (
+              {showWarns && findings.length > WARN_FOLD && (
+                <button className="btn btn--ghost warn-more"
+                        onClick={() => setAllWarns((v) => !v)}>
+                  {allWarns ? 'Show fewer' : `Show all ${findings.length}`}
+                </button>
+              )}
+
+              {showWarns && (allWarns ? findings : findings.slice(0, WARN_FOLD)).map((w, i) => (
                 <div key={i} className={`warn-inline ${w.level === 'error' ? 'warn-inline--error'
                   : w.level === 'note' ? 'warn-inline--note' : ''}`}>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">
@@ -1344,6 +1365,71 @@ function Obstacles({ wall, selected, onSelect, onAdd, onChange, onRemove }) {
    form full of things to get wrong.
    --------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+   Where an island stands.
+
+   An island is the one thing in a kitchen with nothing behind it, so where it
+   goes is a decision rather than a consequence, and the thing that decides it
+   is not the island: it is the two gaps either side of it. Those gaps are
+   what you walk through with a hot tray, and they were being typed blind.
+
+   So the two positions are typed as before, and every walkway they produce is
+   said back underneath them, live, with the figure it is being judged
+   against. Moving it is then a decision you can see rather than a guess you
+   check on another screen.
+   --------------------------------------------------------------------------- */
+function IslandPlace({ wall, project, onChange }) {
+  const at = islandAt(wall, project.cfg);
+  const clear = { ...CLEARANCE_DEFAULTS, ...project.cfg };
+
+  /* Every gap this island makes with anything else on the floor, measured by
+     the model rather than worked out again here. */
+  const gaps = useMemo(() => {
+    try {
+      return walkways(project, floorPlan(project))
+        .filter((w) => w.between.some((n) => n.startsWith(wall.name)));
+    } catch { return []; }
+  }, [project, wall.name]);
+
+  const set = (patch) => onChange(wall.id, { at: { ...at, ...patch } });
+
+  return (
+    <>
+      <div className="settings-grid">
+        <Num label="Along the back wall" value={at.x} min={0} max={12000}
+             onChange={(v) => set({ x: v ?? at.x })} />
+        <Num label="Out from the back wall" value={at.y} min={0} max={9000}
+             onChange={(v) => set({ y: v ?? at.y })} />
+      </div>
+
+      {gaps.length > 0 && (
+        <ul className="island-gaps">
+          {gaps.map((g, i) => {
+            const level = g.gap < clear.walkwayMin ? 'error'
+              : g.gap < clear.walkwayComfortable ? 'warn' : 'ok';
+            return (
+              <li key={i} className={`island-gap island-gap--${level}`}>
+                <span className="num">{fmt(g.gap)}</span>
+                <span>{g.between.join(' to ')}</span>
+                <span className="note">
+                  {level === 'error' ? `under the ${clear.walkwayMin} it takes to open a cabinet and stand up`
+                    : level === 'warn' ? `enough for one, tight for two, against ${clear.walkwayComfortable}`
+                      : 'two can pass'}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="note">
+        Measured from the same corner the room is: along the back wall, then out into
+        it. Nothing is anchored to a wall, so the island goes wherever there is floor,
+        and the gaps above are what that leaves to walk through.
+      </p>
+    </>
+  );
+}
+
 function BarFields({ wall, project, onChange }) {
   const clear = { ...BAR_RULES, ...project.cfg };
   const bar = islandBar(wall);
@@ -1352,6 +1438,9 @@ function BarFields({ wall, project, onChange }) {
   const seats = barSeats(wall, project.cfg, clear, bar);
   const brackets = barBrackets(wall, project.cfg, clear, bar);
   const span = barSpan(wall, project.cfg, bar);
+  const side = barSideLength(wall, project.cfg, bar);
+  const range = barRange(wall, project.cfg, bar);
+  const whole = barIsWholeSide(wall, project.cfg, bar);
 
   /* Turning it on with no depth typed is a bar of nothing, which the model
      reads as no bar at all. So picking a side starts it at a depth you can
@@ -1371,13 +1460,34 @@ function BarFields({ wall, project, onChange }) {
         {on && (
           <Num label="Sticks out" value={bar.depth} min={0} max={1200}
                onChange={(v) => onChange(wall.id, {
-                 bar: v == null || v <= 0 ? null : { side: bar.side, depth: v },
+                 bar: v == null || v <= 0 ? null : { ...bar, side: bar.side, depth: v },
                })} />
         )}
       </div>
 
+      {/* A bar was the whole of one side or nothing, which is not what people
+          build. Half of a 2400 island is a bar with two stools at one end and
+          ordinary cabinet behind the rest. */}
+      {on && (
+        <div className="settings-grid">
+          <Num label="Starts along the side" value={range.from} min={0} max={side}
+               onChange={(v) => onChange(wall.id, { bar: { ...bar, from: v ?? 0 } })} />
+          <Num label="Runs for" value={span} min={0} max={side}
+               placeholder={`${side}`}
+               onChange={(v) => onChange(wall.id, {
+                 /* Empty, or the whole side, means the whole side, so it goes
+                    back to being the simple thing rather than a number that
+                    happens to equal the length today. */
+                 bar: { ...bar, length: v == null || v >= side ? null : v },
+               })} />
+        </div>
+      )}
+
       {on && (
         <p className="note">
+          {whole
+            ? `The whole ${fmt(side)}mm side. `
+            : `${fmt(span)}mm of the ${fmt(side)}mm side, from ${fmt(range.from)} to ${fmt(range.to)}. The rest of that side is ordinary cabinet with the top flush to it. `}
           {seats > 0
             ? `${seats} ${seats === 1 ? 'stool fits' : 'stools fit'} along ${fmt(span)}mm at ${clear.barSeatWidth} each. `
             : `Not enough along ${fmt(span)}mm for a stool at ${clear.barSeatWidth}. `}
@@ -1428,18 +1538,7 @@ function WallManager({ project, onClose, onRoom, onChange, onAdd, onRemove, onSe
           )}
         </div>
 
-        {island && (
-          <div className="settings-grid">
-            <Num label="Along the back wall" value={islandAt(w, project.cfg).x} min={0} max={12000}
-                 onChange={(v) => onChange(w.id, {
-                   at: { ...islandAt(w, project.cfg), x: v ?? islandAt(w, project.cfg).x },
-                 })} />
-            <Num label="Out from the back wall" value={islandAt(w, project.cfg).y} min={0} max={9000}
-                 onChange={(v) => onChange(w.id, {
-                   at: { ...islandAt(w, project.cfg), y: v ?? islandAt(w, project.cfg).y },
-                 })} />
-          </div>
-        )}
+        {island && <IslandPlace wall={w} project={project} onChange={onChange} />}
 
         {island && <BarFields wall={w} project={project} onChange={onChange} />}
 

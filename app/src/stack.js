@@ -50,12 +50,48 @@ export const newRow = (type = 'doors', height = 'fill') => {
   return row;
 };
 
-/** The gaps a stack has to account for, read off the config. */
+/**
+ * Every gap around and between the fronts, read off the config.
+ *
+ * Five numbers, not three. The two side gaps used to be `reveal / 2` written
+ * into the builder, which meant the one gap you can actually see from across
+ * the room, the one down each end of a run, was the only one you could not
+ * set. They still default to `reveal / 2`, so a project that already exists
+ * keeps exactly the geometry it has.
+ *
+ * `between` is the gap between two fronts stacked up the cabinet. `left` and
+ * `right` are from the front to the outside of the carcass at each end, and
+ * `betweenX` is between two doors side by side in one row, which is its own
+ * number: a pair of doors meeting in the middle of an opening is a joint you
+ * look straight at, and a run of cabinets butted together is not.
+ */
 export function reveals(P) {
   const between = Number(P.reveal) || 0;
-  const top = Number(P.revealTop) || 0;
-  const bottom = Number(P.revealBottom) || 0;
-  return { between, top, bottom };
+  const half = between / 2;
+  const num = (v, fallback) => (Number.isFinite(Number(v)) && v !== '' && v !== null
+    ? Number(v) : fallback);
+  return {
+    between,
+    top: num(P.revealTop, 0),
+    bottom: num(P.revealBottom, 0),
+    left: num(P.revealLeft, half),
+    right: num(P.revealRight, half),
+    betweenX: num(P.revealBetween, between),
+  };
+}
+
+/**
+ * How wide the fronts are and where they start, across a carcass.
+ *
+ * The one place that answers it. The builder asked in three places with the
+ * same two lines of arithmetic each time, which is three places for the gaps
+ * to stop agreeing with each other.
+ *
+ * @returns {{x:number, width:number}} x is the left edge of the front
+ */
+export function frontSpan(carcassWidth, P) {
+  const r = reveals(P);
+  return { x: r.left, width: Math.max(0, carcassWidth - r.left - r.right) };
 }
 
 /**
@@ -232,7 +268,9 @@ export function cleanStack(stack) {
         /* A bin runs on a bought carrier, so no wooden box is cut for it.
            Carried through a save, or a bin unit reopens as a drawer with a
            box that nobody is going to build. */
-        if (r.bin) row.bin = true;
+        /* A bought carrier rather than a wooden box, and which kind. A bin
+           runs on a bin runner, a pull-out pantry on an ordinary pair. */
+        if (r.bin) row.bin = r.bin === 'pullout' ? 'pullout' : true;
       }
       if (r.type === 'bay') {
         row.appliance = APPLIANCES.includes(r.appliance) ? r.appliance : 'other';

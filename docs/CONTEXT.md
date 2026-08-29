@@ -76,6 +76,7 @@ These are user-imposed rules that apply to any new work:
 | `paneldim.js` | How a drilled panel is annotated: text size, which numbers fit, runs |
 | `clearance.js` | Every carcass and front put in room coordinates and measured against each other |
 | `elevdim.js` | The dimension chains under and beside an elevation |
+| `stack.js` | The front stack, and `reveals()`/`frontSpan()`: every gap around a front |
 | `optimise.js` | Width search per wall, and project-wide material and build plans |
 | `storage.js` | localStorage, snapshots, validation on load, file import and export |
 | `cabinet.js` | Helpers for the single-cabinet viewer: bounds, `cutSize`, `fmt` |
@@ -159,7 +160,7 @@ cut: [keys], prices, quoted }`.
 | Boards | `carcassBoard`, `frontBoard`, `backBoard`, `boxBoard`, `boxBaseBoard` (empty means follow the sides) |
 | Build | `backType 'full' \| 'rail'`, `backRailHeight 120`, `boxBaseFix 'screwed' \| 'butted'` |
 | Drawers | `runnerLength 500`, `runnerClearance 21`, `boxHeight 140`, `boxSetback 20`, `baseGroove 10`, `boxClearTop 20`, `boxClearBottom 5` |
-| Gaps | `reveal 3`, `shelfSetback 20`, `blindClearance 50`, `frontClearance 40` |
+| Gaps | `reveal 3`, `revealTop 0`, `revealBottom 0`, `revealLeft`, `revealRight`, `revealBetween` (the last three empty means follow the reveal), `shelfSetback 20`, `blindClearance 50`, `frontClearance 40` |
 | Joinery | `jointMethod 'pocket-screw'`, `shelfFix 'pocket' \| 'pins'`, `rearRow 'grid'` |
 | Saw | `kerf 3.2`, `trim 10`, `minOffcut 150` |
 
@@ -183,8 +184,20 @@ decides whether the benchtop is added to the project total).
 21 families in five groups. `kind` decides which run it occupies and how tall
 it is. `fronts` decides what gets built.
 
+**Corner:** `base-blind-l` (one full height door), `base-corner-drawer` (a drawer
+across the top of the opening and a door under it, which is IKEA's
+METOD/MAXIMERA corner base at 1280 x 680 x 800: 1280 along the wall, a 680
+opening, and the 600 left over is the leg the return run butts into) and
+`base-corner-carousel` (the same frame, one door). All three are the same
+blind corner with a different stack in the opening, and the two new ones carry
+a carousel as a bought fitting.
+
 **Base:** `base-1door`, `base-2door`, `base-3drawer`, `base-4drawer`,
-`base-sink` (false front over two doors), `base-corner` (plain blind corner),
+`base-sink` (two full height doors, and nothing over them: the plank across the
+top is what a drawer bank has instead of a drawer and a sink base has no use
+for one), `base-oven` (a built-in oven in the top of a base carcass with a
+drawer under it), `base-pullout` (one tall front on a full extension runner),
+`base-corner` (plain blind corner),
 `base-blind-l` (blind corner for an L, see below), `base-micro` (open microwave
 bay over a drawer), `base-bin` (one full height drawer front on a bin runner:
 a drawer, not a cupboard, and no wooden box is cut because the bin carrier is
@@ -550,6 +563,55 @@ project clears the history.
   missing from the nest, and cut ticks pointing at the wrong parts.
 
 ---
+
+### Every gap around a front
+
+Five settings, not three, and all of them are on the Advanced design panel
+under "Gaps around the fronts" with a drawing that names each one:
+
+| Setting | What it is | Empty means |
+| --- | --- | --- |
+| `reveal` | between two fronts, up the cabinet | 3 |
+| `revealBetween` | between two doors in one opening | follow `reveal` |
+| `revealLeft` / `revealRight` | each end of a front to the outside of the carcass | half `reveal` |
+| `revealTop` / `revealBottom` | above the top front, below the bottom one | 0 |
+
+`reveals(cfg)` is the one function that resolves them and `frontSpan(width, cfg)`
+is the one that says where a front sits across a carcass. The two side gaps
+used to be `reveal / 2` written into the builder, which made the gap you look
+straight at from across the room the only one you could not set.
+
+**The invariant, tested exhaustively** in `gaps.test.js`, over every family at
+every width it offers at four different reveals: across, the fronts and the
+gaps between them fill the carcass; up, the rows and their gaps fill the
+opening; and every drawer box is inside the carcass it runs in. That last one
+is what caught the blind corner building a box wider than its own opening, and
+the exhaustive version caught the preset stacks dividing up the carcass height
+instead of the opening, which pushed the bottom front out through the bottom
+of the cabinet whenever a top or bottom gap was set.
+
+### Notes, appliances and the order list
+
+- `project.notes` is sections of lines, each line tickable. Its own screen, and
+  it prints with the pack.
+- `project.extras` gained a `kind`: hardware, appliance or everything else, so
+  the Hardware screen holds three lists. An appliance carries a note for the
+  model and the size of the hole it needs, which is the thing the planner
+  blocked out a cavity for.
+- The order list: every derived row has a "Have" tick that takes it out of the
+  total without taking it off the list, and `project.orderExtras` are lines you
+  type yourself. Both save with the project.
+- The benchtop is reported by volume and area as well as by the metre, from
+  `pieceVolume()` and `benchVolume()` in `runs.js`. A top is priced by the
+  metre and delivered by the tonne.
+
+### The breakfast bar is a span
+
+`{ side, depth, from, length }`. Left empty, `length` is the whole side, which
+is what every project that exists has. Set, the bar runs along part of a side
+and the rest of it is ordinary cabinet: the stools, the brackets and the slab
+all follow the span. A partial bar is reported as its own rectangle rather than
+growing the island slab, because an L is not a piece anybody can dimension.
 
 ## 12. Known gaps
 

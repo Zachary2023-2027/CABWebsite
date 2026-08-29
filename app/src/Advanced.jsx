@@ -30,15 +30,104 @@ const GROUPS = [
              ['kick', 'Kickboard'], ['wallMount', 'Wall cabinet underside'],
              ['wallCabHeight', 'Wall cabinet height'], ['tallHeight', 'Tall carcass'],
              ['ceiling', 'Ceiling']] },
-  { name: 'Depths and gaps',
+  { name: 'Depths',
     fields: [['baseDepth', 'Base depth'], ['wallDepth', 'Wall depth'],
              ['benchDepth', 'Benchtop depth'], ['blindClearance', 'Blind corner, past the benchtop'],
-             ['reveal', 'Gap between fronts'],
-             ['revealTop', 'Gap above the top front'],
-             ['revealBottom', 'Gap below the bottom front'],
              ['boxSetback', 'Box behind the front'],
              ['boxHeight', 'Drawer box side height'], ['backRailHeight', 'Back rail height']] },
 ];
+
+/* ---------------------------------------------------------------------------
+   Every gap around a front, in the order you meet them.
+
+   These used to be three settings and two numbers written into the builder.
+   The two written in were `reveal / 2` at each end of the cabinet, which is
+   the gap you look straight at from across the room and was the only one you
+   could not change.
+
+   They are laid out here in the order they appear on a real front rather than
+   in the order they happen to be stored, with a drawing beside them naming
+   each one, because five numbers called "reveal something" are five numbers
+   nobody can tell apart from their names alone.
+   --------------------------------------------------------------------------- */
+const GAPS = [
+  ['reveal', 'Between two fronts, up the cabinet',
+    'The gap you see between a drawer and the drawer under it.'],
+  ['revealBetween', 'Between two doors in one opening',
+    'A pair meeting in the middle. Empty follows the gap above, which is what it always did.'],
+  ['revealLeft', 'Left end, front to the outside of the carcass',
+    'Empty is half the gap between fronts, so two cabinets butted together leave one whole gap between their doors.'],
+  ['revealRight', 'Right end, front to the outside of the carcass',
+    'Empty is half the gap between fronts.'],
+  ['revealTop', 'Above the top front',
+    'A base cabinet has a benchtop sitting over its top front, so a gap here stops it rubbing as it opens.'],
+  ['revealBottom', 'Below the bottom front',
+    'The bottom front overhangs a set back kickboard, so nothing is in the way and a gap here is cosmetic.'],
+];
+
+/* What each of those gaps is, drawn on a front, so a name and a number are
+   attached to a place on a cabinet rather than to each other. */
+function GapDiagram({ cfg }) {
+  const g = (k, fallback) => {
+    const v = cfg[k];
+    return (v === null || v === undefined || v === '') ? fallback : Number(v);
+  };
+  const r = g('reveal', 3);
+  const parts = [
+    ['Left', g('revealLeft', r / 2)],
+    ['Right', g('revealRight', r / 2)],
+    ['Top', g('revealTop', 0)],
+    ['Bottom', g('revealBottom', 0)],
+    ['Between, up', r],
+    ['Between, across', g('revealBetween', r)],
+  ];
+
+  return (
+    <div className="gap-figure">
+      <svg viewBox="0 0 320 200" className="gap-svg" role="img"
+           aria-label="Where each gap sits on a cabinet front">
+        {/* the carcass */}
+        <rect x="8" y="8" width="304" height="184" fill="none"
+              stroke="var(--dw-line)" strokeWidth="2" />
+        {/* two drawers over a pair of doors, which between them show every gap */}
+        <rect x="26" y="24" width="268" height="44" fill="var(--dw-carcass)"
+              stroke="var(--dw-line)" strokeWidth="1.5" />
+        <rect x="26" y="76" width="130" height="100" fill="var(--dw-carcass)"
+              stroke="var(--dw-line)" strokeWidth="1.5" />
+        <rect x="164" y="76" width="130" height="100" fill="var(--dw-carcass)"
+              stroke="var(--dw-line)" strokeWidth="1.5" />
+
+        {[['8,16 26,16', 'Left', 17, 12], ['294,16 312,16', 'Right', 303, 12]].map(([, ...rest]) => null)}
+
+        {/* the six gaps, each marked where it really is */}
+        <g fill="var(--accent)" fontFamily="var(--font-mono)" fontSize="11" textAnchor="middle">
+          <text x="17" y="128">L</text>
+          <text x="303" y="128">R</text>
+          <text x="160" y="20">T</text>
+          <text x="160" y="188">B</text>
+          <text x="160" y="76">U</text>
+          <text x="160" y="130">A</text>
+        </g>
+        <g stroke="var(--accent)" strokeWidth="1.5">
+          <line x1="8" y1="118" x2="26" y2="118" />
+          <line x1="294" y1="118" x2="312" y2="118" />
+          <line x1="140" y1="8" x2="140" y2="24" />
+          <line x1="140" y1="176" x2="140" y2="192" />
+          <line x1="120" y1="68" x2="120" y2="76" />
+          <line x1="156" y1="120" x2="164" y2="120" />
+        </g>
+      </svg>
+      <ul className="gap-key">
+        <li><b>L</b> {parts[0][1]} left end</li>
+        <li><b>R</b> {parts[1][1]} right end</li>
+        <li><b>T</b> {parts[2][1]} above the top</li>
+        <li><b>B</b> {parts[3][1]} below the bottom</li>
+        <li><b>U</b> {parts[4][1]} between, up the cabinet</li>
+        <li><b>A</b> {parts[5][1]} between, across an opening</li>
+      </ul>
+    </div>
+  );
+}
 
 /* The room shape and the wall lengths used to live here, two screens away
    from the tabs they were about. They are in Walls now, next to the list of
@@ -270,6 +359,42 @@ export function Advanced({ cfg, onChange, onReset, onClose }) {
                          onChange={(v) => onChange({ [k]: v })} />
                 ))}
             </div>
+          </section>
+
+          {/* Every gap around a front, in one place, in the order you meet
+              them on a real cabinet, with a drawing that says which is which. */}
+          <section className="adv-group">
+            <span className="field__label">Gaps around the fronts</span>
+            <p className="note">
+              Every gap between a front and whatever is beside it. Each one is yours to
+              set, including the two at the ends of the cabinet, which are the ones you
+              look straight at from across the room and were the only ones this app used
+              to decide for you. Leave a field empty and it follows the rule named under
+              it, which is the geometry every project already has.
+            </p>
+
+            <GapDiagram cfg={cfg} />
+
+            <div className="gap-fields">
+              {GAPS.map(([k, label, note]) => (
+                <div className="gap-field" key={k}>
+                  <Num label={label} value={cfg[k]}
+                       placeholder={k === 'revealLeft' || k === 'revealRight'
+                         ? `${(Number(cfg.reveal) || 0) / 2}`
+                         : k === 'revealBetween' ? `${Number(cfg.reveal) || 0}` : undefined}
+                       onChange={(v) => onChange({ [k]: v ?? PROJECT[k] })} />
+                  <p className="note">{note}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="note">
+              A front is the carcass less the gap at each end, so at a {fmt(cfg.reveal)}mm
+              gap a {fmt(cfg.baseDepth)}mm deep cabinet {fmt(600)}mm wide carries a front
+              {' '}{fmt(600 - (cfg.revealLeft ?? cfg.reveal / 2) - (cfg.revealRight ?? cfg.reveal / 2))}mm
+              wide, and two of those butted together leave {fmt((cfg.revealLeft ?? cfg.reveal / 2)
+                + (cfg.revealRight ?? cfg.reveal / 2))}mm between their doors.
+            </p>
           </section>
 
           {GROUPS.map((g) => (

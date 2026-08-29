@@ -244,6 +244,31 @@ export function endPanelParts(runs, P, wallId) {
  * against your sheet stock. What it needs is the list of pieces and their
  * real lengths, including the bit that hangs past the end of the run.
  */
+/**
+ * How much benchtop a piece actually is, in cubic metres.
+ *
+ * Length by depth by thickness, out of millimetres and into m3 in one step
+ * rather than three, because dividing by a thousand three separate times is
+ * how a volume comes out a thousand times wrong and still looks plausible.
+ *
+ * Worth having because a stone or timber top is quoted and freighted by
+ * volume and weight as often as by the metre, and a slab is heavy: a 40mm
+ * stone top on a 2400 island is most of a tonne, which decides how many
+ * people you need on the day it arrives.
+ */
+export const pieceVolume = (piece) =>
+  ((Number(piece.length) || 0) * (Number(piece.depth) || 0) * (Number(piece.thickness) || 0))
+  / 1e9;
+
+/** The volume of a whole schedule of pieces, in cubic metres. */
+export const benchVolume = (pieces) =>
+  (pieces || []).reduce((a, p) => a + pieceVolume(p), 0);
+
+/** The area of a whole schedule, in square metres. */
+export const benchArea = (pieces) =>
+  (pieces || []).reduce((a, p) =>
+    a + ((Number(p.length) || 0) * (Number(p.depth) || 0)) / 1e6, 0);
+
 export function benchSchedule(runs, P) {
   const overhang = Number(P.benchOverhang) || 0;
 
@@ -281,11 +306,40 @@ export function islandBench(wall, depth, P, bar = { side: 'none', depth: 0 }) {
      one axis and leaves the other alone. Adding it to both, or billing it as
      its own piece, is how you end up ordering a top that will not fit the
      island it is going on. */
-  const along = bar.side === 'left' || bar.side === 'right' ? bar.depth : 0;
-  const across_ = bar.side === 'front' || bar.side === 'back' ? bar.depth : 0;
+  /* A bar along part of a side is not one rectangle any more, it is the
+     island slab with a strip standing off one edge of it. Reporting it as a
+     bigger rectangle would order a slab the length of the island by the depth
+     of the bar all the way along, which is a lot of stone nobody asked for,
+     and it would tell you the top is a shape it is not.
+
+     So a partial bar is its own piece. Every piece stays a rectangle, the
+     volume and the price follow the real top, and a fabricator cutting it out
+     of one slab still gets two sizes rather than an L nobody dimensioned. */
+  const whole = bar.depth > 0 && (bar.length == null
+    || bar.length >= (bar.side === 'left' || bar.side === 'right'
+      ? depth : wall.length) - 0.5);
+
+  const along = whole && (bar.side === 'left' || bar.side === 'right') ? bar.depth : 0;
+  const across_ = whole && (bar.side === 'front' || bar.side === 'back') ? bar.depth : 0;
 
   const length = round1(wall.length + 2 * over + along);
   const across = round1(depth + 2 * over + across_);
+
+  const partial = bar.depth > 0 && !whole ? [{
+    index: 2,
+    /* As long as the bar runs, and as deep as it sticks out. */
+    length: round1(Math.max(0, Number(bar.span ?? bar.length) || 0)),
+    depth: round1(bar.depth),
+    thickness: round1(P.benchThk),
+    overhangs: 3,
+    island: true,
+    barPiece: true,
+    bar: { side: bar.side, depth: bar.depth },
+    pieces: splitRun(round1(Math.max(0, Number(bar.span ?? bar.length) || 0)),
+      Number(P.benchMaxPiece) || 3600),
+    metres: (round1(Math.max(0, Number(bar.span ?? bar.length) || 0)) * bar.depth)
+      / (Number(P.benchDepth) || 600) / 1000,
+  }] : [];
 
   return [{
     index: 1,
@@ -296,7 +350,7 @@ export function islandBench(wall, depth, P, bar = { side: 'none', depth: 0 }) {
     island: true,
     /* Which side runs out past the carcass and how far, so the drawing and
        the print pack say the same thing about it as the price does. */
-    bar: bar.depth > 0 ? { side: bar.side, depth: bar.depth } : null,
+    bar: whole && bar.depth > 0 ? { side: bar.side, depth: bar.depth } : null,
     /* A slab this wide is not one metre of benchtop per metre of length. The
        area over a standard width is what it really costs.
 
@@ -306,7 +360,7 @@ export function islandBench(wall, depth, P, bar = { side: 'none', depth: 0 }) {
        shown, like every other figure that is not a millimetre. */
     metres: (length * across) / (Number(P.benchDepth) || 600) / 1000,
     pieces: splitRun(length, Number(P.benchMaxPiece) || 3600),
-  }];
+  }, ...partial];
 }
 
 /**

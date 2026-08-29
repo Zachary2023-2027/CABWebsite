@@ -10,13 +10,13 @@ import { useMemo, useState } from 'react';
 import Screen, { Empty } from './Screen.jsx';
 import { PACK_DEFAULTS, SHEET_WASTE_DEFAULT, orderList } from './purchase.js';
 import {
-  allFittings, allParts, allUnits, benchPieces, money, nestCfg,
+  allFittings, allParts, allUnits, benchPieces, money, nestCfg, totals,
 } from './project.js';
 import { nestProject } from './nesting.js';
 import { drillUnit } from './drilling.js';
 import { PRICES } from './catalog.js';
 import { Num, Swatch } from './Fields.jsx';
-import { downloadBlob, safeFileName, toCsv } from './storage.js';
+import { downloadBlob, newId, safeFileName, toCsv } from './storage.js';
 import { fmt } from './mm.js';
 
 const DEPS = { allParts, allFittings, allUnits, drillUnit, nestProject, nestCfg, benchPieces };
@@ -40,7 +40,7 @@ const qty = (value, unit) => (unit === 'm'
   ? Number(value).toFixed(2).replace(/\.00$/, '')
   : fmt(value));
 
-function Table({ title, rows, sheetFinish }) {
+function Table({ title, rows, sheetFinish, have, onHave, onRemove }) {
   if (!rows.length) return null;
   return (
     <section className="card">
@@ -49,6 +49,10 @@ function Table({ title, rows, sheetFinish }) {
         <table className="table">
           <thead>
             <tr>
+              {/* A row you already own comes off the order without coming off
+                  the drawing. The cabinet still needs the hinge; you simply do
+                  not have to buy it again, and the total should say so. */}
+              <th className="p-tick" title="Tick what you already have">Have</th>
               <th>What</th>
               <th className="num">Needed</th>
               <th className="num">Pack</th>
@@ -56,11 +60,23 @@ function Table({ title, rows, sheetFinish }) {
               <th className="num">Spare</th>
               <th className="num">Each</th>
               <th className="num">Cost</th>
+              <th className="num" />
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
-              <tr key={i}>
+              <tr key={i} className={have?.(r) ? 'is-had' : ''}>
+                <td className="p-tick">
+                  <label className="check compact">
+                    <input type="checkbox" checked={!!have?.(r)}
+                           aria-label={`Already have ${r.what}`}
+                           onChange={() => onHave?.(r)} />
+                    <span className="check__box">
+                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+                           strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 8.5l3 3 6-7" /></svg>
+                    </span>
+                  </label>
+                </td>
                 <td>
                   {sheetFinish && sheetFinish(r.what) && <Swatch finish={sheetFinish(r.what)} />}
                   {r.what}
@@ -76,6 +92,12 @@ function Table({ title, rows, sheetFinish }) {
                 </td>
                 <td className="num">{r.each ? money(r.each) : ''}</td>
                 <td className="num">{r.cost ? money(r.cost) : ''}</td>
+                <td className="num">
+                  {r.own && (
+                    <button className="btn btn--ghost" onClick={() => onRemove?.(r)}
+                            aria-label={`Remove ${r.what}`}>Remove</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -85,16 +107,73 @@ function Table({ title, rows, sheetFinish }) {
   );
 }
 
-export default function Purchase({ project, onCfg }) {
+export default function Purchase({ project, setProject, onCfg }) {
   const [showPacks, setShowPacks] = useState(false);
 
-  const order = useMemo(
+  const derived = useMemo(
     () => orderList(project, PRICES, DEPS),
     [project, PRICES.hinge, PRICES.handle, PRICES.runnerPair, PRICES.benchPerMetre],
   );
 
   const cfg = { ...PACK_DEFAULTS, sheetWastePct: SHEET_WASTE_DEFAULT, ...project.cfg };
+
+  /* --- what you already have -----------------------------------------------
+
+     A row you tick is a row you own. It stays on the list, greyed, because it
+     is still what the kitchen needs and taking it off would make the list a
+     record of your shopping rather than of the job. What it comes out of is
+     the total, which is the only number a tick should move.
+
+     Remembered against the row's own name, which is what orderList builds
+     them from, so it survives a cabinet being added or deleted. */
+  const had = new Set(project.ordered || []);
+  const have = (r) => had.has(r.what);
+  const toggleHave = (r) => setProject?.((p) => {
+    const cur = new Set(p.ordered || []);
+    if (cur.has(r.what)) cur.delete(r.what); else cur.add(r.what);
+    return { ...p, ordered: [...cur] };
+  });
+
+  /* --- rows you typed yourself ---------------------------------------------
+
+     The order list is derived from the drawing, which is what makes it worth
+     having and also what makes it incomplete: it cannot know about the tap,
+     the delivery, or the two hundred dollars of silicone and shims that a
+     kitchen eats. Those go on here and into the total. */
+  const own = (project.orderExtras || []).map((e) => ({
+    ...e,
+    what: e.what || 'Item',
+    needed: Number(e.qty) || 0,
+    unit: e.unit || 'each',
+    packSize: 1,
+    packs: Number(e.qty) || 0,
+    spare: 0,
+    each: Number(e.each) || 0,
+    cost: (Number(e.qty) || 0) * (Number(e.each) || 0),
+    own: true,
+  }));
+
+  const setOwn = (next) => setProject?.((p) => ({ ...p, orderExtras: next }));
+  const addOwn = () => setOwn([...(project.orderExtras || []),
+    { id: newId(), what: '', qty: 1, unit: 'each', each: 0 }]);
+  const editOwn = (id, patch) => setOwn((project.orderExtras || [])
+    .map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const removeOwn = (r) => setOwn((project.orderExtras || []).filter((e) => e.id !== r.id));
+
+  /* The total is what is left to buy: everything on the list, less what you
+     have already ticked, plus what you typed. */
+  const order = {
+    ...derived,
+    other: [...derived.other, ...own],
+    total: [...derived.board, ...derived.hardware, ...derived.other, ...own]
+      .reduce((a, r) => a + (have(r) ? 0 : (Number(r.cost) || 0)), 0),
+  };
   const rows = [...order.board, ...order.hardware, ...order.other];
+  const haveCost = [...derived.board, ...derived.hardware, ...derived.other, ...own]
+    .reduce((a, r) => a + (have(r) ? (Number(r.cost) || 0) : 0), 0);
+
+  const tableProps = { have, onHave: toggleHave, onRemove: removeOwn };
+  const bench = totals(project);
 
   const download = () => downloadBlob(
     new Blob([toCsv([
@@ -151,15 +230,84 @@ export default function Purchase({ project, onCfg }) {
         </section>
       )}
 
-      <Table title="Board" rows={order.board} />
-      <Table title="Hardware" rows={order.hardware} />
-      <Table title="Everything else" rows={order.other} />
+      <Table title="Board" rows={order.board} {...tableProps} />
+      <Table title="Hardware" rows={order.hardware} {...tableProps} />
+      <Table title="Everything else" rows={order.other} {...tableProps} />
+
+      {/* Anything the drawing cannot know about. The tap, the delivery, the
+          two hundred dollars of silicone and shims a kitchen eats. */}
+      <section className="card order-own">
+        <div className="card__head">
+          <span className="card__title">Your own lines</span>
+          <button className="btn btn--secondary" onClick={addOwn}>Add a line</button>
+        </div>
+        {(project.orderExtras || []).length === 0 ? (
+          <p className="note">
+            Nothing yet. The list above is worked out from the drawing, so it knows
+            about hinges and it does not know about the tap, the delivery, or the day
+            somebody spends templating the stone.
+          </p>
+        ) : (
+          <>
+            <div className="extra-row order-own-row extra-head">
+              <span className="field__label">What</span>
+              <span className="field__label">Qty</span>
+              <span className="field__label">Unit</span>
+              <span className="field__label">Each</span>
+              <span className="field__label">Total</span>
+              <span />
+            </div>
+            {(project.orderExtras || []).map((e) => (
+              <div className="extra-row order-own-row" key={e.id}>
+                <div className="input-shell">
+                  <input type="text" value={e.what} placeholder="Tap, delivery, stone templating"
+                         aria-label="What it is"
+                         onChange={(ev) => editOwn(e.id, { what: ev.target.value })} />
+                </div>
+                <Num label="Quantity" hideLabel compact unit="" value={e.qty} whenEmpty={0}
+                     onChange={(v) => editOwn(e.id, { qty: v ?? 0 })} />
+                <div className="input-shell">
+                  <input type="text" value={e.unit} placeholder="each"
+                         aria-label="Unit"
+                         onChange={(ev) => editOwn(e.id, { unit: ev.target.value })} />
+                </div>
+                <Num label="Each" hideLabel compact unit="AUD" value={e.each} whenEmpty={0}
+                     onChange={(v) => editOwn(e.id, { each: v ?? 0 })} />
+                <span className="n extra-total">
+                  {money((Number(e.qty) || 0) * (Number(e.each) || 0))}
+                </span>
+                <button className="btn btn--ghost"
+                        onClick={() => removeOwn(e)}
+                        aria-label={`Remove ${e.what || 'line'}`}>Remove</button>
+              </div>
+            ))}
+          </>
+        )}
+      </section>
 
       <section className="card order-total">
         <div className="order-total__row">
-          <span>Everything on this list</span>
+          <span>Still to buy</span>
           <span className="num">{money(order.total)}</span>
         </div>
+        {haveCost > 0 && (
+          <p className="note">
+            {money(haveCost)} of the list is ticked as already owned and is not in that
+            figure. It is still on the list, because the kitchen still needs it.
+          </p>
+        )}
+        {/* A benchtop is bought by the metre, delivered by the tonne and
+            carried by however many people are there on the day. */}
+        {bench.benchVolume > 0 && (
+          <p className="note">
+            The benchtop is {bench.benchMetres.toFixed(2)}m of standard width top:
+            {' '}{bench.benchArea.toFixed(2)} square metres of surface
+            and {bench.benchVolume.toFixed(3)} cubic metres of material at
+            {' '}{fmt(project.cfg.benchThk)}mm thick. In stone that is roughly
+            {' '}{Math.round(bench.benchVolume * 2700)}kg, which decides how many people
+            you need there when it arrives.
+          </p>
+        )}
         {order.packOverhead > 0 && (
           <p className="note">
             {money(order.packOverhead)} of that is what you are left with rather than

@@ -5,6 +5,7 @@ import CutList from './CutList.jsx';
 import Nesting from './Nesting.jsx';
 import Hardware from './Hardware.jsx';
 import Drilling from './Drilling.jsx';
+import Notes from './Notes.jsx';
 import Costing from './Costing.jsx';
 import Settings from './Settings.jsx';
 import Reference from './Reference.jsx';
@@ -59,6 +60,7 @@ const NAV = [
     ['purchase', 'Order list', 'M6 6h15l-1.5 9h-12zM6 6L5 3H2M9 20a1 1 0 100-2 1 1 0 000 2zM17 20a1 1 0 100-2 1 1 0 000 2z'],
   ]],
   ['Paper', [
+    ['notes', 'Notes', 'M5 3h9l5 5v13H5zM14 3v5h5M8 13h8M8 17h5'],
     ['print', 'Print', 'M6 9V3h12v6M6 18H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-1M6 14h12v7H6z'],
   ]],
 ];
@@ -605,11 +607,12 @@ export default function App() {
       case 'checks': return <Checks project={project} onCfg={(patch) => setProject((p) => ({
         ...p, cfg: { ...p.cfg, ...patch },
       }))} />;
-      case 'purchase': return <Purchase project={project} onCfg={(patch) => setProject((p) => ({
+      case 'purchase': return <Purchase project={project} setProject={setProject} onCfg={(patch) => setProject((p) => ({
         ...p, cfg: { ...p.cfg, ...patch },
       }))} />;
       case 'reference': return <Reference />;
       case 'instructions': return <Instructions />;
+      case 'notes': return <Notes project={project} setProject={setProject} />;
       case 'print': return <Print project={project} cut={cut} />;
       default: return null;
     }

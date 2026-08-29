@@ -89,8 +89,25 @@ describe('front rows fill the carcass width', () => {
       if (!fronts.length) return;
 
       const R = u.cfg.reveal;
+
+      /* A blind corner is the one cabinet where a row of fronts does not span
+         the carcass. The blind panel stands beside the whole stack for the
+         full height of the cabinet, and what the rows fill is the opening
+         next to it. So it comes out of the rows and is checked on its own. */
+      const blind = fronts.find((p) => p.code.endsWith('-BLIND'));
+      const stacked = fronts.filter((p) => p !== blind);
+      const frontWidth = u.width - R;
+      const target = blind ? frontWidth - blind.size[0] - R : frontWidth;
+
+      if (blind) {
+        expect(blind.size[1], 'the blind panel is the full height of the cabinet')
+          .toBeCloseTo(u.height, 1);
+        expect(blind.size[0] + R + target, 'blind plus opening plus one reveal is the front')
+          .toBeCloseTo(frontWidth, 1);
+      }
+
       const rows = new Map();
-      for (const p of fronts) {
+      for (const p of stacked) {
         const y = Math.round(p.pos[1]);
         if (!rows.has(y)) rows.set(y, []);
         rows.get(y).push(p);
@@ -99,7 +116,7 @@ describe('front rows fill the carcass width', () => {
       for (const [y, row] of rows) {
         // size[0] is the width of a front whichever way round L and W are.
         const across = row.reduce((a, p) => a + p.size[0], 0) + (row.length - 1) * R;
-        expect(across, `row at ${y}`).toBeCloseTo(u.width - R, 0);
+        expect(across, `row at ${y}`).toBeCloseTo(target, 0);
       }
     });
   }

@@ -21,6 +21,7 @@ import { POCKET } from './pocket.js';
 import { axisValues, labelled, settingOut, textSize } from './paneldim.js';
 import { PRICES, sheetFor } from './catalog.js';
 import { fmt } from './mm.js';
+import { pieceVolume } from './runs.js';
 import { Swatch } from './Fields.jsx';
 import { partLabel } from './workshop.js';
 
@@ -205,6 +206,13 @@ function buildPages(project, docs, cut) {
 
   if (docs.shopping) {
     pages.push({ doc: 'Shopping list', kind: 'shopping', nest, parts });
+  }
+
+  /* Notes last of the reading pages, because they are the only ones that are
+     not derived from the drawing and the only ones you might add to with a
+     pencil while you are standing there. */
+  if (docs.notes && (project.notes || []).some((n) => (n.lines || []).some((l) => l.text.trim()))) {
+    pages.push({ doc: 'Notes', kind: 'notes' });
   }
 
   /* Labels last, because they are the only pages you cut up. Forty white
@@ -426,6 +434,29 @@ function PageBody({ page, project, cut }) {
     );
   }
 
+  if (page.kind === 'notes') {
+    return (
+      <div className="p-notes-page">
+        {(project.notes || []).map((n) => {
+          const lines = (n.lines || []).filter((l) => l.text.trim());
+          if (!lines.length) return null;
+          return (
+            <section key={n.id} className="p-note-section">
+              <b>{n.heading || 'Notes'}</b>
+              <ul className="p-list">
+                {lines.map((l) => (
+                  <li key={l.id} className={l.done ? 'is-done' : ''}>
+                    <span className="p-box">{l.done ? '×' : ''}</span> {l.text}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (page.kind === 'shopping') {
     const fittings = allFittings(project);
     const tot = totals(project);
@@ -499,7 +530,8 @@ function PageBody({ page, project, cut }) {
             <table className="p-table">
               <thead>
                 <tr><th>Where</th><th className="p-n">Length</th><th className="p-n">Depth</th>
-                  <th className="p-n">Thickness</th><th>Cut from</th></tr>
+                  <th className="p-n">Thickness</th><th className="p-n">m3</th>
+                  <th>Cut from</th></tr>
               </thead>
               <tbody>
                 {tot.benchPieces.map((b2, i) => (
@@ -522,6 +554,7 @@ function PageBody({ page, project, cut }) {
                     <td className="p-n">{fmt(b2.length)}</td>
                     <td className="p-n">{fmt(b2.depth)}</td>
                     <td className="p-n">{fmt(b2.thickness)}</td>
+                    <td className="p-n">{pieceVolume(b2).toFixed(3)}</td>
                     <td>{b2.pieces.length === 1
                       ? 'one piece'
                       : `${b2.pieces.length} pieces, ${b2.pieces.map(fmt).join(' + ')}`}</td>
@@ -536,7 +569,16 @@ function PageBody({ page, project, cut }) {
         <table className="p-table">
           <tbody>
             <tr>
-              <td>Benchtop{tot.benchIncluded ? '' : ', not in the total'}</td>
+              <td>
+                Benchtop{tot.benchIncluded ? '' : ', not in the total'}
+                {/* By the metre is what it is priced at. By volume is what
+                    arrives on the truck and what somebody has to lift. */}
+                <span className="p-note">
+                  {' '}{tot.benchArea.toFixed(2)} m2 of surface,
+                  {' '}{tot.benchVolume.toFixed(3)} m3 at {fmt(project.cfg.benchThk)}mm,
+                  about {Math.round(tot.benchVolume * 2700)}kg in stone
+                </span>
+              </td>
               <td className="p-n">{tot.benchMetres.toFixed(2)} m</td>
               <td className="p-n">{money(tot.benchCost)}</td>
             </tr>
@@ -568,7 +610,7 @@ const BAR_EDGE = { front: 'front', back: 'back', left: 'left end', right: 'right
 export default function Print({ project, cut }) {
   const [docs, setDocs] = useState({
     plan: true, cutlist: true, sheets: true, drilling: false, shopping: true,
-    labels: false,
+    notes: true, labels: false,
   });
   const [size, setSize] = useState('a4');
 
@@ -598,7 +640,7 @@ export default function Print({ project, cut }) {
       <div className="print-controls no-print">
         {[['plan', 'Elevations'], ['cutlist', 'Cut list'], ['sheets', 'Sheet layouts'],
           ['drilling', 'Drilling schedule'], ['shopping', 'Shopping list'],
-          ['labels', 'Labels']].map(([k, label]) => (
+          ['notes', 'Notes'], ['labels', 'Labels']].map(([k, label]) => (
           <label className="check" key={k}>
             <input type="checkbox" checked={docs[k]} onChange={() => toggle(k)} />
             <span className="check__box">

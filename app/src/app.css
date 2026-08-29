@@ -257,12 +257,25 @@ body {
   max-height: 34vh; overflow-y: auto;
 }
 
-/* The count, so a folded strip still says how much is behind it. */
+/* The bar the strip folds into. It is a button, because the whole of it is
+   the thing you press: a caret you have to hit exactly is a caret nobody
+   hits on a tablet in a workshop. */
 .warn-summary {
   display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
-  padding-bottom: var(--sp-1);
+  padding: var(--sp-1) 0; width: 100%; text-align: left;
+  background: none; border: 0; color: inherit; cursor: pointer;
+  border-radius: var(--r-1);
 }
+.warn-summary:hover { color: var(--text); }
+.warn-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .warn-summary .field__label { margin-right: var(--sp-1); }
+.warn-summary__hint { margin-left: auto; }
+.warn-caret { transition: transform 120ms ease; flex: none; color: var(--text-2); }
+.warn-caret.is-open { transform: rotate(90deg); }
+.warn-more { justify-self: start; }
+
+/* Shut, it is one bar and the drawing gets the room back. */
+.wall-warnings.is-shut { max-height: none; overflow: visible; }
 
 .inspector-side { width: var(--panel-w); }
 .inspector { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -949,8 +962,16 @@ body {
 .settings-card .note { margin: 0 0 var(--sp-3); }
 .settings-card { display: grid; gap: var(--sp-3); }
 .extra-row {
-  grid-template-columns: minmax(160px, 2fr) 90px 130px auto auto;
+  /* Item, the note against it, quantity, unit cost, total, remove. The note
+     is where a model number and the size of the hole an appliance needs go,
+     so it gets real room rather than being an afterthought. */
+  grid-template-columns: minmax(140px, 2fr) minmax(120px, 2fr) 90px 130px auto auto;
   align-items: center;
+}
+
+@media (max-width: 820px) {
+  .extra-row { grid-template-columns: 1fr 1fr; }
+  .extra-head { display: none; }
 }
 .extra-row .input-shell { min-width: 0; }
 /* Qty and cost come from the shared number field now, so the grid item is the
@@ -1644,3 +1665,104 @@ kbd {
   .guide-search { width: 100%; }
   .guide-key { grid-template-columns: 1fr; gap: var(--sp-1); }
 }
+
+/* ---------------------------------------------------------------------------
+   Notes.
+
+   A page of text in an app that is otherwise all numbers, so it borrows the
+   card and leaves everything else alone: no toolbar, no formatting, no modes.
+   A line is a tick, a growing textarea and a way to get rid of it.
+   --------------------------------------------------------------------------- */
+.notes-list { display: grid; gap: var(--sp-4); max-width: 900px; }
+.notes-empty { display: grid; gap: var(--sp-3); justify-items: start; max-width: 640px; }
+
+.note-section { display: grid; gap: var(--sp-2); }
+.note-heading {
+  font: inherit; font-weight: 600; font-size: var(--fs-3);
+  border: 0; background: none; color: var(--text);
+  padding: 2px 0; min-width: 0; flex: 1;
+}
+.note-heading:focus { outline: none; box-shadow: 0 1px 0 0 var(--accent); }
+.note-heading::placeholder { color: var(--text-3); font-weight: 400; }
+
+.note-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.note-line {
+  display: grid; grid-template-columns: auto 1fr auto; gap: var(--sp-2);
+  align-items: start; padding: 3px 0;
+  border-bottom: var(--bw) solid transparent;
+}
+.note-line:hover { border-bottom-color: var(--border); }
+.note-tick { margin-top: 3px; }
+
+.note-text {
+  font: inherit; color: var(--text); background: none; border: 0;
+  resize: none; overflow: hidden; padding: 1px 0; min-height: 1.5em;
+  line-height: 1.5; width: 100%;
+}
+.note-text:focus { outline: none; }
+.note-text::placeholder { color: var(--text-3); }
+.note-line.is-done .note-text { color: var(--text-2); text-decoration: line-through; }
+
+/* Only where the pointer is, so a page of notes is text and not a column of
+   crosses down the side of it. */
+.note-remove { opacity: 0; padding: 0 var(--sp-2); line-height: 1.4; }
+.note-line:hover .note-remove,
+.note-remove:focus-visible { opacity: 1; }
+.note-add { justify-self: start; }
+
+@media (pointer: coarse) { .note-remove { opacity: 1; } }
+
+
+/* The order list: what you already own, and lines you typed yourself. */
+.table tr.is-had > td { color: var(--text-2); }
+.table tr.is-had > td:nth-child(2) { text-decoration: line-through; }
+.order-own { display: grid; gap: var(--sp-2); }
+.order-own-row { grid-template-columns: minmax(160px, 2fr) 90px 90px 130px auto auto; }
+@media (max-width: 820px) { .order-own-row { grid-template-columns: 1fr 1fr; } }
+
+
+/* The gaps panel: a drawing that names each gap, and the fields beside it. */
+.gap-figure {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--sp-4); align-items: center;
+  padding: var(--sp-3); background: var(--sunken); border-radius: var(--r-1);
+}
+.gap-svg { width: 100%; height: auto; max-height: 200px; }
+.gap-key { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px;
+  font-size: var(--fs-1); color: var(--text-2); }
+.gap-key b { display: inline-block; width: 1.4em; color: var(--accent);
+  font-family: var(--font-mono); }
+.gap-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-3); }
+.gap-field { display: grid; gap: 2px; align-content: start; }
+.gap-field .note { margin: 0; }
+@media (max-width: 700px) { .gap-figure { grid-template-columns: 1fr; } }
+
+
+/* The walkways an island makes, said where you move it. */
+.island-gaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.island-gap {
+  display: grid; grid-template-columns: 5ch minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--sp-2); align-items: baseline; font-size: var(--fs-1);
+  padding: 3px var(--sp-2); border-radius: var(--r-1); background: var(--sunken);
+}
+.island-gap .num { font-weight: 600; text-align: right; }
+.island-gap .note { margin: 0; }
+.island-gap--error { background: var(--warn-weak, var(--sunken)); }
+.island-gap--error .num { color: var(--warn); }
+@media (max-width: 700px) { .island-gap { grid-template-columns: 5ch 1fr; }
+  .island-gap .note { grid-column: 1 / -1; } }
+
+
+/* Notes on paper. */
+.p-notes-page { display: grid; gap: 4mm; align-content: start; }
+.p-note-section > b { display: block; margin-bottom: 1mm; }
+.p-notes-page .p-list li { display: flex; gap: 2mm; align-items: baseline; }
+.p-notes-page .p-list li.is-done { color: #555; }
+.p-notes-page .p-box { flex: none; width: 3mm; height: 3mm; border: 0.3mm solid #000;
+  font-size: 6pt; line-height: 2.6mm; text-align: center; }
+
+
+/* The add buttons on the three extras lists. In a grid they stretch to the
+   card, which makes a quiet action look like the point of the card. */
+.extras > .btn { justify-self: start; }

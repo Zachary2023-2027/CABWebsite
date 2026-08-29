@@ -90,7 +90,14 @@ describe('every front sits inside a row of its own stack', () => {
     if (!u.stack) continue;
 
     it(`${f.id} at ${width}mm`, () => {
+      /* The blind panel of a corner cabinet belongs to no row: it stands
+         beside the whole stack, full height, covering the dead width the
+         return run is in front of. Every other front is in exactly one row. */
       for (const p of fronts(u)) {
+        if (p.code.endsWith('-BLIND')) {
+          expect(p.size[1], `${p.code} is not the full height`).toBeCloseTo(u.height, 1);
+          continue;
+        }
         const row = u.stack.rows.find(
           (r) => p.pos[1] >= r.y - 0.51 && p.pos[1] + p.size[1] <= r.top + 0.51);
         expect(row, `${p.code} at ${p.pos[1]}..${p.pos[1] + p.size[1]} is in no row`).toBeTruthy();

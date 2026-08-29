@@ -45,6 +45,12 @@ export default function Costing({ project, quoted, setQuoted }) {
           ['Cabinets, allocated', money(cabinetTotal), `${rows.length} units, board by part area`],
           ['Per linear metre', money(perLinearMetre), `${runMetres.toFixed(2)} m of base run`],
           ['Board, as nested', money(nest.cost), `${nest.sheets} sheets, ${nest.wastePct.toFixed(1)}% waste`],
+          /* A benchtop is priced by the metre and delivered by the tonne. The
+             metre is what you pay; the volume is what turns up and what
+             somebody has to carry through the door on the day. */
+          ['Benchtop', money(tot.benchCost),
+            `${tot.benchMetres.toFixed(2)} m, ${tot.benchArea.toFixed(2)} m2, `
+            + `${tot.benchVolume.toFixed(3)} m3, about ${Math.round(tot.benchVolume * 2700)}kg in stone`],
           ['Project total', money(tot.cost),
             tot.benchIncluded ? 'with benchtop and kickboard'
               : `kickboard in, benchtop left out (${money(tot.benchCost)})`],

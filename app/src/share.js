@@ -83,7 +83,14 @@ export function squeeze(project) {
       A: wall.at ? [wall.at.x, wall.at.y] : undefined,
       /* The breakfast bar, as a side and a number. Two characters of link for
          the thing that decides how much benchtop is being bought. */
-      B: wall.bar?.depth > 0 ? [wall.bar.side, wall.bar.depth] : undefined,
+      /* Side, depth, and where along the side it runs. The last two are only
+         written when the bar is part of a side rather than all of it, so a
+         plain bar is still two characters of link. */
+      B: wall.bar?.depth > 0
+        ? [wall.bar.side, wall.bar.depth,
+          ...(wall.bar.from > 0 || wall.bar.length > 0
+            ? [wall.bar.from || 0, wall.bar.length || 0] : [])]
+        : undefined,
       o: wall.obstacles?.length ? wall.obstacles : undefined,
       u: wall.units.map((u) => {
         const out = { f: u.familyId };
@@ -124,7 +131,13 @@ export function expand(small) {
         kind: wall.k ? 'island' : 'wall',
         ...(wall.D ? { depth: wall.D } : {}),
         ...(Array.isArray(wall.A) ? { at: { x: wall.A[0], y: wall.A[1] } } : {}),
-        ...(Array.isArray(wall.B) ? { bar: { side: wall.B[0], depth: wall.B[1] } } : {}),
+        ...(Array.isArray(wall.B) ? {
+          bar: {
+            side: wall.B[0], depth: wall.B[1],
+            ...(wall.B[2] ? { from: wall.B[2] } : {}),
+            ...(wall.B[3] ? { length: wall.B[3] } : {}),
+          },
+        } : {}),
         length: wall.L,
         obstacles: wall.o || [],
         units: (wall.u || []).map((u, j) => ({

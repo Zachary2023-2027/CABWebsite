@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import Screen, { Empty, Est } from './Screen.jsx';
-import { allFittings, money, projectExtras } from './project.js';
+import { EXTRA_KINDS, allFittings, extrasOfKind, money, projectExtras } from './project.js';
 import { newId } from './storage.js';
 import { Num } from './Fields.jsx';
 
@@ -9,19 +9,32 @@ const LABEL = {
   runnerPair: 'Drawer runner pair, full extension',
   handle: 'Handle',
   binRunner: 'Bin runner',
+  carousel: 'Corner carousel or pull-out',
   barBracket: 'Breakfast bar bracket or leg',
 };
 
-/* Anything the derived list cannot know about: the handles you actually
-   bought, a soft close kit, legs, screws. Typed in, priced by you, and
-   carried through to costing and the print pack. */
-function Extras({ project, setProject }) {
-  const rows = project.extras || [];
+/* ---------------------------------------------------------------------------
+   Everything the cabinets cannot tell you.
+
+   A part list can work out its own hinges. It cannot know which oven you
+   bought, that the splashback is on order, or that somebody is charging you
+   to template the stone. All of that is money in the job and none of it is
+   derivable, so it is typed.
+
+   Three lists rather than one, because an appliance and a box of screws are
+   not the same decision and do not get read at the same time. The appliance
+   list is the one that matters most: the planner blocks out a hole for a
+   fridge and until now there was nowhere to write down which fridge, so the
+   cavity and the appliance that has to fit it lived in different heads.
+   --------------------------------------------------------------------------- */
+function Extras({ project, setProject, kind }) {
+  const rows = extrasOfKind(project, kind.id);
   const edit = (id, patch) => setProject((p) => ({
     ...p, extras: (p.extras || []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
   }));
   const add = () => setProject((p) => ({
-    ...p, extras: [...(p.extras || []), { id: newId(), name: '', qty: 1, cost: 0 }],
+    ...p,
+    extras: [...(p.extras || []), { id: newId(), name: '', qty: 1, cost: 0, kind: kind.id, note: '' }],
   }));
   const remove = (id) => setProject((p) => ({
     ...p, extras: (p.extras || []).filter((e) => e.id !== id),
@@ -31,17 +44,15 @@ function Extras({ project, setProject }) {
   return (
     <section className="card settings-card extras">
       <div className="card__head">
-        <span className="card__title">Your own hardware</span>
+        <span className="card__title">{kind.name}</span>
         <span className="progress-count num">{money(total)}</span>
       </div>
-      <p className="note">
-        Not worked out from the cabinets. Type what you are buying, how many, and what it costs.
-        It goes into the project total and the print pack.
-      </p>
+      <p className="note">{kind.note}</p>
 
       {rows.length > 0 && (
         <div className="extra-row extra-head">
           <span className="field__label">Item</span>
+          <span className="field__label">Model, size or note</span>
           <span className="field__label">Qty</span>
           <span className="field__label">Unit cost</span>
           <span className="field__label">Total</span>
@@ -52,9 +63,17 @@ function Extras({ project, setProject }) {
       {rows.map((e) => (
         <div className="extra-row" key={e.id}>
           <div className="input-shell">
-            <input type="text" value={e.name} placeholder="Item"
+            <input type="text" value={e.name} placeholder={kind.placeholder}
                    aria-label="Item name"
                    onChange={(ev) => edit(e.id, { name: ev.target.value })} />
+          </div>
+          {/* The model number, the size, the lead time. An appliance is not a
+              line of money, it is a thing with a size that has to fit a hole
+              the planner has already blocked out. */}
+          <div className="input-shell">
+            <input type="text" value={e.note || ''} placeholder={kind.notePlaceholder}
+                   aria-label="Model, size or note"
+                   onChange={(ev) => edit(e.id, { note: ev.target.value })} />
           </div>
           <Num label={`Quantity of ${e.name || 'item'}`} hideLabel compact unit=""
                value={e.qty} whenEmpty={0}
@@ -68,8 +87,29 @@ function Extras({ project, setProject }) {
         </div>
       ))}
 
-      <button className="btn btn--secondary" onClick={add}>Add an item</button>
+      <button className="btn btn--secondary" onClick={add}>{kind.add}</button>
     </section>
+  );
+}
+
+/* The three lists, in the order you would think about them. */
+const KIND_TEXT = {
+  hardware: { placeholder: 'Soft close kit, legs, screws',
+    notePlaceholder: 'Size or part number', add: 'Add hardware' },
+  appliance: { placeholder: 'Oven, cooktop, sink, tap',
+    notePlaceholder: 'Model and the size of the hole it needs', add: 'Add an appliance' },
+  other: { placeholder: 'Splashback, tiling, plumbing, stone templating',
+    notePlaceholder: 'Who is doing it, or when', add: 'Add an item' },
+};
+
+function ExtraLists({ project, setProject }) {
+  return (
+    <>
+      {EXTRA_KINDS.map((k) => (
+        <Extras key={k.id} project={project} setProject={setProject}
+                kind={{ ...k, ...KIND_TEXT[k.id] }} />
+      ))}
+    </>
   );
 }
 
@@ -81,7 +121,7 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
     return (
       <Screen title="Hardware" context="Everything that is not board." flow>
         <Empty text="No hardware yet. Add cabinets in the planner." />
-        <Extras project={project} setProject={setProject} />
+        <ExtraLists project={project} setProject={setProject} />
       </Screen>
     );
   }
@@ -155,7 +195,7 @@ export default function Hardware({ project, setProject, prices, setPrices }) {
         </table>
       </div>
 
-      <Extras project={project} setProject={setProject} />
+      <ExtraLists project={project} setProject={setProject} />
 
       <section className="card shopping">
         <div className="card__head">

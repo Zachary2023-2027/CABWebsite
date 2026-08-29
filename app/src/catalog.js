@@ -11,7 +11,7 @@ import { assertMm, round1 } from './mm.js';
 import {
   drawerBox, hingeCountFor, longestFitting, migrateRunnerClearance, nearestLength, runnerProfile,
 } from './hardware.js';
-import { newRow, resolveStack } from './stack.js';
+import { availableHeight, frontSpan, newRow, resolveStack, reveals } from './stack.js';
 import { finishFor, roleOf } from './finishes.js';
 
 /* The air left between the drawer box and the surfaces above and below it,
@@ -57,6 +57,17 @@ export const PROJECT = {
      gap there stops it rubbing: that is your call, not a constant. */
   revealTop: 0,
   revealBottom: 0,
+  /* The gap down each end of a front, between it and the outside of the
+     carcass. Empty means half the reveal, which is the geometry this app has
+     always produced: two cabinets butted together then leave one whole reveal
+     between their fronts. It is the gap you look straight at from across the
+     room, so it is yours to set. */
+  revealLeft: null,
+  revealRight: null,
+  /* Between two doors side by side in one opening. Empty follows the reveal.
+     A pair meeting in the middle of a cabinet is a joint you stand in front
+     of, and it does not have to match the joint between two cabinets. */
+  revealBetween: null,
   /* Kept so a project saved before runner profiles still opens. It is not
      read by the geometry any more: the profile below decides the drawer box
      width, and hydrate turns a stored clearance into a profile. */
@@ -249,6 +260,9 @@ export const PRICES = {
   runnerPair: 28,
   handle: 9,
   binRunner: 64,
+  /* A corner carousel or pull-out. Bought as a unit, and the reason a corner
+     cabinet is worth building rather than being a cave. */
+  carousel: 210,
   /* A bracket or a leg under a breakfast bar overhang. Which one you buy
      changes the price a lot, so this is a seed to replace rather than a
      figure to rely on. */
@@ -367,6 +381,55 @@ export const FAMILIES = [
     desc: 'Sits in the corner of an L. The return cabinets butt against its side.',
     widths: [900, 1000, 1050, 1100, 1200, 1350],
     def: { width: 1050, doors: 1, shelves: 1 }, glyph: 'cornerL' },
+
+  /* ---------------------------------------------------------------------
+     The corner cabinets you can actually reach into.
+
+     A blind corner with one full height door is the cheap answer: half of it
+     is a cave you put a stockpot in once a year. These two are what the trade
+     and IKEA both build instead, and in this model they are the same frame as
+     the blind corner with a different stack in the opening.
+
+     IKEA sell the first as METOD/MAXIMERA corner base cabinet with drawer and
+     pull-out, 1280 x 680 x 800: 1280 along the wall, a 680 front opening, and
+     the 600 left over is the leg the return run butts into, which is exactly
+     what this app already calls the blind. A drawer runs across the top of
+     the opening and the carousel lives behind the door under it.
+     --------------------------------------------------------------------- */
+
+  { id: 'base-corner-drawer', group: 'Base', name: 'Corner, drawer and pull-out',
+    kind: 'base', fronts: 'blind', corner: true,
+    desc: 'Blind corner with a drawer across the top and a door under it. The carousel goes behind the door.',
+    widths: [1000, 1050, 1100, 1200, 1280, 1350],
+    def: { width: 1280, shelves: 0, cornerDrawerH: 180 }, carousel: true,
+    /* The drawer height is a setting, because a MAXIMERA drawer is a bought
+       height and a drawer you make is whatever you cut it to. */
+    blindStack: (s, H) => [
+      { type: 'drawer', height: Math.min(Number(s.cornerDrawerH) || 180, H - 200) },
+      { type: 'doors', height: 'fill', doors: 1 },
+    ],
+    glyph: 'cornerL' },
+
+  { id: 'base-corner-carousel', group: 'Base', name: 'Corner, carousel',
+    kind: 'base', fronts: 'blind', corner: true,
+    desc: 'The same frame with one full height door. The carousel is the fitting, not a part.',
+    widths: [1000, 1050, 1100, 1200, 1280, 1350],
+    def: { width: 1280, shelves: 0 }, carousel: true,
+    glyph: 'cornerL' },
+
+  /* An oven under the bench rather than up a tower. The oven sits in the top
+     of a 720 carcass and a drawer takes what is left under it, which is where
+     the trays go. */
+  { id: 'base-oven', group: 'Base', name: 'Oven, under bench', kind: 'base', fronts: 'ovenBase',
+    desc: 'Built-in oven in the top of a base cabinet, with a drawer under it.',
+    widths: [600, 700], def: { width: 600, drawers: 1, ovenH: 595 }, glyph: 'oven' },
+
+  /* The narrow one that goes in the gap nothing else fits. One tall front on
+     a full extension runner, with the baskets bought rather than built. */
+  { id: 'base-pullout', group: 'Base', name: 'Pull-out pantry', kind: 'base', fronts: 'pullout',
+    desc: 'One full height front on a full extension runner. The baskets are a fitting, not a part.',
+    widths: [150, 200, 250, 300, 400], def: { width: 300, drawers: 1, shelves: 0 },
+    glyph: 'bin' },
 
   { id: 'wall-1door', group: 'Wall', name: 'Wall, 1 door', kind: 'wall', fronts: 'doors',
     desc: 'One door, two shelves, 320 deep.',
@@ -540,6 +603,14 @@ export const GROUPS = [...new Set(FAMILIES.map((f) => f.group))];
 
 export function defaultStackFor(fam, s, H, P) {
   const R = Number(P.reveal) || 0;
+  /* How much height there is for the fronts themselves, once every gap has
+     been taken out: between the rows, above the top one and below the bottom
+     one. The presets used to divide up the carcass height instead, which is
+     the opening plus the gaps, so setting a gap above or below the fronts
+     pushed the bottom one out through the bottom of the cabinet. It is only
+     visible when those two gaps are set, which is why it survived: they
+     default to nothing. */
+  const avail = (rows) => availableHeight(H, rows, P);
 
   /* A preset can state its front as data. That is what a preset is now: a
      carcass size and a list of rows, which is why adding a cabinet type is
@@ -555,10 +626,12 @@ export function defaultStackFor(fam, s, H, P) {
       /* A pantry gets a lower pair and an upper pair rather than one pair of
          2100mm doors, which nobody can hang on their own. */
       if (fam.kind === 'tall' && (s.doors ?? 2) >= 2 && H > 1600) {
-        const lower = Math.round(H * 0.45);
+        /* The lower pair is set and the upper takes what is left, so the two
+           always add up to the opening however the gaps are set. */
+        const lower = Math.round(avail(2) * 0.45);
         return [
-          { type: 'doors', height: H - lower - R / 2, doors: 2, hingeSide: 'pair' },
-          { type: 'doors', height: lower - R / 2, doors: 2, hingeSide: 'pair' },
+          { type: 'doors', height: 'fill', doors: 2, hingeSide: 'pair' },
+          { type: 'doors', height: lower, doors: 2, hingeSide: 'pair' },
         ];
       }
       const n = s.doors ?? 1;
@@ -571,7 +644,7 @@ export function defaultStackFor(fam, s, H, P) {
         && s.drawerHeights.every((v) => Number(v) > 0)
         ? s.drawerHeights.map(Number)
         : null;
-      const even = (H - (n - 1) * R) / n;
+      const even = avail(n) / n;
       return Array.from({ length: n }, (_, i) => ({
         type: 'drawer', height: heights ? heights[i] : even,
       }));
@@ -582,28 +655,47 @@ export function defaultStackFor(fam, s, H, P) {
       const bay = s.microH ?? 380;
       return [
         { type: 'open', height: bay },
-        { type: 'drawer', height: Math.max(120, H - bay - R) },
+        // The drawer takes what is left, so the two add up whatever the gaps are.
+        { type: 'drawer', height: 'fill' },
       ];
     }
 
-    case 'sink': {
-      // A false front over a pair of doors, so the bowl has somewhere to go.
-      const fh = 150;
-      return [
-        { type: 'false', height: fh },
-        { type: 'doors', height: H - fh - R, doors: 2, hingeSide: 'pair' },
-      ];
-    }
+    case 'sink':
+      /* Two doors, full height, and nothing over them.
+
+         It used to carry a 150mm false front across the top, which is what a
+         drawer bank in a sink run has instead of a drawer. A sink base does
+         not need one: the bowl hangs below the benchtop, the doors run past
+         it, and the plank across the top is a part to cut, a part to hang and
+         a part to look at for no reason. Anyone who does want one can add a
+         false front row to the stack. */
+      return [{ type: 'doors', height: 'fill', doors: 2, hingeSide: 'pair' }];
 
     case 'oven': {
       const cavity = s.ovenH ?? 600;
       const drawerH = 300;
       return [
-        { type: 'doors', height: H - cavity - drawerH - 2 * R, doors: 1, hingeSide: 'left' },
+        // The door over the oven takes whatever the other two leave.
+        { type: 'doors', height: 'fill', doors: 1, hingeSide: 'left' },
         { type: 'bay', height: cavity, appliance: 'oven' },
         { type: 'drawer', height: drawerH },
       ];
     }
+
+    case 'ovenBase': {
+      /* The oven in the top and a drawer under it. A built-in oven is about
+         595 tall, so what is left in a 720 carcass is the drawer, and both
+         are settings rather than constants. */
+      const cavity = Math.min(s.ovenH ?? 595, H - 120);
+      return [
+        { type: 'bay', height: cavity, appliance: 'oven' },
+        { type: 'drawer', height: 'fill' },
+      ];
+    }
+
+    case 'pullout':
+      // One front, full height, on its own runner. The baskets are bought.
+      return [{ type: 'drawer', height: 'fill', bin: 'pullout' }];
 
     case 'bin':
       /* A bin unit is a drawer, not a cupboard. It is a single front on a
@@ -858,8 +950,14 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
 
   const R = P.reveal;
   const FT = P.frontThk;
-  const frontW = W - 2 * (R / 2);
-  const sideGap = R / 2;
+  /* Where the fronts sit across the carcass, from the one place that knows.
+     Both of these used to be `reveal / 2` written out here, which made the
+     gap at each end of a cabinet the only one in the app you could not set. */
+  const span = frontSpan(W, P);
+  const frontW = span.width;
+  const sideGap = span.x;
+  // Between two doors sharing one opening, which is its own setting.
+  const RX = reveals(P).betweenX;
 
   let doorNo = 0;
   let drawerNo = 0;
@@ -876,8 +974,11 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
    * in the middle, which is what two doors on one opening always are, and is
    * what this produced before the side became something you can set.
    */
-  const addDoors = (n, y, h, hingeSide, rowIndex) => {
-    const each = (frontW - (n - 1) * R) / n;
+  /* x0 and w say where across the cabinet this row goes. They are the whole
+     front on an ordinary cabinet, and the accessible part of the opening on a
+     blind corner, whose other end is dead width behind the return run. */
+  const addDoors = (n, y, h, hingeSide, rowIndex, x0 = sideGap, w = frontW) => {
+    const each = (w - (n - 1) * RX) / n;
     const side = hingeSide || (n >= 2 ? 'pair' : 'left');
     for (let i = 0; i < n; i++) {
       const num = ++doorNo;
@@ -886,14 +987,26 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         code: code(`DOOR-${num}`),
         name: `Door ${num}`, group: 'front', material: MAT.front,
         L: Math.round(h), W: Math.round(each), T: FT,
-        size: [each, h, FT], pos: [sideGap + i * (each + R), y, D], explode: [0, 0, 340],
+        size: [each, h, FT], pos: [x0 + i * (each + RX), y, D], explode: [0, 0, 340],
         edging: 'All four edges', hinge, row: rowIndex,
       }));
       fittings.push({ type: 'hinge', qty: hingeCount(h), code: code(`HINGE-${num}`) });
     }
   };
 
-  const addDrawers = (n, y, h, heights, rowIndex, bin = false) => {
+  /**
+   * A row of drawers.
+   *
+   * `x0` and `w` are the FRONT: where the drawer face sits across the cabinet
+   * and how wide it is. `boxIn` is the INTERIOR the box actually runs in,
+   * `{x0, width}` in carcass coordinates, between the two faces the runners
+   * screw to. They are not the same thing and neither can be derived from the
+   * other: a front runs past the carcass it covers, and in a blind corner the
+   * usable interior stops at the back of the blind panel while the front
+   * carries on to the end of the cabinet.
+   */
+  const addDrawers = (n, y, h, heights, rowIndex, bin = false,
+    x0 = sideGap, w = frontW, boxIn = null) => {
     /* Remember the opening these drawers have to fill. The inspector checks
        typed heights against this, not against the whole carcass, so a
        microwave unit with a bay above the drawer is judged correctly. */
@@ -921,13 +1034,21 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       longestFitting(internalDepth, profile, P.runnerDepthAllowance),
     );
 
+    /* The interior the box runs in. The whole carcass on an ordinary cabinet,
+       and the part of a blind corner you can reach into on that one. The
+       runner deduction comes off the opening the box is really in, so sizing
+       it off the carcass in a corner would build a drawer wider than its
+       hole and hang it off the back of the blind panel. */
+    const inside = boxIn || { x0: T, width: internalW };
+    const boxInternalW = inside.width;
     const box = drawerBox({
-      cabinetWidth: W, carcassThk: T, boxSideThk: P.boxSideThk,
+      cabinetWidth: boxInternalW + 2 * T, carcassThk: T, boxSideThk: P.boxSideThk,
       nominalLength: RL, profile, deduction: P.runnerDeduction,
     });
     const boxW = box.outsideWidth;
     const boxInnerW = box.insideWidth;
-    const boxSide = (internalW - boxW) / 2;   // clearance beside each box side
+    const boxSide = (boxInternalW - boxW) / 2;   // clearance beside each box side
+    const boxX = inside.x0;
     const boxZ = D - P.boxSetback - RL;
     /* Two ways to hold the bottom, and only one of them changes the size of
        the box. Recessed, the panel is cut to the inside of the box and sits
@@ -964,8 +1085,8 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
 
       parts.push(mkPart({
         code: code(`DRWR-F${num}`), name: `Drawer front ${num}`, group: 'front', material: MAT.front,
-        L: Math.round(frontW), W: Math.round(each), T: FT, drawer: num, row: rowIndex,
-        size: [frontW, each, FT], pos: [sideGap, fy, D], explode: [0, 0, 340],
+        L: Math.round(w), W: Math.round(each), T: FT, drawer: num, row: rowIndex,
+        size: [w, each, FT], pos: [x0, fy, D], explode: [0, 0, 340],
         edging: 'All four edges',
       }));
 
@@ -974,7 +1095,13 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
          it and the box arithmetic below is skipped rather than producing
          panels nobody makes. */
       if (bin) {
-        fittings.push({ type: 'binRunner', qty: 1, code: code(`BIN-RUNNER-${num}`) });
+        /* Which carrier it runs on. A bin runs on a bin runner and a pull-out
+           pantry runs on an ordinary full extension pair, and they are priced
+           and bought differently, so the row says which. */
+        const carrier = bin === 'pullout'
+          ? { type: 'runnerPair', qty: 1, code: code(`RUNNER-${num}`), length: RL }
+          : { type: 'binRunner', qty: 1, code: code(`BIN-RUNNER-${num}`) };
+        fittings.push(carrier);
         fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-D${num}`) });
         continue;
       }
@@ -1004,10 +1131,10 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         explode: [ex[0] + sh[0], ex[1] + sh[1], ex[2] + sh[2]],
       }));
 
-      push('SIDE-L', 'box, left side', RL, BH, BST, [BST, BH, RL], [T + boxSide, by, boxZ], [-170, 0, 0], MAT.box);
-      push('SIDE-R', 'box, right side', RL, BH, BST, [BST, BH, RL], [T + boxSide + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
-      push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
-      push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [T + boxSide + BST, by, boxZ], [0, 0, -150], MAT.box);
+      push('SIDE-L', 'box, left side', RL, BH, BST, [BST, BH, RL], [boxX + boxSide, by, boxZ], [-170, 0, 0], MAT.box);
+      push('SIDE-R', 'box, right side', RL, BH, BST, [BST, BH, RL], [boxX + boxSide + boxW - BST, by, boxZ], [170, 0, 0], MAT.box);
+      push('FRONT', 'box, front', boxInnerW, BH, BST, [boxInnerW, BH, BST], [boxX + boxSide + BST, by, boxZ + RL - BST], [0, 0, 150], MAT.box);
+      push('BACK', 'box, back', boxInnerW, BH, BST, [boxInnerW, BH, BST], [boxX + boxSide + BST, by, boxZ], [0, 0, -150], MAT.box);
 
       /* A recessed base is cut to the inside of the box, between the front
          and the back, and sits up the side by baseGroove. A butted base is
@@ -1024,7 +1151,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       push('BASE', butted ? 'base, butted under' : 'base, pocket screwed',
         baseW, baseD, P.boxBaseThk,
         [baseW, P.boxBaseThk, baseD],
-        [T + boxSide + (butted ? 0 : BST),
+        [boxX + boxSide + (butted ? 0 : BST),
           butted ? by - P.boxBaseThk : by + P.baseGroove,
           boxZ + (butted ? 0 : BST)],
         [0, -150, 0], MAT.boxBase);
@@ -1057,7 +1184,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       if (row.type === 'doors') {
         addDoors(row.doors ?? 1, row.y, row.height, row.hingeSide, i);
       } else if (row.type === 'drawer') {
-        addDrawers(1, row.y, row.height, null, i, !!row.bin);
+        addDrawers(1, row.y, row.height, null, i, row.bin || false);
       } else if (row.type === 'false') {
         parts.push(mkPart({
           code: code('FALSE'), name: 'False front', group: 'front', material: MAT.front,
@@ -1076,6 +1203,12 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
   }
 
+  /* A corner carousel is a bought fitting, not a part. It is the reason the
+     cabinet is worth building, so it belongs on the order list. */
+  if (fam.carousel) {
+    fittings.push({ type: 'carousel', qty: 1, code: code('CAROUSEL') });
+  }
+
   if (fam.fronts === 'blind') {
     /* Blind corner in an L.
 
@@ -1087,28 +1220,62 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
        built. The default is the benchtop depth plus a clearance you can
        change; anything tighter is flagged on the cabinet. */
     const blind = blindWidth;
-    const opening = frontW - blind - R;
+    const opening = frontW - blind - RX;
     // Which end runs into the corner. Right suits the right hand end of a
     // run, left suits the other leg of a U.
     const blindLeft = (s.blindSide || 'right') === 'left';
+    const openX = blindLeft ? sideGap + blind + RX : sideGap;
+
     parts.push(mkPart({
       code: code('BLIND'), name: 'Blind panel', group: 'front', material: MAT.front,
       L: Math.round(H), W: Math.round(blind), T: FT,
       size: [blind, H, FT],
-      pos: [blindLeft ? sideGap : sideGap + opening + R, 0, D], explode: [0, 0, 260],
+      pos: [blindLeft ? sideGap : sideGap + opening + RX, 0, D], explode: [0, 0, 260],
       edging: 'All four edges',
     }));
+
+    /* What goes in the part of the front you can actually reach.
+
+       It used to be one full height door and nothing else, which is one of
+       the two corner cabinets people build. The other is the one with a
+       drawer across the top and a door under it, with the carousel behind the
+       door: IKEA sell it as METOD/MAXIMERA, 1280 along the wall with a 680
+       opening, and the 600 left over is the leg the return run butts into,
+       which is exactly what this app already calls the blind.
+
+       So the opening takes a stack like any other front, and the two of them
+       are the same cabinet with a different stack in the hole. */
     if (opening > 150) {
-      const num = ++doorNo;
-      parts.push(mkPart({
-        code: code(`DOOR-${num}`), name: `Door ${num}`, group: 'front', material: MAT.front,
-        L: Math.round(H), W: Math.round(opening), T: FT,
-        size: [opening, H, FT],
-        pos: [blindLeft ? sideGap + blind + R : sideGap, 0, D], explode: [0, 0, 340],
-        edging: 'All four edges', hinge: blindLeft ? 'right' : 'left',
-      }));
-      fittings.push({ type: 'hinge', qty: hingeCount(H), code: code(`HINGE-${num}`) });
-      fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${num}`) });
+      const hinge = blindLeft ? 'right' : 'left';
+      const rows = Array.isArray(s.stack) && s.stack.length
+        ? s.stack
+        : (fam.blindStack
+          ? fam.blindStack(s, H, P, hinge)
+          : [{ type: 'doors', height: 'fill', doors: 1, hingeSide: hinge }]);
+
+      const resolved = resolveStack(rows, H, P);
+      stackNotes = resolved;
+
+      for (const [i, row] of resolved.rows.entries()) {
+        if (row.height <= 0) continue;
+        if (row.type === 'doors') {
+          addDoors(row.doors ?? 1, row.y, row.height, row.hingeSide || hinge, i,
+            openX, opening);
+        } else if (row.type === 'drawer') {
+          /* The interior the box runs in stops at the back of the blind panel
+             and starts at the carcass face on the side you can reach into.
+             Both of those are carcass coordinates; the front above is not,
+             and using the front here builds a box inside the side panel. */
+          const inner = blindLeft
+            ? { x0: sideGap + blind + RX, width: (W - T) - (sideGap + blind + RX) }
+            : { x0: T, width: (openX + opening) - T };
+          addDrawers(1, row.y, row.height, null, i, row.bin || false,
+            openX, opening, inner);
+        }
+      }
+      for (let i = 0; i < doorNo; i++) {
+        fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-${i + 1}`) });
+      }
     }
   }
 

@@ -12,8 +12,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BAR_SIDES, allFittings, allParts, allUnits, barBrackets, barCost, barFittings,
-  barSeats, barSpan, benchPieces, floorPlan, isIsland, islandBar, islandDepth,
-  nestCfg, starterProject, totals,
+  barIsWholeSide, barRange, barSeats, barSideLength, barSpan, benchPieces, floorPlan,
+  isIsland, islandBar, islandDepth, nestCfg, starterProject, totals,
 } from '../project.js';
 import { BAR_RULES } from '../bar.js';
 import { benchLength, islandBench } from '../runs.js';
@@ -21,7 +21,7 @@ import { facesOf, walkways } from '../checks.js';
 import { orderList } from '../purchase.js';
 import { nestProject } from '../nesting.js';
 import { drillUnit } from '../drilling.js';
-import { hydrate } from '../storage.js';
+import { hydrate, snapshot } from '../storage.js';
 import { decodeProject, encodeProject } from '../share.js';
 import { PRICES, PROJECT } from '../catalog.js';
 
@@ -42,12 +42,13 @@ const rules = (p) => ({ ...BAR_RULES, ...p.cfg });
 
 describe('what a bar is', () => {
   it('is a side and a number, and nothing else', () => {
-    expect(islandBar({ bar: { side: 'back', depth: 300 } })).toEqual({ side: 'back', depth: 300 });
+    expect(islandBar({ bar: { side: 'back', depth: 300 } }))
+      .toMatchObject({ side: 'back', depth: 300 });
   });
 
   it('is no bar at all when there is no island to put it on', () => {
-    expect(islandBar(undefined)).toEqual({ side: 'none', depth: 0 });
-    expect(islandBar({})).toEqual({ side: 'none', depth: 0 });
+    expect(islandBar(undefined)).toMatchObject({ side: 'none', depth: 0 });
+    expect(islandBar({})).toMatchObject({ side: 'none', depth: 0 });
   });
 
   /* A side nobody recognises is not a broken island, it is an island with no
@@ -105,7 +106,7 @@ describe('the slab it makes', () => {
     const after = slab('back', 400);
     expect(after.overhangs).toBe(4);
     expect(after.island).toBe(true);
-    expect(after.bar).toEqual({ side: 'back', depth: 400 });
+    expect(after.bar).toMatchObject({ side: 'back', depth: 400 });
   });
 
   it('says nothing about a bar when there is not one', () => {
@@ -234,13 +235,13 @@ describe('it survives being saved and shared', () => {
   it('opens again from a file', () => {
     const p = withBar('right', 380);
     const back = hydrate({ project: p });
-    expect(islandBar(island(back.project))).toEqual({ side: 'right', depth: 380 });
+    expect(islandBar(island(back.project))).toMatchObject({ side: 'right', depth: 380 });
   });
 
   it('travels in a link', () => {
     const p = withBar('back', 320);
     const back = decodeProject(encodeProject(p).replace(/^/, ''));
-    expect(islandBar(island(back.project))).toEqual({ side: 'back', depth: 320 });
+    expect(islandBar(island(back.project))).toMatchObject({ side: 'back', depth: 320 });
   });
 
   /* A hand edited file is untrusted input like anything else. */
@@ -258,5 +259,83 @@ describe('it survives being saved and shared', () => {
     for (const [k, v] of Object.entries(BAR_RULES)) {
       expect(PROJECT[k], k).toBe(v);
     }
+  });
+});
+
+
+/* ---------------------------------------------------------------------------
+   Part of a side.
+
+   A bar was the whole of one side or nothing, which is not what people build.
+   Half of a 2400 island is a bar with two stools at one end and ordinary
+   cabinet behind the rest, and saying so used to be impossible: you got a
+   2400 overhang, and a bracket count and a stool count for a bar twice the
+   size of the one you were making.
+   --------------------------------------------------------------------------- */
+describe('a bar along part of a side', () => {
+  const isl = (bar) => ({ id: 'ISL', name: 'Island', kind: 'island', length: 2400, depth: 1120, bar });
+
+  it('left alone it is the whole side, which is what it always was', () => {
+    const wall = isl({ side: 'back', depth: 300 });
+    expect(barSpan(wall, PROJECT)).toBe(2400);
+    expect(barIsWholeSide(wall, PROJECT)).toBe(true);
+    expect(barRange(wall, PROJECT)).toEqual({ from: 0, to: 2400 });
+  });
+
+  it('a length makes it part of the side, and it starts where you say', () => {
+    const wall = isl({ side: 'back', depth: 300, from: 600, length: 1200 });
+    expect(barSpan(wall, PROJECT)).toBe(1200);
+    expect(barRange(wall, PROJECT)).toEqual({ from: 600, to: 1800 });
+    expect(barIsWholeSide(wall, PROJECT)).toBe(false);
+  });
+
+  /* Half the length is half the stools and, past the point it holds itself
+     up, half the brackets. Those counts were the whole reason the span had to
+     be real rather than assumed. */
+  it('the stools and the brackets follow the part, not the side', () => {
+    const clear = { ...BAR_RULES, ...PROJECT };
+    const whole = isl({ side: 'back', depth: 300 });
+    const half = isl({ side: 'back', depth: 300, length: 1200 });
+
+    expect(barSeats(half, PROJECT, clear)).toBeLessThan(barSeats(whole, PROJECT, clear));
+    expect(barSeats(half, PROJECT, clear))
+      .toBe(Math.floor(1200 / clear.barSeatWidth));
+  });
+
+  it('a bar longer than its side is a bar as long as its side', () => {
+    const wall = isl({ side: 'back', depth: 300, from: 2000, length: 9000 });
+    expect(barSpan(wall, PROJECT)).toBe(400);
+    expect(barRange(wall, PROJECT)).toEqual({ from: 2000, to: 2400 });
+  });
+
+  it('a start past the end of the island is a bar of nothing', () => {
+    const wall = isl({ side: 'back', depth: 300, from: 3000, length: 600 });
+    expect(barSpan(wall, PROJECT)).toBe(0);
+  });
+
+  it('an end bar is measured along the depth, not the length', () => {
+    const wall = isl({ side: 'right', depth: 300, length: 600 });
+    expect(barSideLength(wall, PROJECT)).toBe(1120);
+    expect(barSpan(wall, PROJECT)).toBe(600);
+  });
+
+  it('the span survives a save and a link', () => {
+    const p = starterProject();
+    island(p).bar = { side: 'back', depth: 300, from: 600, length: 1200 };
+    const want = { side: 'back', depth: 300, from: 600, length: 1200 };
+
+    expect(islandBar(island(hydrate({ project: p }).project))).toMatchObject(want);
+    expect(islandBar(island(decodeProject(encodeProject(p)).project))).toMatchObject(want);
+  });
+
+  /* A file saved before a bar could be part of a side has neither figure, and
+     has to open as what it was: a bar along the whole of its side. */
+  it('a bar saved before spans existed still opens as the whole side', () => {
+    const p = starterProject();
+    island(p).bar = { side: 'back', depth: 300 };
+    const back = islandBar(island(hydrate({ project: p }).project));
+
+    expect(back.length).toBeNull();
+    expect(barSpan(island(p), p.cfg, back)).toBe(island(p).length);
   });
 });

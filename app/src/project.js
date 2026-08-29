@@ -18,8 +18,8 @@
 import { FAMILY, PRICES, PROJECT, buildUnit, sheetFor, unitCost } from './catalog.js';
 import { NEST, nestProject } from './nesting.js';
 import {
-  baseRuns, benchLength, benchSchedule, endPanelParts, islandBench, islandKickRuns,
-  kickParts, usableLength,
+  baseRuns, benchArea, benchLength, benchSchedule, benchVolume, endPanelParts, islandBench,
+  islandKickRuns, kickParts, pieceVolume, usableLength,
 } from './runs.js';
 import { BAR_RULES } from './bar.js';
 import { assertMm, round1 } from './mm.js';
@@ -216,7 +216,7 @@ export const BAR_SIDES = [
 const BAR_SIDE_IDS = new Set(BAR_SIDES.map((s) => s.id));
 
 /** No bar. One object, so a project without one is not a special case. */
-export const NO_BAR = Object.freeze({ side: 'none', depth: 0 });
+export const NO_BAR = Object.freeze({ side: 'none', depth: 0, from: 0, length: null });
 
 /**
  * The breakfast bar on an island, as the model sees it.
@@ -231,7 +231,22 @@ export function islandBar(wall) {
   const side = BAR_SIDE_IDS.has(raw?.side) ? raw.side : 'none';
   const depth = Number.isFinite(Number(raw?.depth)) ? Math.max(0, Number(raw.depth)) : 0;
   if (side === 'none' || depth <= 0) return NO_BAR;
-  return { side, depth: round1(depth) };
+
+  /* How much of that side the bar runs along, and where it starts.
+
+     A bar was the whole of one side or nothing, which is not what people
+     build. Half of a 2400 island is a bar with two stools at one end and
+     ordinary cabinet behind the rest, and there was no way to say it: you
+     got a 2400 overhang and a bracket count and a stool count for a bar
+     twice the size of the one you were making.
+
+     Left empty the length is the whole side, which is what every project
+     that already exists gets. */
+  const from = Number.isFinite(Number(raw?.from)) ? Math.max(0, Number(raw.from)) : 0;
+  const length = Number.isFinite(Number(raw?.length)) && Number(raw.length) > 0
+    ? Number(raw.length) : null;
+
+  return { side, depth: round1(depth), from: round1(from), length: length && round1(length) };
 }
 
 /** True when a side of an island carries the bar. */
@@ -245,11 +260,41 @@ export const barOn = (bar, side) => bar.side === side && bar.depth > 0;
  * its depth. Getting these the wrong way round on a long shallow island is the
  * difference between six stools and two.
  */
-export function barSpan(wall, cfg, bar = islandBar(wall)) {
-  if (bar.depth <= 0) return 0;
+/** The whole of the side a bar is on, whether or not the bar fills it. */
+export function barSideLength(wall, cfg, bar = islandBar(wall)) {
   return bar.side === 'left' || bar.side === 'right'
     ? islandDepth(wall, cfg)
     : Number(wall.length) || 0;
+}
+
+/**
+ * How long the bar edge is, which is what the stools and the brackets are
+ * spaced along.
+ *
+ * The part of the side the bar actually runs along, clipped to the side it is
+ * on: a start past the end of the island, or a length longer than the side,
+ * is a bar as long as the side and not a bar hanging off the end of it.
+ */
+export function barSpan(wall, cfg, bar = islandBar(wall)) {
+  if (bar.depth <= 0) return 0;
+  const side = barSideLength(wall, cfg, bar);
+  const from = Math.min(bar.from || 0, side);
+  const want = bar.length == null ? side - from : bar.length;
+  return round1(Math.max(0, Math.min(want, side - from)));
+}
+
+/** Where the bar starts and ends along its side, clipped the same way. */
+export function barRange(wall, cfg, bar = islandBar(wall)) {
+  const from = Math.min(bar.from || 0, barSideLength(wall, cfg, bar));
+  return { from: round1(from), to: round1(from + barSpan(wall, cfg, bar)) };
+}
+
+/** True when the bar runs the whole of its side, which is the simple case. */
+export function barIsWholeSide(wall, cfg, bar = islandBar(wall)) {
+  if (bar.depth <= 0) return false;
+  const side = barSideLength(wall, cfg, bar);
+  const r = barRange(wall, cfg, bar);
+  return r.from <= 0.5 && r.to >= side - 0.5;
 }
 
 /**
@@ -1101,6 +1146,12 @@ export function totals(project) {
   return {
     cabinets, doors, drawers,
     benchMetres,
+    /* What the top actually is as a solid, not as a line. A stone or timber
+       benchtop is quoted, freighted and lifted by volume and weight as often
+       as by the metre, and one person cannot carry half a cubic metre of
+       stone. Worked out once, here, so every screen quotes the same figure. */
+    benchVolume: benchVolume(schedule),
+    benchArea: benchArea(schedule),
     benchPieces: schedule,
     benchRunMetres: benchMm / 1000,
     kickMetres: kickMm / 1000,
@@ -1120,8 +1171,37 @@ export function totals(project) {
 }
 
 /** Hardware the user typed in themselves, rather than anything derived. */
+/* ---------------------------------------------------------------------------
+   The things the model cannot know about.
+
+   A cabinet list can work out its own hinges. It cannot know which oven you
+   bought, that the splashback is on order, or that you are paying somebody to
+   template the stone. All of that is money in the job and none of it is
+   derivable, so it is typed, and it is grouped by what sort of thing it is
+   because an appliance and a box of screws are not the same kind of decision.
+   --------------------------------------------------------------------------- */
+
+export const EXTRA_KINDS = [
+  { id: 'hardware', name: 'Hardware',
+    note: 'Handles, legs, soft close kits, screws. Anything that goes on a cabinet.' },
+  { id: 'appliance', name: 'Appliances',
+    note: 'The oven, the cooktop, the sink, the tap. What goes in the holes the planner blocked out.' },
+  { id: 'other', name: 'Everything else',
+    note: 'Splashback, tiling, plumbing, electrical, the stone templating fee. Money in the job that is not a cabinet.' },
+];
+
+export const EXTRA_KIND_IDS = new Set(EXTRA_KINDS.map((k) => k.id));
+
+/** The kind an item is, falling back rather than dropping it. */
+export const extraKind = (e) =>
+  (EXTRA_KIND_IDS.has(e?.kind) ? e.kind : 'hardware');
+
 export const projectExtras = (project) =>
   (project.extras || []).filter((e) => e && e.name);
+
+/** The typed items of one kind, in the order they were added. */
+export const extrasOfKind = (project, kind) =>
+  (project.extras || []).filter((e) => e && extraKind(e) === kind);
 
 export const extrasCost = (project) =>
   projectExtras(project).reduce((a, e) => a + (Number(e.qty) || 0) * (Number(e.cost) || 0), 0);
@@ -1198,8 +1278,12 @@ export function benchPieces(project) {
        reporting five strips of 600 deep for one 2400 by 1120 slab: the two
        disagreed, and the order list was the one that was wrong. */
     if (isIsland(wall)) {
+      /* The bar with its span already worked out and clipped to the side it
+         is on, so the slab and the stool count are reading the same bar. */
+      const bar = islandBar(wall);
       const pieces = islandBench(
-        wall, islandDepth(wall, project.cfg), project.cfg, islandBar(wall),
+        wall, islandDepth(wall, project.cfg), project.cfg,
+        { ...bar, span: barSpan(wall, project.cfg, bar) },
       );
       for (const piece of pieces) {
         out.push({ ...piece, wallId: wall.id, wallName: wall.name });
