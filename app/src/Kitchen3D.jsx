@@ -26,7 +26,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Part, boxGeo, cssVar } from './Viewer.jsx';
 import {
-  NO_BAR, barBrackets, barSeats, facing, islandBar, islandDepth, unitWarnings, zRange,
+  NO_BAR, barBrackets, barSeats, frameBox, islandBar, islandDepth, unitFrame, unitWarnings,
 } from './project.js';
 import { BAR_RULES } from './bar.js';
 import { finishFor } from './finishes.js';
@@ -41,8 +41,8 @@ import {
   Vent, Washer, Window,
 } from './Fixtures.jsx';
 import {
-  FULL_SWING, arcPoint, degrees, doorSwing, drawerSlide, mirrorSector, openUntilBlocked,
-  partSector, swingSector,
+  FULL_SWING, arcPoint, degrees, doorSwing, drawerSlide, openUntilBlocked,
+  partSector, sectorInRoom, swingSector,
 } from './motion.js';
 
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -57,18 +57,17 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
    --------------------------------------------------------------------------- */
 
 function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDepth = 0,
-                   cfg, benchTop, show }) {
+                   islandLength = 0, cfg, benchTop, show }) {
   const { unit, x } = p;
   const travel = unit.cfg?.runnerLength ?? 500;
   const handles = useMemo(() => (show.handles ? handlesFor(unit) : []), [unit, show.handles]);
   const handleFor = (pred) => handles.filter(pred);
 
-  /* The two sides of an island face opposite ways, which is what makes it an
-     island rather than two cabinets glued back to back with their doors
-     looking at each other. The front run is the one turned around, so its
-     doors open out of the front face at z 0 and the back run's out of the
-     back face. Which way round that is belongs to the model: this reads it. */
-  const face = facing(p, islandDepth);
+  /* Which way this cabinet faces and where it stands. All four sides of an
+     island are a quarter turn and an origin, and the table that says which is
+     in the model, so the cabinet this draws is the same one the clearance
+     check measures and the plan of the floor shows. */
+  const face = unitFrame(p, islandLength, islandDepth);
 
   const partProps = {
     offset: [0, 0, 0], selected: sel, ghosted: ghost, hidden: false, warn,
@@ -129,18 +128,15 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
     </>
   );
 
-  if (face.flip) {
-    /* A half turn about the cabinet's own middle, landed so its front face
-       comes out at the offset. Turning it is the only way to face it the
-       other way: moving it leaves the doors on the wrong side. */
-    return (
-      <group position={[x + unit.width, unit.mountY, face.offset]} rotation={[0, Math.PI, 0]}>
-        <group position={[0, 0, 0]}>{body}</group>
-      </group>
-    );
-  }
-
-  return <group position={[x, unit.mountY, face.offset]}>{body}</group>;
+  /* A turn about the cabinet's own origin, landed where the frame says.
+     Turning it is the only way to face it another way: moving it leaves the
+     doors on the wrong side of the box. */
+  return (
+    <group position={[face.origin[0], unit.mountY, face.origin[1]]}
+           rotation={[0, face.rot, 0]}>
+      {body}
+    </group>
+  );
 }
 
 const VIEWS = {
@@ -386,29 +382,28 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
             onPointerOver: (e) => { e.stopPropagation(); setHovered(p); },
             onPointerOut: () => setHovered(null),
           };
-          const face = facing(p, lay.island ? depth : 0);
+          const face = unitFrame(p, lay.island ? lay.wall.length : 0, lay.island ? depth : 0);
           const inner = (
             <Appliance unit={unit} ghost={ghost}
                        benchHeight={cfg.benchHeight - unit.mountY} />
           );
+          const cage = frameBox(face, 0, unit.width, 0, unit.depth);
           return (
             <group key={p.item.uid} {...evt}>
-              {face.flip ? (
-                <group position={[x + unit.width, unit.mountY, face.offset]} rotation={[0, Math.PI, 0]}>
-                  {inner}
-                </group>
-              ) : (
-                <group position={[x, unit.mountY, face.offset]}>{inner}</group>
-              )}
+              <group position={[face.origin[0], unit.mountY, face.origin[1]]}
+                     rotation={[0, face.rot, 0]}>
+                {inner}
+              </group>
               {/* Selection reads off a wire cage rather than off a tint. Tinting
                   a fridge blue makes it stop being a fridge, which is the thing
                   drawing them properly was for. */}
               {sel && (
                 <lineSegments position={[
-                  x + unit.width / 2, unit.mountY + unit.height / 2,
-                  (zRange(face, 0, unit.depth)[0] + zRange(face, 0, unit.depth)[1]) / 2,
+                  (cage.x0 + cage.x1) / 2, unit.mountY + unit.height / 2,
+                  (cage.z0 + cage.z1) / 2,
                 ]}>
-                  <edgesGeometry args={[boxGeo(unit.width + 16, unit.height + 16, unit.depth + 16).box]} />
+                  <edgesGeometry args={[boxGeo(
+                    cage.x1 - cage.x0 + 16, unit.height + 16, cage.z1 - cage.z0 + 16).box]} />
                   <lineBasicMaterial color={cssVar('--accent', '#356F51')} />
                 </lineSegments>
               )}
@@ -418,7 +413,8 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
 
         return (
           <Cabinet key={p.item.uid} p={p} open={open} sel={sel} ghost={ghost} warn={warn}
-                   islandDepth={lay.island ? depth : 0} cfg={cfg} show={show}
+                   islandDepth={lay.island ? depth : 0}
+                   islandLength={lay.island ? lay.wall.length : 0} cfg={cfg} show={show}
                    benchTop={cfg.benchHeight}
                    setHovered={setHovered} setSelected={setSelected} />
         );
@@ -426,16 +422,21 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
 
       {/* kickboard, set back from the front face */}
       {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
-        <mesh key={`k${p.item.uid}`} receiveShadow
-              /* Under the front of the cabinet, set back from its face. Which
-                 way the cabinet faces decides which end of it that is. */
-              position={[p.x + p.unit.width / 2, cfg.kick / 2,
-                (({ offset, flip }) => (flip ? offset - 60 : offset + p.unit.depth - 60))(
-                  facing(p, lay.island ? depth : 0))]}
-              onClick={noop}>
-          <boxGeometry args={[p.unit.width, cfg.kick, 18]} />
-          <meshStandardMaterial color={kickCol} roughness={0.86} />
-        </mesh>
+        /* Under the front of the cabinet, set back from its face. Which way
+           the cabinet faces decides where that is, and how the strip is
+           turned, so both come off the same frame the carcass used. */
+        (() => {
+          const face = unitFrame(p, lay.island ? lay.wall.length : 0, lay.island ? depth : 0);
+          const box = frameBox(face, 0, p.unit.width, p.unit.depth - 60, p.unit.depth - 42);
+          return (
+            <mesh key={`k${p.item.uid}`} receiveShadow
+                  position={[(box.x0 + box.x1) / 2, cfg.kick / 2, (box.z0 + box.z1) / 2]}
+                  onClick={noop}>
+              <boxGeometry args={[box.x1 - box.x0, cfg.kick, box.z1 - box.z0]} />
+              <meshStandardMaterial color={kickCol} roughness={0.86} />
+            </mesh>
+          );
+        })()
       ))}
 
       {/* The splashback: the wall between the benchtop and the wall cabinets.
@@ -1003,10 +1004,11 @@ function SwingArcs({ lay, cfg, selected }) {
        place, which is how the arcs used to report every island door as
        fouling the cabinet backing onto it. */
     const boxes = placed.map((q) => {
-      const [z0, z1] = zRange(facing(q, depth), 0, q.unit.depth);
+      const b = frameBox(unitFrame(q, depth ? lay.wall.length : 0, depth),
+        0, q.unit.width, 0, q.unit.depth);
       return {
         uid: q.item.uid,
-        x0: q.x, x1: q.x + q.unit.width, z0, z1,
+        ...b,
         y0: q.unit.mountY, y1: q.unit.mountY + q.unit.height,
         label: q.unit.family.name,
       };
@@ -1020,13 +1022,11 @@ function SwingArcs({ lay, cfg, selected }) {
 
       // The cabinet whose door it is cannot foul itself.
       const others = boxes.filter((q) => q.uid !== p.item.uid);
-      const face = facing(p, depth);
+      const face = unitFrame(p, depth ? lay.wall.length : 0, depth);
 
       for (const door of doors) {
-        const shut = swingSector(door, p.x, FULL_SWING, p.unit.mountY);
-        const placedSector = face.flip
-          ? mirrorSector(shut, face.offset)
-          : { ...shut, cz: shut.cz + face.offset };
+        const shut = swingSector(door, 0, FULL_SWING, p.unit.mountY);
+        const placedSector = sectorInRoom(shut, face.origin, face.rot);
 
         const { angle } = openUntilBlocked(placedSector, others);
         const reach = Math.max(angle, 0.08);

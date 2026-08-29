@@ -133,8 +133,36 @@ export const isIsland = (wall) => wallKind(wall) === 'island';
 export const islandDepth = (wall, cfg) =>
   (Number(wall?.depth) > 0 ? Number(wall.depth) : (cfg?.baseDepth ?? 560) * 2);
 
-/** Which side of an island a cabinet is on. Only islands have two. */
-export const sideOf = (item) => (item?.settings?.side === 'back' ? 'back' : 'front');
+/* ---------------------------------------------------------------------------
+   The four sides of an island.
+
+   An island is the one run in a kitchen with nothing behind it, so every one
+   of its four faces is a face you can stand at and put cabinets on. Two of
+   them run along its length and two along its depth, which is the only real
+   difference between them.
+   --------------------------------------------------------------------------- */
+
+export const ISLAND_SIDES = [
+  { id: 'front', name: 'Front', along: 'length' },
+  { id: 'back', name: 'Back', along: 'length' },
+  { id: 'left', name: 'Left end', along: 'depth' },
+  { id: 'right', name: 'Right end', along: 'depth' },
+];
+
+export const ISLAND_SIDE_IDS = ISLAND_SIDES.map((s) => s.id);
+const SIDE_SET = new Set(ISLAND_SIDE_IDS);
+
+/** Which side of an island a cabinet is on. Anything else is the front. */
+export const sideOf = (item) =>
+  (SIDE_SET.has(item?.settings?.side) ? item.settings.side : 'front');
+
+/** How long a side is: the island's length, or its depth on an end. */
+export function sideRun(wall, cfg, side = 'front') {
+  if (!isIsland(wall)) return Number(wall?.length) || 0;
+  return (side === 'left' || side === 'right')
+    ? islandDepth(wall, cfg)
+    : Number(wall.length) || 0;
+}
 
 /* ---------------------------------------------------------------------------
    Which way a cabinet faces on its run.
@@ -155,21 +183,72 @@ export const sideOf = (item) => (item?.settings?.side === 'back' ? 'back' : 'fro
    --------------------------------------------------------------------------- */
 
 /**
- * How a unit's own z maps onto its run's z.
+ * Where a unit sits on its run, and how far it is turned.
  *
- * @returns {{offset:number, flip:boolean}} local z becomes
- *          flip ? offset - z : offset + z
+ * This is the one table the whole four sided island rests on. A point in the
+ * unit's own space, with x across its width and z running from its back at 0
+ * to its front at its depth, lands at
+ *
+ *     [ox + x cos(rot) + z sin(rot), oz - x sin(rot) + z cos(rot)]
+ *
+ * which is the same formula the room uses to place a wall, so the two compose
+ * without either knowing about the other.
+ *
+ * A wall has one side and everything on it faces the room, so it is the
+ * identity: no turn, and the front lands at the cabinet's own depth.
+ *
+ * An island has four, and each is a quarter turn. Front and back come out as
+ * exactly the transforms this app already used for them, which is the point:
+ * this generalises what was there rather than replacing it.
+ *
+ * @param {object} p          a placed unit
+ * @param {number} length     the island's length, 0 for a wall
+ * @param {number} depth      the island's depth, 0 for a wall
+ * @returns {{origin:[number,number], rot:number}}
  */
-export function facing(p, islandDepth = 0) {
-  if (!islandDepth) return { offset: 0, flip: false };
-  return p.side === 'back'
-    ? { offset: islandDepth - p.unit.depth, flip: false }
-    : { offset: p.unit.depth, flip: true };
+export function unitFrame(p, length = 0, depth = 0) {
+  const along = p.x;
+  const w = p.unit.width;
+  const d = p.unit.depth;
+
+  if (!depth) return { origin: [along, 0], rot: 0 };
+
+  switch (p.side) {
+    case 'back': return { origin: [along, depth - d], rot: 0 };
+    case 'left': return { origin: [d, along], rot: -Math.PI / 2 };
+    case 'right': return { origin: [length - d, along + w], rot: Math.PI / 2 };
+    default: return { origin: [along + w, d], rot: Math.PI };
+  }
 }
 
-/** A range of the unit's own z, put on the run. Ordered low to high. */
-export const zRange = (f, z0, z1) =>
-  (f.flip ? [f.offset - z1, f.offset - z0] : [f.offset + z0, f.offset + z1]);
+/** A point in a unit's own space, put on its run. */
+export function framePoint(frame, x, z) {
+  const cos = Math.cos(frame.rot);
+  const sin = Math.sin(frame.rot);
+  return [
+    frame.origin[0] + x * cos + z * sin,
+    frame.origin[1] - x * sin + z * cos,
+  ];
+}
+
+/**
+ * A box in a unit's own space, put on its run, as an axis aligned box.
+ *
+ * The turns are all quarters, so an upright box lands back on the axes and
+ * everything downstream stays a plain rectangle test.
+ */
+export function frameBox(frame, x0, x1, z0, z1) {
+  const pts = [
+    framePoint(frame, x0, z0), framePoint(frame, x1, z0),
+    framePoint(frame, x0, z1), framePoint(frame, x1, z1),
+  ];
+  return {
+    x0: Math.min(...pts.map((q) => q[0])),
+    x1: Math.max(...pts.map((q) => q[0])),
+    z0: Math.min(...pts.map((q) => q[1])),
+    z1: Math.max(...pts.map((q) => q[1])),
+  };
+}
 
 /**
  * Where an island stands on the floor.
@@ -226,8 +305,50 @@ export const NO_BAR = Object.freeze({ side: 'none', depth: 0, from: 0, length: n
  *
  * @returns {{side:string, depth:number}}
  */
+/**
+ * Every breakfast bar on an island.
+ *
+ * A list, because an island has four sides and a kitchen can want a bar on
+ * more than one of them: an overhang along the back to sit at and a return
+ * across an end is an ordinary thing to build and could not be said at all.
+ *
+ * A project saved when there was only ever one bar carries `bar` rather than
+ * `bars`, and opens as a list of one.
+ */
+export function islandBars(wall) {
+  const raw = Array.isArray(wall?.bars) ? wall.bars
+    : (wall?.bar ? [wall.bar] : []);
+
+  const out = [];
+  const used = new Set();
+  for (const one of raw) {
+    const bar = cleanOneBar(one);
+    if (bar.depth <= 0) continue;
+    // One bar per side. Two overhangs off the same edge is one overhang.
+    if (used.has(bar.side)) continue;
+    used.add(bar.side);
+    out.push(bar);
+  }
+  return out;
+}
+
+/** The bar on one side, or no bar. */
+export const barOnSide = (wall, side) =>
+  islandBars(wall).find((b) => b.side === side) || NO_BAR;
+
+/**
+ * The first bar, for everything written when there could only be one.
+ *
+ * Kept so nothing that reads a single bar has to learn about the list before
+ * it is worth its while, and so a project with one bar behaves exactly as it
+ * did.
+ */
 export function islandBar(wall) {
-  const raw = wall?.bar;
+  const all = islandBars(wall);
+  return all.length ? all[0] : NO_BAR;
+}
+
+function cleanOneBar(raw) {
   const side = BAR_SIDE_IDS.has(raw?.side) ? raw.side : 'none';
   const depth = Number.isFinite(Number(raw?.depth)) ? Math.max(0, Number(raw.depth)) : 0;
   if (side === 'none' || depth <= 0) return NO_BAR;
@@ -303,6 +424,13 @@ export function barIsWholeSide(wall, cfg, bar = islandBar(wall)) {
  * Elbow room per seat, not stool width: two stools touching is two stools
  * nobody can sit on at once.
  */
+/** The stools at every bar on an island, and the brackets under all of them. */
+export const barSeatsAll = (wall, cfg, clear) =>
+  islandBars(wall).reduce((a, b) => a + barSeats(wall, cfg, clear, b), 0);
+
+export const barBracketsAll = (wall, cfg, clear) =>
+  islandBars(wall).reduce((a, b) => a + barBrackets(wall, cfg, clear, b), 0);
+
 export function barSeats(wall, cfg, clear, bar = islandBar(wall)) {
   const each = Number(clear?.barSeatWidth) || 0;
   if (bar.depth <= 0 || each <= 0) return 0;
@@ -352,9 +480,10 @@ export function floorPlan(project) {
         corner: false,
         island: true,
         depth: islandDepth(wall, cfg),
-        /* Carried here so the checks and the 3D read the same bar the price
+        /* Carried here so the checks and the 3D read the same bars the price
            did, rather than each working it out off the wall record. */
         bar: islandBar(wall),
+        bars: islandBars(wall).map((b) => ({ ...b, span: barSpan(wall, cfg, b) })),
       };
     });
 
@@ -384,9 +513,15 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0, endReserve = 0)
   /* An island has two sides and they are laid out independently: a cabinet on
      the back does not push one on the front along. A wall has one side, and
      everything on it is on the front, so the same code covers both. */
+  /* One cursor per side. A wall has one side and everything is on the front.
+     An island has four and they fill independently: a cabinet on its left end
+     does not push one on its front along, and a full front does not make the
+     left end full. */
   const cursors = {
     front: { base: startOffset, wall: startOffset },
     back: { base: 0, wall: 0 },
+    left: { base: 0, wall: 0 },
+    right: { base: 0, wall: 0 },
   };
   let n = 0;
   let f = 0;
@@ -431,10 +566,11 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0, endReserve = 0)
     placed.push({ item, unit, x, where, side, label, codeId, pinned: pinned !== null });
   }
 
-  /* How far along each side has been filled. An island reports the longer of
-     its two sides as its run, because that is what has to fit in its length. */
-  const baseRun = Math.max(cursors.front.base, cursors.back.base);
-  const wallRun = Math.max(cursors.front.wall, cursors.back.wall);
+  /* How far along has been filled. An island reports the fullest of its four
+     sides, because that is the one that has to fit. */
+  const sides = Object.values(cursors);
+  const baseRun = Math.max(...sides.map((c) => c.base));
+  const wallRun = Math.max(...sides.map((c) => c.wall));
 
   /* The last millimetre a cabinet on this wall may reach. Everything that
      places, snaps, gaps or complains measures against this rather than the
@@ -445,10 +581,21 @@ export function layoutWall(wall, cfg = PROJECT, startOffset = 0, endReserve = 0)
   return {
     placed, baseRun, wallRun, run: Math.max(baseRun, wallRun),
     wall, startOffset, endReserve, limit, island,
-    /* The two sides, for anything that draws them separately. A wall has an
-       empty back, which every consumer can ignore without knowing why. */
-    front: placed.filter((p) => p.side !== 'back'),
+    cursors,
+    /* Each side on its own, for anything that draws or measures one at a
+       time. A wall has everything on its front and the other three empty,
+       which every consumer can ignore without knowing why. */
+    front: placed.filter((p) => p.side === 'front'),
     back: placed.filter((p) => p.side === 'back'),
+    left: placed.filter((p) => p.side === 'left'),
+    right: placed.filter((p) => p.side === 'right'),
+    /* How long each side is, so nothing has to work it out again from the
+       island's length and depth and get the ends the wrong way round. */
+    runOf: (side) => (island
+      ? ((side === 'left' || side === 'right')
+        ? (Number(wall.depth) > 0 ? Number(wall.depth) : (cfg?.baseDepth ?? 560) * 2)
+        : wall.length)
+      : wall.length),
   };
 }
 
@@ -722,7 +869,11 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
     if (Number.isFinite(x)) out.push({ x, kind, label, pull });
   };
 
-  add(lay.startOffset, 'start', 'start of the wall');
+  /* The two ends of the side this cabinet is on. On a wall that is the wall;
+     on an island's end it is the island's depth, not its length. */
+  const runLen = lay.runOf ? lay.runOf(lay.island ? sideOf(item) : 'front') : lay.wall.length;
+
+  add(lay.startOffset, 'start', 'start of the run');
 
   /* The far end, which is not always the end of the wall. When the corner is
      built from the next wall, that cabinet reaches back to here, and butting
@@ -732,18 +883,18 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
   if (lay.endReserve > 0) {
     add(lay.limit - w, 'corner', 'the corner cabinet on the next wall', opts.cornerPull);
   } else {
-    add(lay.wall.length - w, 'end', 'end of the wall');
+    add(runLen - w, 'end', 'end of the run');
   }
 
-  /* Only what is beside it. On an island the other side occupies the same
-     stretch of x, so without this a cabinet on the back snaps to the edges of
+  /* Only what is beside it. Every side of an island runs along the same
+     numbers, so without this a cabinet on the back snaps to the edges of
      cabinets on the front, which are behind it rather than next to it. */
   const side = lay.island ? sideOf(item) : null;
 
   for (const p of lay.placed) {
     if (p.item.uid === item.uid) continue;
     if (!sameRun(where, p.where)) continue;
-    if (side !== null && (p.side === 'back' ? side !== 'back' : side === 'back')) continue;
+    if (side !== null && p.side !== side) continue;
     add(p.x + p.unit.width, 'butt', `right of ${p.label || p.unit.family.name}`);
     add(p.x - w, 'butt', `left of ${p.label || p.unit.family.name}`);
   }
@@ -809,8 +960,43 @@ export function snapX(lay, item, unit, rawX, opts = SNAP) {
  * will not. Used when you add one, so it lands in the first real gap rather
  * than on top of something.
  */
+/**
+ * The corners of an island side that the sides next to it already fill.
+ *
+ * A cabinet on an end butts against the ends of the front and back runs, so
+ * what an end really has is its depth less however deep those two are. On a
+ * 1120 island with 560 cabinets front and back, that is nothing at all: the
+ * ends are the exposed side panels of the long runs and there is no room on
+ * them, which is exactly how a real island is built.
+ *
+ * Taking it off the run rather than warning about it afterwards is what stops
+ * a cabinet being dropped straight into a corner that is already full.
+ *
+ * @returns {[number, number][]} spans of the side that are already occupied
+ */
+export function cornerTaken(lay, side) {
+  if (!lay.island) return [];
+
+  const ends = side === 'left' || side === 'right';
+  // The two sides that run into this one's corners, in order along it.
+  const [atStart, atEnd] = ends ? ['front', 'back'] : ['left', 'right'];
+
+  const deepest = (which) => lay.placed
+    .filter((p) => p.side === which && p.where !== 'wall')
+    .reduce((a, p) => Math.max(a, p.unit.depth || 0), 0);
+
+  const run = lay.runOf(side);
+  const out = [];
+  const a = deepest(atStart);
+  const b = deepest(atEnd);
+  if (a > 0) out.push([0, a]);
+  if (b > 0) out.push([Math.max(0, run - b), run]);
+  return out;
+}
+
 export function firstFreeX(lay, unit, width, side = 'front') {
   const where = occupies(unit.kind, unit.fullHeight);
+  const runLen = lay.runOf ? lay.runOf(side) : lay.wall.length;
   /* Only what is on the same side counts. A cabinet on the back of an island
      does not push one on the front along, so looking at both sides finds the
      island full when the side you are adding to is empty.
@@ -820,10 +1006,12 @@ export function firstFreeX(lay, unit, width, side = 'front') {
      about it afterwards is what stops a new cabinet landing in one. */
   const taken = [
     ...lay.placed
-      .filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
+      .filter((p) => (lay.island ? p.side === side : true))
       .filter((p) => sameRun(where, p.where))
       .map((p) => [p.x, p.x + p.unit.width]),
     ...blockingSpans(lay, unit).map((b) => [b.x0, b.x1]),
+    /* And the corners the sides next to this one already stand in. */
+    ...cornerTaken(lay, side),
   ].sort((a, b) => a[0] - b[0]);
 
   let cursor = lay.startOffset;
@@ -831,7 +1019,10 @@ export function firstFreeX(lay, unit, width, side = 'front') {
     if (a - cursor >= width) return cursor;
     cursor = Math.max(cursor, b);
   }
-  return cursor + width <= lay.limit + 0.5 ? cursor : null;
+  /* An island's end is as long as the island is deep, which is not what the
+     wall's limit says. */
+  const stop = lay.island ? runLen : lay.limit;
+  return cursor + width <= stop + 0.5 ? cursor : null;
 }
 
 /**
@@ -847,18 +1038,25 @@ export function firstFreeX(lay, unit, width, side = 'front') {
  * a screen that reimplements it will get it wrong in exactly the way a test
  * of the screen's copy will not notice.
  *
- * @returns {{x: ?number, side: 'front'|'back'}} x null when it fits nowhere
+ * @returns {{x: ?number, side: string}} x null when it fits nowhere
  */
 export function placeOnRun(lay, unit, width, want = 'front') {
-  const side = want === 'back' ? 'back' : 'front';
+  const side = SIDE_SET.has(want) ? want : 'front';
   const first = firstFreeX(lay, unit, width, side);
   if (first !== null) return { x: first, side };
 
   if (!lay.island) return { x: null, side };
 
-  const other = side === 'back' ? 'front' : 'back';
-  const second = firstFreeX(lay, unit, width, other);
-  return second === null ? { x: null, side } : { x: second, side: other };
+  /* Round the island, starting from the one you are looking at. A full front
+     is not a full island: there are three more faces on it, and filling the
+     thing you are working on beats stacking cabinets past the end of one
+     side of it. */
+  const order = ISLAND_SIDE_IDS.filter((id) => id !== side);
+  for (const other of order) {
+    const at = firstFreeX(lay, unit, width, other);
+    if (at !== null) return { x: at, side: other };
+  }
+  return { x: null, side };
 }
 
 /**
@@ -872,7 +1070,7 @@ export function placeOnRun(lay, unit, width, want = 'front') {
 export function runGaps(lay, which = 'base', side = null) {
   const spans = lay.placed
     .filter((p) => (which === 'wall' ? p.where !== 'base' : p.where !== 'wall'))
-    .filter((p) => side === null || (p.side === 'back' ? side === 'back' : side !== 'back'))
+    .filter((p) => side === null || p.side === side)
     .map((p) => [p.x, p.x + p.unit.width])
     .sort((a, b) => a[0] - b[0]);
   if (!spans.length) return [];
@@ -884,8 +1082,10 @@ export function runGaps(lay, which = 'base', side = null) {
     cursor = Math.max(cursor, b);
   }
   /* Against the limit, not the wall. The stretch a corner cabinet on the next
-     wall is standing in is not a gap you can fill: it is already full. */
-  if (lay.limit - cursor > 5) gaps.push({ x: cursor, w: lay.limit - cursor, trailing: true });
+     wall is standing in is not a gap you can fill: it is already full. On an
+     island the limit is the side's own length, which on an end is the depth. */
+  const stop = lay.island && side ? lay.runOf(side) : lay.limit;
+  if (stop - cursor > 5) gaps.push({ x: cursor, w: stop - cursor, trailing: true });
   return gaps;
 }
 
@@ -896,11 +1096,18 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
   const { unit, x } = p;
   const s = unit.settings;
 
-  if (x + unit.width > lay.limit + 0.5) {
-    const over = Math.round(x + unit.width - lay.limit);
+  /* An island's end is as long as the island is deep. Measuring a cabinet on
+     it against the island's length says a 600 cabinet on a 1120 deep end has
+     1800mm of room, which it does not. */
+  const stop = lay.island && lay.runOf ? lay.runOf(p.side) : lay.limit;
+  if (x + unit.width > stop + 0.5) {
+    const over = Math.round(x + unit.width - stop);
+    const name = ISLAND_SIDES.find((q) => q.id === p.side)?.name.toLowerCase();
     out.push(lay.endReserve > 0
       ? `Runs ${over}mm into the corner cabinet on the next wall`
-      : `Past the end of the wall by ${over}mm`);
+      : lay.island
+        ? `Past the end of the ${name} by ${over}mm`
+        : `Past the end of the wall by ${over}mm`);
   }
 
   /* Two cabinets in the same run cannot occupy the same millimetres. Before
@@ -915,11 +1122,10 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
      same stretch of x back to back, so without this every cabinet on the
      front of one was reported as overlapping the cabinet behind it, which is
      not an overlap: it is what back to back means. */
-  const mySide = p.side === 'back' ? 'back' : 'front';
   for (const q of lay.placed) {
     if (q.item.uid === p.item.uid) continue;
     if (!sameRun(p.where, q.where)) continue;
-    if (lay.island && (q.side === 'back' ? 'back' : 'front') !== mySide) continue;
+    if (lay.island && q.side !== p.side) continue;
     const over = Math.min(x + unit.width, q.x + q.unit.width) - Math.max(x, q.x);
     if (over > 0.5) {
       out.push(`Overlaps ${q.label || q.unit.family.name} by ${Math.round(over)}mm`);
@@ -1031,7 +1237,44 @@ export function wallWarnings(lay, project) {
     }
   }
 
-  if (lay.baseRun > lay.limit + 0.5) {
+  /* An island's ends are as long as it is deep, so a run that fits its length
+     can still be too long for the end it is on. Checked per side, because the
+     one number `baseRun` cannot say which of four sides it came from. */
+  if (lay.island) {
+    /* An end whose corners are both full has no room on it at all. That is
+       not a mistake, it is what a 1120 island with 560 cabinets front and
+       back is: the ends are the exposed side panels of the long runs. Worth
+       saying, because otherwise you go looking for the room. */
+    for (const side of ['left', 'right']) {
+      const room = lay.runOf(side);
+      const free = room - cornerTaken(lay, side)
+        .reduce((a, [x0, x1]) => a + (x1 - x0), 0);
+      const onIt = lay.placed.some((p) => p.side === side && p.where !== 'wall');
+      const name = ISLAND_SIDES.find((q) => q.id === side).name.toLowerCase();
+      if (free <= 0 && !onIt) {
+        out.push({
+          level: 'note',
+          text: `The ${name} has no room on it: the front and back runs fill the island's ${Math.round(room)}mm of depth between them. Make the island deeper, or leave one of the long sides short, to put cabinets on it.`,
+        });
+      }
+    }
+
+    for (const side of ISLAND_SIDE_IDS) {
+      const run = lay.placed
+        .filter((p) => p.side === side && p.where !== 'wall')
+        .reduce((a, p) => Math.max(a, p.x + p.unit.width), 0);
+      const room = lay.runOf(side);
+      if (run > room + 0.5) {
+        const name = ISLAND_SIDES.find((q) => q.id === side).name.toLowerCase();
+        out.push({
+          level: 'error',
+          text: `The ${name} of the island is filled to ${Math.round(run)}mm against ${Math.round(room)}mm of ${side === 'left' || side === 'right' ? 'depth' : 'length'}. Reduce by ${Math.round(run - room)}mm.`,
+        });
+      }
+    }
+  }
+
+  if (!lay.island && lay.baseRun > lay.limit + 0.5) {
     const over = Math.round(lay.baseRun - lay.limit);
     out.push(lay.endReserve > 0
       ? { level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm and only reaches ${Math.round(lay.limit)}mm before the corner cabinet on the next wall. Reduce by ${over}mm.` }
@@ -1041,12 +1284,13 @@ export function wallWarnings(lay, project) {
        say where it is rather than only how much is left over. An island has
        two sides that fill independently, so each is asked separately and the
        answer says which one it is about. */
-    const sides = lay.island ? ['front', 'back'] : [null];
+    const sides = lay.island ? ISLAND_SIDE_IDS : [null];
     for (const side of sides) {
-      const where = side ? ` on the ${side} of the island` : '';
+      const name = ISLAND_SIDES.find((q) => q.id === side)?.name.toLowerCase();
+      const where = side ? ` on the ${name} of the island` : '';
       const gaps = runGaps(lay, 'base', side);
       const filled = lay.placed.some((p) => p.where !== 'wall'
-        && (side === null || (p.side === 'back' ? side === 'back' : side !== 'back')));
+        && (side === null || p.side === side));
 
       for (const g of gaps.filter((q) => !q.trailing)) {
         out.push({ level: 'warn', text: `${Math.round(g.w)}mm gap at ${Math.round(g.x)}mm along the base run${where}. Add a filler, widen a cabinet, or press Close gaps.` });
@@ -1280,10 +1524,15 @@ export function benchPieces(project) {
     if (isIsland(wall)) {
       /* The bar with its span already worked out and clipped to the side it
          is on, so the slab and the stool count are reading the same bar. */
-      const bar = islandBar(wall);
+      /* Every bar on the island, each with its span already worked out and
+         clipped to the side it is on, so the slab and the stool counts are
+         reading the same bars. */
+      const bars = islandBars(wall).map((b) => ({
+        ...b, span: barSpan(wall, project.cfg, b),
+      }));
       const pieces = islandBench(
         wall, islandDepth(wall, project.cfg), project.cfg,
-        { ...bar, span: barSpan(wall, project.cfg, bar) },
+        bars.length ? bars : { side: 'none', depth: 0 },
       );
       for (const piece of pieces) {
         out.push({ ...piece, wallId: wall.id, wallName: wall.name });
@@ -1358,7 +1607,9 @@ export function barFittings(project) {
   const out = [];
   for (const wall of project.walls) {
     if (!isIsland(wall)) continue;
-    const qty = barBrackets(wall, project.cfg, clear);
+    /* Every bar on the island, not the first one. Two overhangs need two
+       sets of brackets, and counting only one is money left off the order. */
+    const qty = barBracketsAll(wall, project.cfg, clear);
     if (qty > 0) out.push({ type: 'barBracket', qty, where: wall.name });
   }
   return out;

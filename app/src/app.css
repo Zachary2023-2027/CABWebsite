@@ -1766,3 +1766,12 @@ kbd {
 /* The add buttons on the three extras lists. In a grid they stretch to the
    card, which makes a quiet action look like the point of the card. */
 .extras > .btn { justify-self: start; }
+
+
+/* The four sided island: the side picker, and the list of bars. */
+.side-count {
+  margin-left: 6px; font-size: var(--fs-1); opacity: 0.7;
+  font-family: var(--font-mono);
+}
+.bar-row { display: grid; gap: var(--sp-2); background: var(--sunken); }
+.bar-add { justify-self: start; }

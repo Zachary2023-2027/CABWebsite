@@ -167,3 +167,39 @@ describe('where a cabinet is drawn is where it is measured', () => {
     expect(sums(base.links)).toBeCloseTo(wallA.length, 6);
   });
 });
+
+
+/* ---------------------------------------------------------------------------
+   An island's ends.
+
+   They run along its depth, not its length. A chain that took the layout's
+   limit, which is about the length, ran the dimensions on a 1120 deep end out
+   to 2400 and said the end was twice as long as it is.
+   --------------------------------------------------------------------------- */
+describe('an island end is dimensioned along its depth', () => {
+  const isle = (units = []) => ({
+    id: 'ISL', name: 'Island', kind: 'island', length: 2400, depth: 1120,
+    obstacles: [], units,
+  });
+
+  it('the chain closes on the depth, not the length', () => {
+    const lay = layoutWall(isle([
+      { uid: 'a', familyId: 'base-1door', settings: { width: 600, x: 0, side: 'left' } },
+    ]), PROJECT);
+
+    const { chains } = elevationChains(lay, lay.left, (p) => p.x, lay.runOf('left'));
+    for (const chain of chains) {
+      expect(sums(chain.links), chain.id).toBeCloseTo(1120, 6);
+      expect(chain.links[chain.links.length - 1].x1).toBeCloseTo(1120, 6);
+    }
+  });
+
+  it('and a long side still closes on the length', () => {
+    const lay = layoutWall(isle([
+      { uid: 'a', familyId: 'base-1door', settings: { width: 600, x: 0 } },
+    ]), PROJECT);
+
+    const { chains } = elevationChains(lay, lay.front, (p) => p.x, lay.runOf('front'));
+    for (const chain of chains) expect(sums(chain.links), chain.id).toBeCloseTo(2400, 6);
+  });
+});

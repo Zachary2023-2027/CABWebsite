@@ -199,11 +199,11 @@ function Appliance({ x, y, w, h, name }) {
 
 export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onHover, onDrag,
                                    onObstacle, side = 'front' }) {
-  /* An island has two sides and you work on one at a time, so the drawing
+  /* An island has four sides and you work on one at a time, so the drawing
      shows the side you are on. A wall has one side and everything is on it,
      which is what 'front' means for a wall. */
   const shown = lay.island
-    ? lay.placed.filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
+    ? lay.placed.filter((p) => p.side === side)
     : lay.placed;
 
   /* The drag is held here and committed on release. Writing every pointer
@@ -288,14 +288,19 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
 
   const wall = lay.wall;
   const CEIL = cfg.ceiling;
-  const L = wall.length;
+  /* As long as the side being drawn. An island's end runs along its depth,
+     and drawing it against the island's length puts a 600 cabinet in the
+     middle of three metres of floor that is not there. */
+  const L = lay.island && lay.runOf ? lay.runOf(side) : wall.length;
   /* Room for the dimensions. The left pad carries the height chain, the
      bottom pad carries however many horizontal chains this wall has, and both
      are worked out from the chains rather than being constants somebody has
      to remember to change. */
   const shownChains = useMemo(
-    () => elevationChains(lay, shown, (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x)),
-    [lay, shown, drag],
+    () => elevationChains(lay, shown,
+      (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x),
+      lay.island && lay.runOf ? lay.runOf(side) : lay.wall.length),
+    [lay, shown, drag, side],
   );
   const heights = useMemo(() => heightChain(lay, cfg, shown), [lay, cfg, shown]);
 

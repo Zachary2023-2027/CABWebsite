@@ -15,7 +15,7 @@
    =========================================================================== */
 
 import { FAMILY, PRICE_SEED, PROJECT } from './catalog.js';
-import { EXTRA_KIND_IDS, ROOM_SHAPES, allParts } from './project.js';
+import { EXTRA_KIND_IDS, ISLAND_SIDE_IDS, ROOM_SHAPES, allParts } from './project.js';
 import { migrateRunnerClearance } from './hardware.js';
 import { cleanStack } from './stack.js';
 import { cleanObstacle } from './obstacles.js';
@@ -134,7 +134,13 @@ export function hydrate(raw) {
     /* The breakfast bar. A side nobody recognises or an overhang that is not
        a number is no bar rather than a broken one, and the island still
        opens. */
-    ...(cleanBar(w.bar) ? { bar: cleanBar(w.bar) } : {}),
+    /* Every bar on the island. A file written when there could only be one
+       carries `bar` rather than `bars`, and opens as a list of one. */
+    ...(() => {
+      const list = (Array.isArray(w.bars) ? w.bars : (w.bar ? [w.bar] : []))
+        .map(cleanBar).filter(Boolean).slice(0, 4);
+      return list.length ? { bars: list } : {};
+    })(),
     length: Number(w.length) > 0 ? Number(w.length) : 3600,
     /* Cleaned rather than filtered. The old test threw away anything with a
        bad number in it, which quietly deleted a window because its height
@@ -391,10 +397,12 @@ function cleanSettings(s) {
       continue;
     }
     if (k === 'side') {
-      // Only an island has two sides, and only 'back' means anything.
-      if (v === 'back') out[k] = 'back';
+      /* Which side of an island a cabinet is on. Four of them now, and
+         anything else is the front, which is what a wall's cabinets are. */
+      if (ISLAND_SIDE_IDS.includes(v) && v !== 'front') out[k] = v;
       continue;
     }
+
     if (k === 'x') {
       /* Where the cabinet was put along its wall. Anything that is not a
          real number is dropped, and the cabinet goes back to flowing after

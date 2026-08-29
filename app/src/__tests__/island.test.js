@@ -260,14 +260,63 @@ describe('a full side spills onto the other one', () => {
     expect(side).toBe('front');
   });
 
-  it('when both sides are full it stays where you put it', () => {
+  /* An island has four faces, not two. A full front is not a full island:
+     there are two ends on it, each as long as the island is deep, and a
+     cabinet goes on one of them before it goes nowhere. */
+  /* Onto an end, if the island is deep enough to have one. A cabinet on an
+     end butts against the ends of the long runs, so a 1120 island with 560
+     cabinets front and back has nothing left on its ends at all. */
+  it('spills round to an end once the long sides are full', () => {
     const { p, isl } = island3600([
       { uid: 'f1', familyId: 'base-2door', settings: { width: 3600, x: 0 } },
       { uid: 'b1', familyId: 'base-2door', settings: { width: 3600, x: 0, side: 'back' } },
     ]);
+    isl.depth = 1800;
+    const { x, side } = placeOn(lay(p, isl), probe(600), 600, 'front');
+    expect(['left', 'right']).toContain(side);
+    expect(x).toBe(PROJECT.baseDepth);
+  });
+
+  it('when all four are full it stays where you put it', () => {
+    const { p, isl } = island3600([
+      { uid: 'f1', familyId: 'base-2door', settings: { width: 3600, x: 0 } },
+      { uid: 'b1', familyId: 'base-2door', settings: { width: 3600, x: 0, side: 'back' } },
+      { uid: 'l1', familyId: 'base-2door', settings: { width: 1120, x: 0, side: 'left' } },
+      { uid: 'r1', familyId: 'base-2door', settings: { width: 1120, x: 0, side: 'right' } },
+    ]);
     const { x, side } = placeOn(lay(p, isl), probe(600), 600, 'front');
     expect(x).toBeNull();
     expect(side).toBe('front');
+  });
+
+  /* An end runs along the island's depth, not its length. Measuring it the
+     other way says a 600 cabinet on a 1120 deep end has 3600mm of room. */
+  it('an end is as long as the island is deep', () => {
+    const { p, isl } = island3600([]);
+    const l = lay(p, isl);
+
+    expect(l.runOf('front')).toBe(3600);
+    expect(l.runOf('back')).toBe(3600);
+    expect(l.runOf('left')).toBe(islandDepth(isl, p.cfg));
+    expect(l.runOf('right')).toBe(islandDepth(isl, p.cfg));
+
+    // And nothing longer than the depth fits on an end.
+    expect(firstFreeX(l, probe(3600), 3600, 'left')).toBeNull();
+    expect(firstFreeX(l, probe(600), 600, 'left')).toBe(0);
+  });
+
+  it('the four sides fill independently', () => {
+    const { p, isl } = island3600([
+      { uid: 'f1', familyId: 'base-2door', settings: { width: 3600, x: 0 } },
+    ]);
+    const l = lay(p, isl);
+
+    expect(firstFreeX(l, probe(600), 600, 'front')).toBeNull();
+    expect(firstFreeX(l, probe(600), 600, 'back')).toBe(0);
+    // The ends start clear of the front run they butt against.
+    for (const side of ['left', 'right']) {
+      expect(firstFreeX(l, probe(400), 400, side), side).toBe(PROJECT.baseDepth);
+    }
   });
 
   it('a wall has nowhere to spill to, so a full one stays full', () => {

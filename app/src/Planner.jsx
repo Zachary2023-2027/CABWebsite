@@ -16,8 +16,8 @@ import { fmt, round1 } from './mm.js';
 import { downloadSvg, safeFileName } from './storage.js';
 import StackEditor from './StackEditor.jsx';
 import {
-  BAR_SIDES, ROOM_SHAPES, WALL_KINDS, barBrackets, barIsWholeSide, barRange, barSeats,
-  barSideLength, barSpan, floorPlan,
+  BAR_SIDES, ISLAND_SIDES, ROOM_SHAPES, WALL_KINDS, barBrackets, barIsWholeSide, barRange,
+  barSeats, barSideLength, barSpan, floorPlan, islandBars,
   isIsland, islandAt, islandBar, islandDepth, layoutFor, money, placeOnRun,
   roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
@@ -563,7 +563,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
     /* Which side of an island it starts out looking at. A wall has one side,
        so this is always the front there and the setting is never written. */
-    const wantSide = lay.island && side === 'back' ? 'back' : 'front';
+    const wantSide = lay.island ? side : 'front';
 
     const place = (targetLay, at = 'front') => {
       if (probe.corner) {
@@ -600,7 +600,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const next = structuredClone(prev);
       const w = next.walls.find((q) => q.id === targetId);
       const settings = x === null ? {} : { x };
-      if (landedSide === 'back') settings.side = 'back';
+      if (landedSide !== 'front') settings.side = landedSide;
       w.units.push({ uid: id, familyId, settings });
       if (targetId !== prev.activeWall) next.activeWall = targetId;
       return next;
@@ -617,9 +617,13 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
       const name = project.walls.find((w) => w.id === targetId)?.name || targetId;
       setNotice(`${fam?.name || 'Cabinet'} did not fit on ${wall.name}, so it went on ${name}.`);
     } else if (landedSide !== wantSide) {
-      setNotice(`The ${wantSide} of ${wall.name} is full, so ${fam?.name || 'the cabinet'} went on the ${landedSide}.`);
+      const name = (id) => ISLAND_SIDES.find((q) => q.id === id)?.name.toLowerCase() || id;
+      setNotice(`The ${name(wantSide)} of ${wall.name} is full, so ${fam?.name || 'the cabinet'} went on the ${name(landedSide)}.`);
     } else if (x === null) {
-      setNotice(`${fam?.name || 'Cabinet'} does not fit on ${wall.name}. It is on the end, past the wall.`);
+      const name = lay.island
+        ? (ISLAND_SIDES.find((q) => q.id === landedSide)?.name.toLowerCase() || 'side')
+        : 'wall';
+      setNotice(`${fam?.name || 'Cabinet'} does not fit on the ${name} of ${wall.name}. It is on the end, past it.`);
     } else setNotice(null);
   };
 
@@ -1046,14 +1050,22 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
       {/* An island has two sides. You work on one at a time, and a cabinet
           added while the back is showing goes on the back. */}
+      {/* An island has four faces and every one of them is somewhere you can
+          stand. The count on each says which are empty, so a side with
+          nothing on it is visible rather than found. */}
       {lay.island && (
         <div className="seg elev-side no-print" role="group" aria-label="Which side of the island">
-          {[['front', 'Front'], ['back', 'Back']].map(([k, label]) => (
-            <button key={k} className="seg__item" aria-pressed={side === k}
-                    onClick={(e) => { e.stopPropagation(); setSide(k); setSelected(null); }}>
-              {label}
-            </button>
-          ))}
+          {ISLAND_SIDES.map((s) => {
+            const n = lay.placed.filter((p) => p.side === s.id).length;
+            return (
+              <button key={s.id} className="seg__item" aria-pressed={side === s.id}
+                      title={`${s.name}, ${fmt(lay.runOf(s.id))}mm long`}
+                      onClick={(e) => { e.stopPropagation(); setSide(s.id); setSelected(null); }}>
+                {s.name}
+                {n > 0 && <span className="side-count num">{n}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
       <button className="btn btn--ghost elev-svg no-print"
@@ -1430,75 +1442,117 @@ function IslandPlace({ wall, project, onChange }) {
   );
 }
 
-function BarFields({ wall, project, onChange }) {
-  const clear = { ...BAR_RULES, ...project.cfg };
-  const bar = islandBar(wall);
-  const on = bar.depth > 0;
+/* ---------------------------------------------------------------------------
+   The breakfast bars.
 
-  const seats = barSeats(wall, project.cfg, clear, bar);
-  const brackets = barBrackets(wall, project.cfg, clear, bar);
-  const span = barSpan(wall, project.cfg, bar);
+   A list, because an island has four sides and there is no reason only one of
+   them can be a bar. An overhang along the back to sit at and a return across
+   an end is an ordinary thing to build, and it could not be said at all.
+
+   Each row is a side, how far it sticks out, and what part of that side it
+   runs along. Everything else follows and is said back: how many stools fit,
+   whether it holds itself up, and how much floor to leave behind it.
+   --------------------------------------------------------------------------- */
+function BarRow({ wall, project, bar, onChange, onRemove, taken }) {
+  const clear = { ...BAR_RULES, ...project.cfg };
   const side = barSideLength(wall, project.cfg, bar);
+  const span = barSpan(wall, project.cfg, bar);
   const range = barRange(wall, project.cfg, bar);
   const whole = barIsWholeSide(wall, project.cfg, bar);
 
-  /* Turning it on with no depth typed is a bar of nothing, which the model
-     reads as no bar at all. So picking a side starts it at a depth you can
-     actually sit at, and picking None keeps the depth for when you turn it
-     back on. */
-  const setSide = (side) => onChange(wall.id, {
-    bar: side === 'none' ? null
-      : { side, depth: bar.depth > 0 ? bar.depth : clear.barKneeDepth },
-  });
+  const seats = barSeats(wall, project.cfg, clear, bar);
+  const brackets = barBrackets(wall, project.cfg, clear, bar);
+
+  return (
+    <div className="card bar-row">
+      <div className="card__head">
+        <span className="card__title">
+          {BAR_SIDES.find((s) => s.id === bar.side)?.name || bar.side}
+        </span>
+        <button className="btn btn--ghost" onClick={onRemove}>Remove</button>
+      </div>
+
+      <div className="settings-grid">
+        <Choice label="Side" value={bar.side}
+                options={BAR_SIDES.filter((s) => s.id !== 'none'
+                  && (s.id === bar.side || !taken.has(s.id)))
+                  .map((s) => ({ value: s.id, label: s.name }))}
+                onChange={(v) => onChange({ ...bar, side: v, from: 0, length: null })} />
+        <Num label="Sticks out" value={bar.depth} min={0} max={1200}
+             onChange={(v) => onChange({ ...bar, depth: v ?? bar.depth })} />
+      </div>
+
+      <div className="settings-grid">
+        <Num label="Starts along the side" value={range.from} min={0} max={side}
+             onChange={(v) => onChange({ ...bar, from: v ?? 0 })} />
+        <Num label="Runs for" value={span} min={0} max={side} placeholder={`${side}`}
+             onChange={(v) => onChange({
+               /* Empty, or the whole side, means the whole side, so it goes
+                  back to being the simple thing rather than a number that
+                  happens to equal the length today. */
+               ...bar, length: v == null || v >= side ? null : v,
+             })} />
+      </div>
+
+      <p className="note">
+        {whole
+          ? `The whole ${fmt(side)}mm side. `
+          : `${fmt(span)}mm of the ${fmt(side)}mm side, from ${fmt(range.from)} to ${fmt(range.to)}. The rest of that side is ordinary cabinet with the top flush to it. `}
+        {seats > 0
+          ? `${seats} ${seats === 1 ? 'stool fits' : 'stools fit'} at ${clear.barSeatWidth} each. `
+          : `Not enough along ${fmt(span)}mm for a stool at ${clear.barSeatWidth}. `}
+        {bar.depth < clear.barKneeDepth
+          ? `Under ${clear.barKneeDepth} you cannot get knees under it. `
+          : ''}
+        {brackets > 0
+          ? `Past ${clear.barMaxUnsupported} it needs holding up, so ${brackets} brackets are on the order list. `
+          : `It carries itself at up to ${clear.barMaxUnsupported}. `}
+        Leave {clear.barStoolSpace}mm of floor behind it for the stools.
+      </p>
+    </div>
+  );
+}
+
+function BarFields({ wall, project, onChange }) {
+  const clear = { ...BAR_RULES, ...project.cfg };
+  const bars = islandBars(wall);
+  const taken = new Set(bars.map((b) => b.side));
+  const free = BAR_SIDES.filter((s) => s.id !== 'none' && !taken.has(s.id));
+
+  const set = (next) => onChange(wall.id, { bars: next, bar: null });
+  const add = () => {
+    const side = free[0]?.id;
+    if (!side) return;
+    set([...bars, { side, depth: clear.barKneeDepth, from: 0, length: null }]);
+  };
 
   return (
     <>
-      <div className="settings-grid">
-        <Choice label="Breakfast bar" value={bar.side}
-                options={BAR_SIDES.map((s) => ({ value: s.id, label: s.name }))}
-                onChange={setSide} />
-        {on && (
-          <Num label="Sticks out" value={bar.depth} min={0} max={1200}
-               onChange={(v) => onChange(wall.id, {
-                 bar: v == null || v <= 0 ? null : { ...bar, side: bar.side, depth: v },
-               })} />
-        )}
-      </div>
-
-      {/* A bar was the whole of one side or nothing, which is not what people
-          build. Half of a 2400 island is a bar with two stools at one end and
-          ordinary cabinet behind the rest. */}
-      {on && (
-        <div className="settings-grid">
-          <Num label="Starts along the side" value={range.from} min={0} max={side}
-               onChange={(v) => onChange(wall.id, { bar: { ...bar, from: v ?? 0 } })} />
-          <Num label="Runs for" value={span} min={0} max={side}
-               placeholder={`${side}`}
-               onChange={(v) => onChange(wall.id, {
-                 /* Empty, or the whole side, means the whole side, so it goes
-                    back to being the simple thing rather than a number that
-                    happens to equal the length today. */
-                 bar: { ...bar, length: v == null || v >= side ? null : v },
-               })} />
-        </div>
+      <span className="field__label">Breakfast bars</span>
+      {bars.length === 0 && (
+        <p className="note">
+          None. A bar is the top running on past the carcass far enough to sit at.
+          Any side can carry one, and any part of any side: half of one end is a
+          real answer, and the rest of that side stays ordinary cabinet.
+        </p>
       )}
 
-      {on && (
+      {bars.map((b, i) => (
+        <BarRow key={b.side} wall={wall} project={project} bar={b}
+                taken={taken}
+                onChange={(next) => set(bars.map((x, j) => (j === i ? next : x)))}
+                onRemove={() => set(bars.filter((_, j) => j !== i))} />
+      ))}
+
+      {free.length > 0 && (
+        <button className="btn btn--secondary bar-add" onClick={add}>
+          {bars.length ? 'Add another bar' : 'Add a breakfast bar'}
+        </button>
+      )}
+
+      {bars.length > 0 && (
         <p className="note">
-          {whole
-            ? `The whole ${fmt(side)}mm side. `
-            : `${fmt(span)}mm of the ${fmt(side)}mm side, from ${fmt(range.from)} to ${fmt(range.to)}. The rest of that side is ordinary cabinet with the top flush to it. `}
-          {seats > 0
-            ? `${seats} ${seats === 1 ? 'stool fits' : 'stools fit'} along ${fmt(span)}mm at ${clear.barSeatWidth} each. `
-            : `Not enough along ${fmt(span)}mm for a stool at ${clear.barSeatWidth}. `}
-          {bar.depth < clear.barKneeDepth
-            ? `Under ${clear.barKneeDepth} you cannot get knees under it. `
-            : ''}
-          {brackets > 0
-            ? `Past ${clear.barMaxUnsupported} it needs holding up, so ${brackets} brackets are on the order list. `
-            : `It carries itself at up to ${clear.barMaxUnsupported}. `}
-          Leave {clear.barStoolSpace}mm of floor behind it for the stools. Every
-          one of those figures is yours to set, under The figures on Checks.
+          Every one of those figures is yours to set, under The figures on Checks.
         </p>
       )}
     </>

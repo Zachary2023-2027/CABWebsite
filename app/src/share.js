@@ -83,14 +83,19 @@ export function squeeze(project) {
       A: wall.at ? [wall.at.x, wall.at.y] : undefined,
       /* The breakfast bar, as a side and a number. Two characters of link for
          the thing that decides how much benchtop is being bought. */
-      /* Side, depth, and where along the side it runs. The last two are only
-         written when the bar is part of a side rather than all of it, so a
-         plain bar is still two characters of link. */
-      B: wall.bar?.depth > 0
-        ? [wall.bar.side, wall.bar.depth,
-          ...(wall.bar.from > 0 || wall.bar.length > 0
-            ? [wall.bar.from || 0, wall.bar.length || 0] : [])]
-        : undefined,
+      /* Every bar, each as a side, a depth and where along the side it runs.
+         The last two are only written when the bar is part of a side rather
+         than all of it, so a plain bar is still two characters of link.
+
+         A list of lists. A link written when there could only be one bar
+         carries a single flat pair, which decodes below as a list of one. */
+      B: (() => {
+        const list = (Array.isArray(wall.bars) ? wall.bars
+          : (wall.bar ? [wall.bar] : [])).filter((b) => b?.depth > 0);
+        if (!list.length) return undefined;
+        return list.map((b) => [b.side, b.depth,
+          ...(b.from > 0 || b.length > 0 ? [b.from || 0, b.length || 0] : [])]);
+      })(),
       o: wall.obstacles?.length ? wall.obstacles : undefined,
       u: wall.units.map((u) => {
         const out = { f: u.familyId };
@@ -131,12 +136,13 @@ export function expand(small) {
         kind: wall.k ? 'island' : 'wall',
         ...(wall.D ? { depth: wall.D } : {}),
         ...(Array.isArray(wall.A) ? { at: { x: wall.A[0], y: wall.A[1] } } : {}),
-        ...(Array.isArray(wall.B) ? {
-          bar: {
-            side: wall.B[0], depth: wall.B[1],
-            ...(wall.B[2] ? { from: wall.B[2] } : {}),
-            ...(wall.B[3] ? { length: wall.B[3] } : {}),
-          },
+        ...(Array.isArray(wall.B) && wall.B.length ? {
+          /* A list of bars, or the single flat pair an older link carries. */
+          bars: (Array.isArray(wall.B[0]) ? wall.B : [wall.B]).map((b) => ({
+            side: b[0], depth: b[1],
+            ...(b[2] ? { from: b[2] } : {}),
+            ...(b[3] ? { length: b[3] } : {}),
+          })),
         } : {}),
         length: wall.L,
         obstacles: wall.o || [],

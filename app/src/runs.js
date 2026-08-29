@@ -299,6 +299,78 @@ export function benchSchedule(runs, P) {
  * slab against a rate quoted per metre of a normal benchtop.
  */
 export function islandBench(wall, depth, P, bar = { side: 'none', depth: 0 }) {
+  /* One bar or a list of them. Everything that called this passed one, and a
+     four sided island can carry up to four, so it takes either. */
+  const bars = (Array.isArray(bar) ? bar : [bar]).filter((b) => b && b.depth > 0);
+  if (bars.length > 1) return islandBenchAll(wall, depth, P, bars);
+  const one = bars[0] || { side: 'none', depth: 0 };
+  return islandBenchOne(wall, depth, P, one);
+}
+
+/**
+ * An island top with bars on more than one side.
+ *
+ * The slab grows on each side a bar runs the whole of, and each bar along
+ * part of a side is its own rectangle. Two full side bars on opposite edges
+ * make one wider slab; two on adjoining edges make one bigger slab; a partial
+ * one is a strip beside it. Every piece stays a rectangle, which is what the
+ * cut list, the price and the volume all depend on.
+ */
+function islandBenchAll(wall, depth, P, bars) {
+  const over = Number(P.benchOverhang) || 0;
+  const sideLen = (side) => ((side === 'left' || side === 'right') ? depth : wall.length);
+  const whole = (b) => b.length == null || b.length >= sideLen(b.side) - 0.5;
+
+  let along = 0;
+  let across = 0;
+  const strips = [];
+
+  for (const b of bars) {
+    if (whole(b)) {
+      if (b.side === 'left' || b.side === 'right') along += b.depth;
+      else across += b.depth;
+    } else {
+      strips.push(b);
+    }
+  }
+
+  const length = round1(wall.length + 2 * over + along);
+  const acrossMm = round1(depth + 2 * over + across);
+
+  const slab = {
+    index: 1,
+    length,
+    depth: acrossMm,
+    thickness: round1(P.benchThk),
+    overhangs: 4,
+    island: true,
+    bar: bars.filter(whole).map((b) => ({ side: b.side, depth: b.depth }))[0] || null,
+    bars: bars.filter(whole).map((b) => ({ side: b.side, depth: b.depth })),
+    metres: (length * acrossMm) / (Number(P.benchDepth) || 600) / 1000,
+    pieces: splitRun(length, Number(P.benchMaxPiece) || 3600),
+  };
+
+  return [slab, ...strips.map((b, i) => barStrip(b, P, i + 2))];
+}
+
+/** A bar along part of a side, as its own rectangle. */
+function barStrip(b, P, index) {
+  const run = round1(Math.max(0, Number(b.span ?? b.length) || 0));
+  return {
+    index,
+    length: run,
+    depth: round1(b.depth),
+    thickness: round1(P.benchThk),
+    overhangs: 3,
+    island: true,
+    barPiece: true,
+    bar: { side: b.side, depth: b.depth },
+    pieces: splitRun(run, Number(P.benchMaxPiece) || 3600),
+    metres: (run * b.depth) / (Number(P.benchDepth) || 600) / 1000,
+  };
+}
+
+function islandBenchOne(wall, depth, P, bar) {
   const over = Number(P.benchOverhang) || 0;
 
   /* The breakfast bar is more of the same slab, not a second piece. It runs

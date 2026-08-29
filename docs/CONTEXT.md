@@ -252,13 +252,49 @@ neighbour on either side, the start of the wall, the end of the wall. Tolerance
 same distance, because the corner is the only place it works. The join that
 took hold is drawn as a line up the wall and named.
 
-**Islands face outward.** The two sides of an island face opposite ways: the
-front run's doors open out of the front face at z 0, the back run's out of the
-back face at z depth. That is what makes it an island rather than two cabinets
-glued back to back with their doors looking at each other, and it is the same
-convention the walkway check has always measured an island by. `facing()` and
-`zRange()` in `project.js` are the one place that says so, read by the 3D that
-draws it, the swing arcs and the clearance check.
+### An island has four sides
+
+Every face of an island is a face you can stand at, so all four take cabinets
+and all four can carry a breakfast bar.
+
+**A side is a frame, not a flag.** `unitFrame(p, length, depth)` in
+`project.js` is the one table the whole thing rests on. A point in a cabinet's
+own space, x across its width and z from its back at 0 to its front at its
+depth, lands at the same formula the room uses to place a wall, so the two
+compose without either knowing about the other:
+
+| side | origin | turn |
+| --- | --- | --- |
+| front | `[along + width, depth]` | 180 |
+| back | `[along, islandDepth - depth]` | 0 |
+| left | `[depth, along]` | -90 |
+| right | `[length - depth, along + width]` | +90 |
+
+A wall is the same function returning `[along, 0]` and no turn. Front and back
+come out as exactly the transforms this app already used for them. `framePoint`
+and `frameBox` apply it; the 3D that draws the island, the clearance check that
+measures it and the elevation all read it, so none of them can disagree.
+
+**Each side is its own run.** Front and back run along the island's length and
+the ends along its depth, so `layoutWall` keeps four cursors and `lay.runOf(side)`
+says how long each is. Snapping, first free position, gaps, overlaps and the
+past-the-end warning all take one of four sides instead of one of two.
+
+**The sides take one another's corners.** A cabinet on an end butts against the
+ends of the front and back runs, so what an end really has is the island's depth
+less however deep those two are. On a 1120 island with 560 cabinets front and
+back that is nothing at all, and it is not a mistake: the ends of such an island
+are the exposed side panels of the long runs. `cornerTaken()` takes it off the
+run rather than warning afterwards, so a cabinet is never dropped into a corner
+that is already full, and the wall says why the end is unusable.
+
+**Breakfast bars are a list.** `wall.bars` is an array of
+`{side, depth, from, length}`, one per side, so an overhang along the back and a
+return across an end is a thing you can say. Left empty, `length` is the whole
+side. `wall.bar`, the single one, is read as a list of one, so nothing saved
+before this breaks. The stools, the brackets, the slab and the walkway behind
+each one all follow the list; a bar along part of a side is its own rectangle
+beside the slab, because an L is not a piece anybody can dimension.
 
 **Room shapes.** `straight` (one wall), `l` (two), `u` (three). The joined
 walls are taken in order from the wall list, excluding the island. An L turns

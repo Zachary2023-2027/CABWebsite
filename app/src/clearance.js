@@ -26,10 +26,10 @@
    =========================================================================== */
 
 import {
-  FULL_SWING, degrees, mirrorSector, openUntilBlocked, sectorInRoom, swingSector,
+  FULL_SWING, degrees, openUntilBlocked, sectorInRoom, swingSector,
 } from './motion.js';
 import { round1, whole } from './mm.js';
-import { facing, zRange } from './project.js';
+import { frameBox, framePoint, unitFrame } from './project.js';
 
 /* Two boxes touching is a butt joint, which is how a kitchen is built. Below
    this they are touching; above it they are in each other. */
@@ -77,13 +77,28 @@ export function boxInRoom(entry, x0, x1, z0, z1, y0, y1, extra = {}) {
 }
 
 /**
- * The depth range a unit occupies on its own run.
+ * How a unit on this run is turned and where it sits.
  *
- * The mapping itself lives in the model, so the door this measures is the
- * same door the 3D draws.
+ * The mapping itself lives in the model, so the cabinet this measures is the
+ * same cabinet the 3D draws and the same one the plan of the floor shows.
  */
-export const depthRange = (entry, p, z0, z1) =>
-  zRange(facing(p, entry.island ? (entry.depth ?? p.unit.depth) : 0), z0, z1);
+export const frameOf = (entry, p) => unitFrame(
+  p,
+  entry.island ? (Number(entry.wall.length) || 0) : 0,
+  entry.island ? (entry.depth ?? p.unit.depth) : 0,
+);
+
+/**
+ * A box in a unit's own space, put where it really is in the room.
+ *
+ * Two transforms, composed: the unit onto its side of the run, and the run
+ * into the room. Every turn involved is a quarter, so the result is still an
+ * axis aligned box and everything downstream stays a rectangle test.
+ */
+export function unitBoxInRoom(entry, p, x0, x1, z0, z1, y0, y1, extra = {}) {
+  const local = frameBox(frameOf(entry, p), x0, x1, z0, z1);
+  return boxInRoom(entry, local.x0, local.x1, local.z0, local.z1, y0, y1, extra);
+}
 
 /** A readable name for a cabinet, wall and all. */
 export const nameOf = (entry, p) =>
@@ -100,11 +115,11 @@ export function carcassBoxes(entries) {
   const out = [];
   for (const entry of entries) {
     for (const p of entry.lay.placed) {
-      const [z0, z1] = depthRange(entry, p, 0, p.unit.depth);
-      out.push(boxInRoom(entry, p.x, p.x + p.unit.width, z0, z1,
+      out.push(unitBoxInRoom(entry, p, 0, p.unit.width, 0, p.unit.depth,
         p.unit.mountY, p.unit.mountY + p.unit.height, {
           uid: p.item.uid,
           wallId: entry.wall.id,
+          side: p.side,
           label: nameOf(entry, p),
           cavity: !!p.unit.cavity,
         }));
@@ -128,11 +143,12 @@ export function frontBoxes(entries) {
       if (p.unit.cavity) continue;
       for (const q of p.unit.parts) {
         if (q.group !== 'front' && q.group !== 'filler') continue;
-        const [z0, z1] = depthRange(entry, p, q.pos[2], q.pos[2] + q.size[2]);
-        out.push(boxInRoom(entry, p.x + q.pos[0], p.x + q.pos[0] + q.size[0], z0, z1,
+        out.push(unitBoxInRoom(entry, p,
+          q.pos[0], q.pos[0] + q.size[0], q.pos[2], q.pos[2] + q.size[2],
           p.unit.mountY + q.pos[1], p.unit.mountY + q.pos[1] + q.size[1], {
             uid: p.item.uid,
             wallId: entry.wall.id,
+            side: p.side,
             code: q.code,
             label: `${nameOf(entry, p)}, ${q.name.toLowerCase()}`,
           }));
@@ -277,15 +293,12 @@ export function clearanceFindings(entries, clear = {}) {
       const where = nameOf(entry, p);
 
       for (const door of doors) {
-        const face = facing(p, entry.island ? (entry.depth ?? p.unit.depth) : 0);
-        let sector = swingSector(door, p.x, FULL_SWING, p.unit.mountY);
-        /* A run that is turned around swings its doors the other way. Mirror
-           first, in the run's own space, then move the whole run into the
-           room: doing it in the other order turns the reflection into a
-           rotation and the door opens through the island. */
-        sector = face.flip
-          ? mirrorSector(sector, face.offset)
-          : { ...sector, cz: sector.cz + face.offset };
+        /* Two turns, in order: the door onto its side of the run, then the
+           run into the room. Doing it the other way round turns the side's
+           quarter into the room's and the door opens through the island. */
+        const frame = frameOf(entry, p);
+        let sector = swingSector(door, 0, FULL_SWING, p.unit.mountY);
+        sector = sectorInRoom(sector, frame.origin, frame.rot);
         sector = sectorInRoom(sector, entry.origin || [0, 0], entry.rot || 0);
 
         /* How far it gets, and what stops it, in one pass. Naming the thing

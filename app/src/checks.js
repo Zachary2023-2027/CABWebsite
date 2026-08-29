@@ -193,26 +193,71 @@ export function facingGap(p, q, tolerance = 0.05) {
  * free standing and you walk on both sides of it. Leaving the second one out
  * misses the gap that matters most in a kitchen with an island.
  */
+/**
+ * One face of an island as a line segment in the room.
+ *
+ * A wall has one face and it runs along the wall. An island has four, and two
+ * of them run along its depth rather than its length, which `wallFace` cannot
+ * say: it only ever draws a line along the wall's own x.
+ *
+ * `out` is how far past the island the face stands, which is the overhang
+ * when that side carries a breakfast bar.
+ */
+export function islandFace(entry, side, length, depth, out = 0) {
+  const { origin, rot } = entry;
+  const cos = Math.cos(rot || 0);
+  const sin = Math.sin(rot || 0);
+  const at = (x, z) => [origin[0] + x * cos + z * sin, origin[1] - x * sin + z * cos];
+
+  switch (side) {
+    case 'back': return { a: at(0, depth + out), b: at(length, depth + out) };
+    case 'left': return { a: at(-out, 0), b: at(-out, depth) };
+    case 'right': return { a: at(length + out, 0), b: at(length + out, depth) };
+    default: return { a: at(0, -out), b: at(length, -out) };
+  }
+}
+
+/**
+ * The faces a run presents to the room.
+ *
+ * A wall has one: the front of its cabinets. An island has four, because it
+ * is free standing and you walk on every side of it. Two of them run along
+ * its length and two along its depth.
+ *
+ * A breakfast bar is what you actually walk into on the side that carries
+ * one. The carcass stops where it stops, but the top runs on past it at chest
+ * height, and measuring the walkway to the cabinet rather than to the edge of
+ * the slab reports a gap nobody can use.
+ */
 export function facesOf(entry, cfg) {
   if (!entry.island) return [wallFace(entry, runDepth(entry, cfg))];
 
   const depth = entry.depth ?? runDepth(entry, cfg);
+  const length = Number(entry.wall.length) || 0;
+  const bars = entry.bars || (entry.bar && entry.bar.depth > 0 ? [entry.bar] : []);
 
-  /* A breakfast bar is what you actually walk into. The carcass stops where it
-     stops, but the top runs on past it at chest height, and measuring the
-     walkway to the cabinet rather than to the edge of the slab reports a gap
-     nobody can use.
-
-     Only one side carries it, so the other keeps the carcass face. */
-  const bar = entry.bar || { side: 'none', depth: 0 };
-  const out = bar.side === 'front' ? -bar.depth : 0;
-  const back = depth + (bar.side === 'back' ? bar.depth : 0);
-
-  return [
-    { ...wallFace(entry, out), name: `${entry.wall.name}, front`, bar: bar.side === 'front' },
-    { ...wallFace(entry, back), name: `${entry.wall.name}, back`, bar: bar.side === 'back' },
-  ];
+  return ['front', 'back', 'left', 'right'].map((side) => {
+    const bar = bars.find((b) => b.side === side);
+    const out = bar ? bar.depth : 0;
+    /* How far the face stands from the island's own origin along the axis it
+       faces, which is what a wall's face reports too: negative in front of
+       the island, past its length or depth behind it. */
+    const off = side === 'front' || side === 'left' ? -out
+      : side === 'back' ? depth + out : length + out;
+    return {
+      id: entry.wall.id,
+      name: `${entry.wall.name}, ${SIDE_NAME[side]}`,
+      side,
+      depth: off,
+      across: depth,
+      bar: !!bar,
+      ...islandFace(entry, side, length, depth, out),
+    };
+  });
 }
+
+/** A side of an island, said the way you would say it out loud. */
+const SIDE_NAME = { front: 'front', back: 'back', left: 'left end', right: 'right end' };
 
 /** Every gap between two runs that face each other across the room. */
 export function walkways(project, roomEntries) {

@@ -96,10 +96,14 @@ export function runLinks(placed, from, to, length, xOf = (p) => p.x) {
  *
  * @returns {{chains: object[], length: number}}
  */
-export function elevationChains(lay, shown = lay.front || lay.placed, xOf = (p) => p.x) {
-  const length = lay.wall.length;
+export function elevationChains(lay, shown = lay.front || lay.placed, xOf = (p) => p.x,
+  length = lay.wall.length) {
   const from = lay.startOffset || 0;
-  const to = lay.limit ?? length;
+  /* Never past the end of the thing being drawn. An island's end is as long
+     as the island is deep, and the layout's limit is about its length, so a
+     chain that took the limit ran the end's dimensions out to 2400 on a 1120
+     deep island. */
+  const to = Math.min(lay.limit ?? length, length);
 
   const base = shown.filter((p) => p.where !== 'wall');
   const wall = shown.filter((p) => p.where !== 'base');
