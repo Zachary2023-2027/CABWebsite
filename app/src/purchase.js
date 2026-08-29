@@ -29,6 +29,8 @@
 
 import { round1, whole } from './mm.js';
 import { benchLength } from './runs.js';
+import { jointMethod } from './drilling.js';
+import { pocketScrew } from './pocket.js';
 
 /**
  * How things are sold, as a default to start from.
@@ -117,8 +119,9 @@ export function edgeMetres(parts) {
  * How many fixings a carcass takes.
  *
  * Read off the drilling schedule rather than guessed, so a kitchen built with
- * dowels orders dowels and one built with confirmats orders confirmats, and
- * changing the joint method changes the order.
+ * dowels orders dowels, one built with confirmats orders confirmats and one
+ * built with pocket screws orders pocket screws. Changing the joint method
+ * changes the order.
  */
 export function fixingCount(project, deps) {
   const { allUnits, drillUnit } = deps;
@@ -126,10 +129,12 @@ export function fixingCount(project, deps) {
 
   for (const { unit } of allUnits(project)) {
     for (const panel of drillUnit(unit)) {
-      /* Only the hole the screw passes through is counted. The pilot in the
+      /* Only the hole the fixing itself goes in is counted. The pilot in the
          mating edge is the other half of the same joint, and counting both
-         orders twice as many screws as the carcass has joints. */
-      through += panel.holes.filter((h) => h.kind === 'construction').length;
+         orders twice as many screws as the carcass has joints. A pocket is
+         the whole joint in one hole, so it counts once by construction. */
+      through += panel.holes.filter(
+        (h) => h.kind === 'construction' || h.kind === 'pocket').length;
     }
   }
   return through;
@@ -253,9 +258,15 @@ export function orderList(project, prices, deps) {
 
   const fixings = fixingCount(project, { allUnits, drillUnit });
   if (fixings > 0) {
-    const dowelled = (cfg.jointMethod || 'confirmat-7x50') === 'dowel-8';
+    const method = jointMethod(cfg.jointMethod);
+    const dowelled = method.id === 'dowel-8';
+    /* A pocket screw is sold by its gauge and length, and which one you want
+       is decided by the board it goes in. Naming it saves the walk back to
+       the shop. */
+    const screw = pocketScrew(cfg.carcassThk ?? 16);
     other.push(row({
-      what: dowelled ? 'Dowels' : 'Confirmat screws',
+      what: method.pocket ? `Pocket screws, ${screw.name}`
+        : dowelled ? 'Dowels' : 'Confirmat screws',
       needed: fixings, unit: dowelled ? 'dowel' : 'screw',
       packSize: dowelled ? packs.dowelPack : packs.screwPack,
       /* No seeded price, because a box of screws is a few dollars and

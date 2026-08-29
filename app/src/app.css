@@ -252,7 +252,17 @@ body {
   flex: none; display: grid; gap: var(--sp-1);
   padding: var(--sp-2) var(--sp-4); border-top: var(--bw) solid var(--border);
   background: var(--surface);
+  /* Everything wrong with the wall lives here now, so it can get long. It
+     keeps a hard ceiling and scrolls rather than eating the drawing. */
+  max-height: 34vh; overflow-y: auto;
 }
+
+/* The count, so a folded strip still says how much is behind it. */
+.warn-summary {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  padding-bottom: var(--sp-1);
+}
+.warn-summary .field__label { margin-right: var(--sp-1); }
 
 .inspector-side { width: var(--panel-w); }
 .inspector { display: flex; flex-direction: column; min-height: 0; height: 100%; }
@@ -386,6 +396,38 @@ body {
 .panel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sp-4); }
 .panel-card { display: grid; gap: var(--sp-2); align-content: start; }
 .panel-svg { width: 100%; height: auto; max-height: 420px; background: var(--bg); border-radius: var(--r-1); }
+
+/* The drilling screen.
+
+   One panel per card, full width, with the drawing on the left and every
+   number on the right. A grid of small cards was the wrong shape for this:
+   a panel drawing squeezed into a third of a column is a picture of a panel
+   rather than something you can set out from. */
+.drill-setup { display: grid; gap: var(--sp-2); }
+.drill-kinds { flex-wrap: wrap; }
+.drill-list { display: grid; gap: var(--sp-4); }
+
+.panel-split {
+  display: grid; gap: var(--sp-4);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: start;
+}
+.panel-draw {
+  background: var(--bg); border-radius: var(--r-1);
+  padding: var(--sp-2); min-width: 0;
+}
+.panel-draw .panel-svg { max-height: 460px; background: none; }
+.panel-numbers { display: grid; gap: var(--sp-3); min-width: 0; }
+.setting-out__at { white-space: normal; text-align: right; }
+.hole-screw {
+  display: block; font-size: var(--fs-1); color: var(--text-2);
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 900px) {
+  .panel-split { grid-template-columns: minmax(0, 1fr); }
+  .panel-draw .panel-svg { max-height: 60vh; }
+}
 .panel-meta {
   display: flex; justify-content: space-between;
   font-family: var(--font-mono); font-size: var(--fs-1); color: var(--text-2);
@@ -694,8 +736,20 @@ body {
 .p-drill-page { display: flex; flex-direction: column; height: 100%; }
 .p-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; flex: 1; min-height: 0; }
 .p-panel-fig { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 1.5mm; }
-.p-panel { width: 100%; height: auto; max-height: 92mm; }
-.p-panel-fig figcaption { font-size: 7.6pt; text-align: center; }
+.p-panel { width: 100%; height: auto; max-height: 52mm; }
+.p-panel-fig figcaption { font-size: 7.2pt; text-align: center; }
+/* Every hole position as text under its drawing. A figure you measure off a
+   printed drawing is a figure you have measured wrong.
+
+   Fixed layout with the positions column wrapping, because a run of eighteen
+   hole positions is longer than the column it is in and a table that does not
+   wrap pushes the number you wanted off the edge of the paper. */
+.p-setout { width: 100%; font-size: 6.4pt; table-layout: fixed; }
+.p-setout td, .p-setout th { padding: 0.4mm 1mm; }
+.p-setout th:first-child, .p-setout td:first-child { width: 12mm; }
+.p-setout th:nth-child(2), .p-setout td:nth-child(2) { width: 10mm; }
+.p-setout td:last-child { white-space: normal; overflow-wrap: anywhere; }
+.p-drill-page .p-notes { font-size: 6.8pt; }
 .p-notes { margin-top: 3mm; }
 /* An aside inside a print line, for saying where a cost has gone rather than
    leaving a row that looks like it was forgotten. */

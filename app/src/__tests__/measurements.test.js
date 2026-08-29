@@ -426,16 +426,21 @@ describe('a pinned cabinet stays at the millimetre you pinned it to', () => {
 });
 
 describe('a corner reserves the space the cabinet on the next wall stands in', () => {
-  it('the return wall starts clear of the corner carcass', () => {
+  /* The carcass depth plus a front. The blind panel and the door stand proud
+     of the carcass, and so do the return run's own fronts, so a return that
+     started at the carcass depth put one wall's front inside the other's by a
+     board thickness in the corner. It is 18mm, it is invisible in plan, and
+     it is the reason the doors would not go on. */
+  it('the return wall starts clear of the corner carcass and its front', () => {
     const corner = buildUnit('A1', 'base-blind-l', { width: 1050 }, PROJECT);
     expect(corner.cornerReturn, 'a corner cabinet reports no return')
-      .toBe(corner.depth);
+      .toBe(corner.depth + PROJECT.frontThk);
 
     const lay = layoutWall(wallOf([item('base-2door', { width: 800 })]),
       PROJECT, corner.cornerReturn);
     expect(lay.placed[0].x, 'the first cabinet on the return wall sits in the corner')
       .toBe(corner.cornerReturn);
-    expect(lay.startOffset).toBe(corner.depth);
+    expect(lay.startOffset).toBe(corner.depth + PROJECT.frontThk);
   });
 
   it('a wall that gives its end to the next one stops short by that much', () => {

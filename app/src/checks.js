@@ -38,7 +38,7 @@
 import { BAR_RULES } from './bar.js';
 import { BOX_CLEAR } from './catalog.js';
 import { round1, whole } from './mm.js';
-import { FULL_SWING, degrees, largestSwing } from './motion.js';
+import { clearanceFindings } from './clearance.js';
 import { natureOf, obstacleKind, overlaps } from './obstacles.js';
 import { stackProblems } from './stack.js';
 
@@ -76,6 +76,14 @@ export const CLEARANCE_DEFAULTS = {
   doorMinWidth: 200,
   /* A door that cannot open this far is not usable. */
   doorMinSwing: 75,
+
+  /* The air between two fronts that belong to different runs, at a corner or
+     across the end of an island. Not the reveal: the reveal is the gap
+     between two fronts on one cabinet and it is set out to the millimetre.
+     This is the gap you get by accident, and it has to be enough to reach a
+     handle in and enough for either front to start opening without rubbing
+     the other. */
+  frontClearance: 40,
 
   /* The breakfast bar figures, from the one place that holds them. The model
      needs the same numbers to count brackets, so they are not this file's to
@@ -395,34 +403,27 @@ export function runChecks(project, deps) {
   /* --- doors that cannot be used ------------------------------------------ */
 
   for (const { wall, lay } of lays) {
-    const placed = lay.placed.filter((p) => !p.unit.cavity && p.unit.kind !== 'filler');
-    for (const p of placed) {
-      const others = placed
-        .filter((q) => q.item.uid !== p.item.uid)
-        .map((q) => ({
-          x0: q.x, x1: q.x + q.unit.width, z0: 0, z1: q.unit.depth,
-          y0: q.unit.mountY, y1: q.unit.mountY + q.unit.height,
-          label: q.unit.family.name,
-        }));
-
+    for (const p of lay.placed) {
+      if (p.unit.cavity || p.unit.kind === 'filler') continue;
       for (const door of p.unit.parts.filter(
         (d) => d.group === 'front' && d.code.includes('DOOR'))) {
-        const where = `${wall.name}, ${p.label || p.unit.family.name}`;
-
-        if (door.size[0] < clear.doorMinWidth) {
-          out.push(finding('warn', 'door',
-            `${door.name} is only ${whole(door.size[0])}mm wide. Under ${clear.doorMinWidth} it is not worth hanging.`,
-            where));
-        }
-
-        const reach = largestSwing(door, p.x, others, FULL_SWING, 22, p.unit.mountY);
-        if (degrees(reach) < clear.doorMinSwing) {
-          out.push(finding('error', 'door',
-            `${door.name} only opens ${degrees(reach)} degrees before it fouls something.`,
-            where));
-        }
+        if (door.size[0] >= clear.doorMinWidth) continue;
+        out.push(finding('warn', 'door',
+          `${door.name} is only ${whole(door.size[0])}mm wide. Under ${clear.doorMinWidth} it is not worth hanging.`,
+          `${wall.name}, ${p.label || p.unit.family.name}`));
       }
     }
+  }
+
+  /* --- everything measured across the room rather than along one wall ------
+
+     Door swings, carcasses built through each other and fronts that meet at a
+     corner. All of it comes from the one place that puts every run into the
+     same coordinates, because a wall by wall check cannot see the cabinet on
+     the next wall and the corner is exactly where the trouble is. */
+
+  for (const f of clearanceFindings(entries, clear)) {
+    out.push(finding(f.level, f.rule, f.text, f.where));
   }
 
   /* --- appliances --------------------------------------------------------- */

@@ -128,6 +128,57 @@ export function swingSector(part, originX, maxAngle = FULL_SWING, originY = 0) {
   return { cx, cz, radius: width, side, from, to, y0, y1 };
 }
 
+/* ---------------------------------------------------------------------------
+   The same sector, somewhere else in the room.
+
+   A swing is worked out in the cabinet's own space, which is the only place
+   it can be worked out. What it fouls is very often not in that space: the
+   thing a corner cabinet's door hits is on the next wall, turned ninety
+   degrees and moved to the other end of the room.
+
+   Both of these move a sector without recomputing it, so what gets compared
+   across the room is the same sector the cabinet's own screen drew.
+   --------------------------------------------------------------------------- */
+
+/**
+ * A sector turned and moved into room coordinates.
+ *
+ * The wall runs along its own x with the room in +z, and the room layout
+ * gives each wall an origin and a rotation. A point (x, z) on the wall lands
+ * at (ox + x cos + z sin, oy - x sin + z cos), and an angle measured from +x
+ * toward +z lands at that angle less the rotation. That second half is the
+ * one that is easy to leave out, and leaving it out swings every door on the
+ * return wall in the wrong direction.
+ */
+export function sectorInRoom(sector, origin = [0, 0], rot = 0) {
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  return {
+    ...sector,
+    cx: origin[0] + sector.cx * cos + sector.cz * sin,
+    cz: origin[1] - sector.cx * sin + sector.cz * cos,
+    from: sector.from - rot,
+    to: sector.to - rot,
+  };
+}
+
+/**
+ * A sector on the back of an island, which faces the other way.
+ *
+ * A reflection, not a rotation: the depth is measured back from the far side
+ * and the door changes hand, because a left hand door seen from the back of
+ * the island is a right hand one seen from the front.
+ */
+export function mirrorSector(sector, depth) {
+  return {
+    ...sector,
+    cz: depth - sector.cz,
+    from: -sector.from,
+    to: -sector.to,
+    side: sector.side === 'left' ? 'right' : 'left',
+  };
+}
+
 /**
  * Whether two things are at heights that could ever touch.
  *
@@ -248,6 +299,35 @@ export function largestSwing(part, originX, neighbours, maxAngle = FULL_SWING,
     best = angle;
   }
   return best;
+}
+
+/** The same sector opened only part of the way. */
+export const partSector = (sector, t) => ({
+  ...sector,
+  to: sector.from + (sector.to - sector.from) * t,
+});
+
+/**
+ * How far a sector opens before it hits something, and what stopped it.
+ *
+ * The sector version of largestSwing, for a door that has already been moved
+ * into room coordinates. Rebuilding the sector from the part, as largestSwing
+ * does, would throw that transform away and measure the door back on its own
+ * wall, which is the whole thing this is here to avoid.
+ *
+ * @returns {{angle:number, hit:?object}} angle in radians
+ */
+export function openUntilBlocked(sector, neighbours, steps = 22) {
+  const full = Math.abs(sector.to - sector.from);
+  let best = 0;
+
+  for (let i = 1; i <= steps; i++) {
+    const at = partSector(sector, i / steps);
+    const hit = neighbours.find((n) => sectorHitsBox(at, n));
+    if (hit) return { angle: best, hit };
+    best = (full * i) / steps;
+  }
+  return { angle: best, hit: null };
 }
 
 export const degrees = (radians) => Math.round((radians * 180) / Math.PI);

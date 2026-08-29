@@ -24,7 +24,7 @@ import {
 import { BAR_RULES } from './bar.js';
 import { assertMm, round1 } from './mm.js';
 import { finishFor, roleOf } from './finishes.js';
-import { obstacleNote, overlaps } from './obstacles.js';
+import { natureOf, obstacleKind, obstacleNote, overlaps } from './obstacles.js';
 
 let seq = 0;
 export const uid = () => `u${(seq++).toString(36)}${Date.now().toString(36).slice(-3)}`;
@@ -135,6 +135,41 @@ export const islandDepth = (wall, cfg) =>
 
 /** Which side of an island a cabinet is on. Only islands have two. */
 export const sideOf = (item) => (item?.settings?.side === 'back' ? 'back' : 'front');
+
+/* ---------------------------------------------------------------------------
+   Which way a cabinet faces on its run.
+
+   A wall has one side and everything on it faces the room, so this is the
+   identity there and nothing has to know about it.
+
+   An island has two, and they face OPPOSITE ways. That is what makes it an
+   island rather than two cabinets glued back to back facing each other: the
+   front run's doors open into the front of the island and the back run's into
+   the back, and the two carcasses meet in the middle with their backs
+   together. Its front face is z 0 and its back face is z depth, which is the
+   same convention the walkway check has always measured an island by.
+
+   Stated once here because three places need it and none of them can be
+   allowed to have its own version: the 3D that draws it, the door swing that
+   asks what it fouls, and the clearance check that measures across the room.
+   --------------------------------------------------------------------------- */
+
+/**
+ * How a unit's own z maps onto its run's z.
+ *
+ * @returns {{offset:number, flip:boolean}} local z becomes
+ *          flip ? offset - z : offset + z
+ */
+export function facing(p, islandDepth = 0) {
+  if (!islandDepth) return { offset: 0, flip: false };
+  return p.side === 'back'
+    ? { offset: islandDepth - p.unit.depth, flip: false }
+    : { offset: p.unit.depth, flip: true };
+}
+
+/** A range of the unit's own z, put on the run. Ordered low to high. */
+export const zRange = (f, z0, z1) =>
+  (f.flip ? [f.offset - z1, f.offset - z0] : [f.offset + z0, f.offset + z1]);
 
 /**
  * Where an island stands on the floor.
@@ -558,7 +593,74 @@ export function nestCfg(project) {
 export const SNAP = {
   tolerance: 60,       // how close a join has to be before it takes hold
   cornerPull: 400,     // a corner cabinet is pulled much harder, see below
+  /* A doorway is pulled hard for the same reason a corner is: there is
+     exactly one position beside it that works, and the whole point of
+     dragging a fridge up to a doorway is to land against its edge. */
+  obstaclePull: 250,
 };
+
+/* ---------------------------------------------------------------------------
+   The stretches of wall a cabinet may not stand in.
+
+   An obstacle set to "In the way" is not advice. A doorway is not somewhere
+   you put a fridge and then get a warning about: it is 820mm of wall that
+   does not exist as far as the run is concerned. So it comes out of the wall
+   before anything is placed, snapped or packed, and the warning is only there
+   for the case the model cannot prevent, which is moving the doorway after
+   the cabinets are down.
+
+   The height band matters and is easy to drop. A window at 900 blocks a base
+   cabinet and a tall pantry and does not block a wall cabinet at 1500: they
+   are at different heights and they never meet.
+   --------------------------------------------------------------------------- */
+
+/**
+ * @param {object} lay
+ * @param {object} unit    the unit being placed, for its height band
+ * @returns {{x0:number, x1:number, label:string}[]} in order along the wall
+ */
+export function blockingSpans(lay, unit) {
+  const y0 = unit?.mountY ?? 0;
+  const y1 = y0 + (unit?.height ?? 0);
+  const out = [];
+
+  for (const o of lay.wall.obstacles || []) {
+    if (natureOf(o) !== 'blocks') continue;
+    // Heights that could never touch are not in each other's way.
+    if (y1 > y0 && (y0 >= o.y + o.h || y1 <= o.y)) continue;
+    out.push({
+      x0: o.x, x1: o.x + o.w,
+      label: (o.label || obstacleKind(o.kind).name).toLowerCase(),
+    });
+  }
+  return out.sort((a, b) => a.x0 - b.x0);
+}
+
+/**
+ * The nearest position that does not stand a cabinet in a doorway.
+ *
+ * Pushed to whichever side of the obstacle is closer, and to the other one
+ * when that side runs off the start of the wall. Repeated, because pushing
+ * clear of one obstacle can land on the next.
+ *
+ * @returns {{x:number, blocked:?object}} blocked is what it was pushed off
+ */
+export function clearOfBlocks(lay, unit, x, spans = blockingSpans(lay, unit)) {
+  const w = unit.width;
+  let out = x;
+  let blocked = null;
+
+  for (let pass = 0; pass <= spans.length; pass++) {
+    const hit = spans.find((s) => out < s.x1 - 0.5 && out + w > s.x0 + 0.5);
+    if (!hit) break;
+    blocked = hit;
+    const left = hit.x0 - w;
+    const right = hit.x1;
+    out = (left >= 0 && Math.abs(left - out) <= Math.abs(right - out)) ? left : right;
+  }
+
+  return { x: Math.max(0, out), blocked };
+}
 
 /** Which run a placed unit shares with the one being dragged. */
 const sameRun = (a, b) => a === b || a === 'both' || b === 'both';
@@ -601,6 +703,15 @@ export function snapTargets(lay, item, unit, opts = SNAP) {
     add(p.x - w, 'butt', `left of ${p.label || p.unit.family.name}`);
   }
 
+  /* Either side of anything you have to build around. A fridge beside a
+     doorway lands against its architrave, not 40mm short of it and not 40mm
+     over it, and there is no other position in that stretch of wall that is
+     any use at all. */
+  for (const b of blockingSpans(lay, unit)) {
+    add(b.x0 - w, 'obstacle', `left of the ${b.label}`, opts.obstaclePull ?? opts.tolerance);
+    add(b.x1, 'obstacle', `right of the ${b.label}`, opts.obstaclePull ?? opts.tolerance);
+  }
+
   /* A blind corner belongs in the corner and nowhere else, so it is pulled
      from much further out. Dropping it anywhere near the right end of an L
      puts it exactly in the corner, which is the only place it works. */
@@ -623,13 +734,28 @@ export function snapX(lay, item, unit, rawX, opts = SNAP) {
     const d = Math.abs(c.x - rawX);
     if (d > c.pull) continue;
     /* A corner beats a plain butt joint at the same distance, because that
-       is the join that decides whether the kitchen closes up at all. */
-    const rank = c.kind === 'corner' ? -1 : 0;
+       is the join that decides whether the kitchen closes up at all. An
+       obstacle beats one too: there is one position beside a doorway and any
+       number of places to butt two cabinets together. */
+    const rank = (c.kind === 'corner' || c.kind === 'obstacle') ? -1 : 0;
     if (!best || rank < best.rank || (rank === best.rank && d < best.d)) {
       best = { ...c, d, rank };
     }
   }
-  const x = Math.max(0, Math.round(best ? best.x : rawX));
+
+  /* Whatever the drag and the snap between them decided, a cabinet does not
+     end up standing in a doorway. The push happens last so it wins over
+     everything, including a snap that would have put it there. */
+  const wanted = Math.max(0, Math.round(best ? best.x : rawX));
+  const cleared = clearOfBlocks(lay, unit, wanted);
+  const x = Math.round(cleared.x);
+
+  if (cleared.blocked && x !== wanted) {
+    return {
+      x,
+      snap: { x, kind: 'obstacle', label: `clear of the ${cleared.blocked.label}` },
+    };
+  }
   return { x, snap: best ? { x: best.x, kind: best.kind, label: best.label } : null };
 }
 
@@ -642,12 +768,18 @@ export function firstFreeX(lay, unit, width, side = 'front') {
   const where = occupies(unit.kind, unit.fullHeight);
   /* Only what is on the same side counts. A cabinet on the back of an island
      does not push one on the front along, so looking at both sides finds the
-     island full when the side you are adding to is empty. */
-  const taken = lay.placed
-    .filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
-    .filter((p) => sameRun(where, p.where))
-    .map((p) => [p.x, p.x + p.unit.width])
-    .sort((a, b) => a[0] - b[0]);
+     island full when the side you are adding to is empty.
+
+     A doorway counts on both sides, because it is not a cabinet: it is a
+     stretch of wall that is not there. Adding it here rather than warning
+     about it afterwards is what stops a new cabinet landing in one. */
+  const taken = [
+    ...lay.placed
+      .filter((p) => (p.side === 'back' ? side === 'back' : side !== 'back'))
+      .filter((p) => sameRun(where, p.where))
+      .map((p) => [p.x, p.x + p.unit.width]),
+    ...blockingSpans(lay, unit).map((b) => [b.x0, b.x1]),
+  ].sort((a, b) => a[0] - b[0]);
 
   let cursor = lay.startOffset;
   for (const [a, b] of taken) {
@@ -684,10 +816,18 @@ export function placeOnRun(lay, unit, width, want = 'front') {
   return second === null ? { x: null, side } : { x: second, side: other };
 }
 
-/** Gaps left in a run, so the wall can say where they are. */
-export function runGaps(lay, which = 'base') {
+/**
+ * Gaps left in a run, so the wall can say where they are.
+ *
+ * A side has to be named on an island. Its two sides occupy the same stretch
+ * of x and fill independently, so taking both at once reads a full front and
+ * an empty back as one full run with no gaps in it, and every gap on the back
+ * of an island went unreported.
+ */
+export function runGaps(lay, which = 'base', side = null) {
   const spans = lay.placed
     .filter((p) => (which === 'wall' ? p.where !== 'base' : p.where !== 'wall'))
+    .filter((p) => side === null || (p.side === 'back' ? side === 'back' : side !== 'back'))
     .map((p) => [p.x, p.x + p.unit.width])
     .sort((a, b) => a[0] - b[0]);
   if (!spans.length) return [];
@@ -720,14 +860,24 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
 
   /* Two cabinets in the same run cannot occupy the same millimetres. Before
      you could drag one this was impossible by construction, so it was never
-     worth saying. */
+     worth saying.
+
+     Every one of them, not the first. A cabinet dragged across two others is
+     wrong twice, and being told about one of them and then finding the other
+     after you fix it is how you lose an afternoon.
+
+     On the same SIDE of the run as well. An island's two sides run along the
+     same stretch of x back to back, so without this every cabinet on the
+     front of one was reported as overlapping the cabinet behind it, which is
+     not an overlap: it is what back to back means. */
+  const mySide = p.side === 'back' ? 'back' : 'front';
   for (const q of lay.placed) {
     if (q.item.uid === p.item.uid) continue;
     if (!sameRun(p.where, q.where)) continue;
+    if (lay.island && (q.side === 'back' ? 'back' : 'front') !== mySide) continue;
     const over = Math.min(x + unit.width, q.x + q.unit.width) - Math.max(x, q.x);
     if (over > 0.5) {
       out.push(`Overlaps ${q.label || q.unit.family.name} by ${Math.round(over)}mm`);
-      break;
     }
   }
 
@@ -744,8 +894,14 @@ export function unitWarnings(p, lay, cfg = PROJECT) {
     out.push(`Filler ${unit.width}mm. Over 100 looks like a mistake, add a cabinet`);
   }
 
-  if (unit.kind === 'base' && unit.width > 1000 && unit.family.fronts === 'doors') {
-    out.push(`${unit.width}mm on doors. Over 1000 they will drop, split the cabinet`);
+  /* A door that is too wide drops on its hinges. What matters is the door,
+     not the cabinet: a 1200 cabinet with a pair of 597mm doors on it is a
+     normal cabinet, and measuring the carcass instead put a warning on every
+     wide island unit in the kitchen. */
+  const widest = unit.parts.reduce((a, q) => (
+    q.group === 'front' && q.code.includes('DOOR') ? Math.max(a, q.size[0]) : a), 0);
+  if (widest > 1000) {
+    out.push(`${Math.round(widest)}mm door. Over 1000 it will drop on its hinges, split it into a pair`);
   }
 
   /* A blind corner is only useful if the door can open. The return cabinets
@@ -837,15 +993,23 @@ export function wallWarnings(lay, project) {
       : { level: 'error', text: `Base run is ${Math.round(lay.baseRun)}mm against a ${lay.wall.length}mm wall. Reduce by ${over}mm.` });
   } else {
     /* Free placement means a gap can be anywhere, not just at the end, so
-       say where it is rather than only how much is left over. */
-    const gaps = runGaps(lay, 'base');
-    const inner = gaps.filter((g) => !g.trailing);
-    const tail = gaps.find((g) => g.trailing);
-    for (const g of inner) {
-      out.push({ level: 'warn', text: `${Math.round(g.w)}mm gap at ${Math.round(g.x)}mm along the base run. Add a filler, widen a cabinet, or press Close gaps.` });
-    }
-    if (tail && lay.baseRun > 0) {
-      out.push({ level: 'warn', text: `${Math.round(tail.w)}mm of the base run is unfilled at the end. Add a filler or widen a cabinet.` });
+       say where it is rather than only how much is left over. An island has
+       two sides that fill independently, so each is asked separately and the
+       answer says which one it is about. */
+    const sides = lay.island ? ['front', 'back'] : [null];
+    for (const side of sides) {
+      const where = side ? ` on the ${side} of the island` : '';
+      const gaps = runGaps(lay, 'base', side);
+      const filled = lay.placed.some((p) => p.where !== 'wall'
+        && (side === null || (p.side === 'back' ? side === 'back' : side !== 'back')));
+
+      for (const g of gaps.filter((q) => !q.trailing)) {
+        out.push({ level: 'warn', text: `${Math.round(g.w)}mm gap at ${Math.round(g.x)}mm along the base run${where}. Add a filler, widen a cabinet, or press Close gaps.` });
+      }
+      const tail = gaps.find((q) => q.trailing);
+      if (tail && filled) {
+        out.push({ level: 'warn', text: `${Math.round(tail.w)}mm of the base run${where} is unfilled at the end. Add a filler or widen a cabinet.` });
+      }
     }
   }
   if (lay.wallRun > lay.limit + 0.5) {

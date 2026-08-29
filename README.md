@@ -54,6 +54,12 @@ Eleven screens over one project: Planner, Cabinet, Checks, Reference, Cut list, 
 Drilling, Hardware, Workshop, Costing, Order list, Print and Settings. Everything reads
 one part list, so the drawing, the nest, the holes and the price cannot disagree.
 
+The elevation is dimensioned: every cabinet, every gap and the whole wall, in chains
+that add up. Clearances are measured across the whole room rather than one wall at a
+time, so a door that will not open past the cabinet on the next wall is found before
+anything is cut. Carcasses are pocket screwed by default, and the drilling schedule
+draws every pocket and lists every position.
+
 All dimensions are millimetres and all money is AUD. Projects autosave to the browser
 and export as a `.kcb.json` file. There is no server and no account.
 

@@ -488,3 +488,47 @@ describe('the drawer setout closes', () => {
     expect(drawerSetout(null)).toEqual([]);
   });
 });
+
+/* ---------------------------------------------------------------------------
+   The bin.
+
+   A pull-out bin is a drawer. It was built as a cupboard: a hinged door with a
+   handle on its opening stile, a swing arc into the room, hinges in the
+   fittings and a door in the door count. None of that is what a bin does. It
+   pulls straight out on its own runner, and the carrier it runs on is the box,
+   so there is no wooden box to cut for it either.
+   --------------------------------------------------------------------------- */
+describe('the pull-out bin', () => {
+  const bin = buildUnit('A1', 'base-bin', {}, PROJECT);
+
+  it('has a drawer front and no door', () => {
+    const fronts = bin.parts.filter((p) => p.group === 'front');
+    expect(fronts).toHaveLength(1);
+    expect(fronts[0].code).toMatch(/DRWR-F1$/);
+    expect(fronts[0].drawer).toBe(1);
+    expect(bin.parts.some((p) => p.code.includes('DOOR'))).toBe(false);
+  });
+
+  it('fills the opening, because a bin is one front', () => {
+    const front = bin.parts.find((p) => p.group === 'front');
+    expect(front.W).toBeCloseTo(bin.height, 0);
+  });
+
+  it('takes a bin runner and a handle, and no hinges and no runner pair', () => {
+    const types = bin.fittings.map((f) => f.type);
+    expect(types).toContain('binRunner');
+    expect(types).toContain('handle');
+    expect(types).not.toContain('hinge');
+    expect(types).not.toContain('runnerPair');
+  });
+
+  /* The carrier is the box. Cutting a wooden drawer box for it would put four
+     panels on the cut list that nobody builds and nobody pays for. */
+  it('has no drawer box parts', () => {
+    expect(bin.parts.filter((p) => p.group === 'box')).toHaveLength(0);
+  });
+
+  it('still has a carcass to build', () => {
+    expect(bin.parts.filter((p) => p.group === 'carcass').length).toBeGreaterThan(0);
+  });
+});

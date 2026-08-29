@@ -21,6 +21,8 @@ import {
   roomLayout, roomWallIds, uid, unitServices, unitWarnings, wallWarnings,
 } from './project.js';
 import { BAR_RULES } from './bar.js';
+import { CLEARANCE_DEFAULTS } from './checks.js';
+import { clearanceFindings, findingsForWall } from './clearance.js';
 
 /* --- cabinet family glyphs ------------------------------------------------
    Line drawings on a 24 square. Elevation shapes, not icons: a glyph shows
@@ -132,6 +134,11 @@ function Picker({ onAdd, cfg }) {
     </div>
   );
 }
+
+/* How many findings the strip under the drawing shows before it folds. Six is
+   about what fits without the drawing losing half its height, and the fold
+   says how many are behind it rather than hiding the count as well. */
+const WARN_FOLD = 6;
 
 /* The overrides that live in the drawer box section, so it can tell whether
    this cabinet has departed from the project in there. */
@@ -430,13 +437,58 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [opt, setOpt] = useState(null);
   const [optBusy, setOptBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  /* Folded when there is a lot of it. Errors and warnings are always shown:
+     a warning you have to press a button to see is a warning nobody reads. */
+  const [allWarns, setAllWarns] = useState(false);
 
   const reduced = useMemo(
     () => matchMedia('(pointer: coarse)').matches || window.innerWidth < 900, []);
 
   const wall = project.walls.find((w) => w.id === project.activeWall) || project.walls[0];
   const lay = useMemo(() => layoutFor(project, wall), [project, wall]);
+
+  /* ---------------------------------------------------------------------------
+     What is wrong with this wall, in one strip under the drawing.
+
+     Three separate things used to be three separate places. The wall's own
+     warnings were down here, a cabinet's were a red outline you had to select
+     the cabinet to read, and anything measured across the room was on the
+     Checks screen two clicks away. The one that matters most, a door at a
+     corner that cannot open, was the one you were least likely to see.
+     --------------------------------------------------------------------------- */
+
   const wallWarns = useMemo(() => wallWarnings(lay, project), [lay, project]);
+
+  /* Measured across the whole floor, then narrowed to this wall. It has to be
+     the whole floor: the cabinet a corner door fouls is on the next wall, and
+     a check that only looked at this one could never find it. */
+  const clearances = useMemo(() => clearanceFindings(
+    floorPlan(project), { ...CLEARANCE_DEFAULTS, ...project.cfg }), [project]);
+
+  const findings = useMemo(() => {
+    const out = [];
+    for (const w of wallWarns) out.push({ level: w.level || 'warn', text: w.text });
+    for (const p of lay.placed) {
+      for (const text of unitWarnings(p, lay, project.cfg)) {
+        out.push({
+          level: 'error',
+          text: `${p.label || p.unit.family.name}: ${text}`,
+          uid: p.item.uid,
+        });
+      }
+    }
+    for (const f of findingsForWall(clearances, wall.id)) {
+      out.push({ level: f.level, text: f.where ? `${f.where}: ${f.text}` : f.text });
+    }
+    const rank = { error: 0, warn: 1, note: 2 };
+    return out.sort((a, b) => (rank[a.level] ?? 1) - (rank[b.level] ?? 1));
+  }, [wallWarns, lay, project.cfg, clearances, wall.id]);
+
+  const counts = useMemo(() => ({
+    error: findings.filter((f) => f.level === 'error').length,
+    warn: findings.filter((f) => f.level === 'warn').length,
+    note: findings.filter((f) => f.level === 'note').length,
+  }), [findings]);
   /* The whole joined run, so the 3D can show the corner rather than one wall
      at a time. A straight kitchen has nothing to join, so it stays as it was. */
   /* What the 3D shows.
@@ -1063,7 +1115,7 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
             <div className="plan-arr">{elevation}</div>
           )}
 
-          {(notice || wallWarns.length > 0) && (
+          {(notice || findings.length > 0) && (
             <div className="wall-warnings">
               {notice && (
                 <div className="warn-inline warn-inline--note">
@@ -1073,7 +1125,28 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
                   <span>{notice}</span>
                 </div>
               )}
-              {wallWarns.map((w, i) => (
+
+              {findings.length > 0 && (
+                <div className="warn-summary">
+                  <span className="field__label">On this wall</span>
+                  {counts.error > 0 && (
+                    <span className="badge badge--warn badge--num">{counts.error} to fix</span>
+                  )}
+                  {counts.warn > 0 && (
+                    <span className="badge badge--neutral badge--num">{counts.warn} to look at</span>
+                  )}
+                  {counts.note > 0 && (
+                    <span className="badge badge--neutral badge--num">{counts.note} to know</span>
+                  )}
+                  {findings.length > WARN_FOLD && (
+                    <button className="btn btn--ghost" onClick={() => setAllWarns((v) => !v)}>
+                      {allWarns ? 'Show fewer' : `Show all ${findings.length}`}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(allWarns ? findings : findings.slice(0, WARN_FOLD)).map((w, i) => (
                 <div key={i} className={`warn-inline ${w.level === 'error' ? 'warn-inline--error'
                   : w.level === 'note' ? 'warn-inline--note' : ''}`}>
                   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4">

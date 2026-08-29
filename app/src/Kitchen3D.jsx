@@ -26,7 +26,7 @@ import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Part, boxGeo, cssVar } from './Viewer.jsx';
 import {
-  NO_BAR, barBrackets, barSeats, islandBar, islandDepth, unitWarnings,
+  NO_BAR, barBrackets, barSeats, facing, islandBar, islandDepth, unitWarnings, zRange,
 } from './project.js';
 import { BAR_RULES } from './bar.js';
 import { finishFor } from './finishes.js';
@@ -40,7 +40,10 @@ import {
   Microwave, Outlet, OvenFront, SURFACE, Service, Sink, SinkPlumbing, Stool,
   Vent, Washer, Window,
 } from './Fixtures.jsx';
-import { FULL_SWING, doorSwing, drawerSlide, largestSwing, swingSector, arcPoint, degrees } from './motion.js';
+import {
+  FULL_SWING, arcPoint, degrees, doorSwing, drawerSlide, mirrorSector, openUntilBlocked,
+  partSector, swingSector,
+} from './motion.js';
 
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
@@ -60,10 +63,12 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
   const handles = useMemo(() => (show.handles ? handlesFor(unit) : []), [unit, show.handles]);
   const handleFor = (pred) => handles.filter(pred);
 
-  /* The back of an island faces the other way. Turned about its own middle
-     and pushed to the far face, so its doors open into the room behind it
-     rather than into the cabinets it is backing onto. */
-  const onBack = islandDepth > 0 && p.side === 'back';
+  /* The two sides of an island face opposite ways, which is what makes it an
+     island rather than two cabinets glued back to back with their doors
+     looking at each other. The front run is the one turned around, so its
+     doors open out of the front face at z 0 and the back run's out of the
+     back face. Which way round that is belongs to the model: this reads it. */
+  const face = facing(p, islandDepth);
 
   const partProps = {
     offset: [0, 0, 0], selected: sel, ghosted: ghost, hidden: false, warn,
@@ -124,15 +129,18 @@ function Cabinet({ p, open, sel, ghost, warn, setHovered, setSelected, islandDep
     </>
   );
 
-  if (onBack) {
+  if (face.flip) {
+    /* A half turn about the cabinet's own middle, landed so its front face
+       comes out at the offset. Turning it is the only way to face it the
+       other way: moving it leaves the doors on the wrong side. */
     return (
-      <group position={[x + unit.width, unit.mountY, islandDepth]} rotation={[0, Math.PI, 0]}>
+      <group position={[x + unit.width, unit.mountY, face.offset]} rotation={[0, Math.PI, 0]}>
         <group position={[0, 0, 0]}>{body}</group>
       </group>
     );
   }
 
-  return <group position={[x, unit.mountY, 0]}>{body}</group>;
+  return <group position={[x, unit.mountY, face.offset]}>{body}</group>;
 }
 
 const VIEWS = {
@@ -378,27 +386,28 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
             onPointerOver: (e) => { e.stopPropagation(); setHovered(p); },
             onPointerOut: () => setHovered(null),
           };
-          const onBack = lay.island && p.side === 'back';
+          const face = facing(p, lay.island ? depth : 0);
           const inner = (
             <Appliance unit={unit} ghost={ghost}
                        benchHeight={cfg.benchHeight - unit.mountY} />
           );
           return (
             <group key={p.item.uid} {...evt}>
-              {onBack ? (
-                <group position={[x + unit.width, unit.mountY, depth]} rotation={[0, Math.PI, 0]}>
+              {face.flip ? (
+                <group position={[x + unit.width, unit.mountY, face.offset]} rotation={[0, Math.PI, 0]}>
                   {inner}
                 </group>
               ) : (
-                <group position={[x, unit.mountY, 0]}>{inner}</group>
+                <group position={[x, unit.mountY, face.offset]}>{inner}</group>
               )}
               {/* Selection reads off a wire cage rather than off a tint. Tinting
                   a fridge blue makes it stop being a fridge, which is the thing
                   drawing them properly was for. */}
               {sel && (
-                <lineSegments position={onBack
-                  ? [x + unit.width / 2, unit.mountY + unit.height / 2, depth - unit.depth / 2]
-                  : [x + unit.width / 2, unit.mountY + unit.height / 2, unit.depth / 2]}>
+                <lineSegments position={[
+                  x + unit.width / 2, unit.mountY + unit.height / 2,
+                  (zRange(face, 0, unit.depth)[0] + zRange(face, 0, unit.depth)[1]) / 2,
+                ]}>
                   <edgesGeometry args={[boxGeo(unit.width + 16, unit.height + 16, unit.depth + 16).box]} />
                   <lineBasicMaterial color={cssVar('--accent', '#356F51')} />
                 </lineSegments>
@@ -418,10 +427,11 @@ function WallRun({ lay, cfg, selected, setSelected, setHovered, show, warnMap, o
       {/* kickboard, set back from the front face */}
       {lay.placed.filter((p) => p.where !== 'wall' && !p.unit.cavity).map((p) => (
         <mesh key={`k${p.item.uid}`} receiveShadow
+              /* Under the front of the cabinet, set back from its face. Which
+                 way the cabinet faces decides which end of it that is. */
               position={[p.x + p.unit.width / 2, cfg.kick / 2,
-                p.side === 'back' && depth
-                  ? depth - p.unit.depth + 60
-                  : p.unit.depth - 60]}
+                (({ offset, flip }) => (flip ? offset - 60 : offset + p.unit.depth - 60))(
+                  facing(p, lay.island ? depth : 0))]}
               onClick={noop}>
           <boxGeometry args={[p.unit.width, cfg.kick, 18]} />
           <meshStandardMaterial color={kickCol} roughness={0.86} />
@@ -984,7 +994,23 @@ export default function Kitchen3D(props) {
 function SwingArcs({ lay, cfg, selected }) {
   const arcs = useMemo(() => {
     const placed = lay.placed.filter((q) => !q.unit.cavity && q.unit.kind !== 'filler');
+    const depth = lay.island ? islandDepth(lay.wall, cfg) : 0;
     const out = [];
+
+    /* Everything standing in the plan, as a box seen from above, with each
+       one put where its own side of the run actually is. Taking every cabinet
+       as running from z 0 said the two sides of an island were in the same
+       place, which is how the arcs used to report every island door as
+       fouling the cabinet backing onto it. */
+    const boxes = placed.map((q) => {
+      const [z0, z1] = zRange(facing(q, depth), 0, q.unit.depth);
+      return {
+        uid: q.item.uid,
+        x0: q.x, x1: q.x + q.unit.width, z0, z1,
+        y0: q.unit.mountY, y1: q.unit.mountY + q.unit.height,
+        label: q.unit.family.name,
+      };
+    });
 
     for (const p of placed) {
       if (selected && p.item.uid !== selected) continue;
@@ -992,30 +1018,28 @@ function SwingArcs({ lay, cfg, selected }) {
         (q) => q.group === 'front' && q.code.includes('DOOR'));
       if (!doors.length) continue;
 
-      /* Everything else standing in the plan, as a box seen from above. The
-         cabinet whose door it is cannot foul itself. */
-      const others = placed
-        .filter((q) => q.item.uid !== p.item.uid)
-        .map((q) => ({
-          x0: q.x, x1: q.x + q.unit.width,
-          z0: 0, z1: q.unit.depth,
-          y0: q.unit.mountY, y1: q.unit.mountY + q.unit.height,
-          label: q.unit.family.name,
-        }));
+      // The cabinet whose door it is cannot foul itself.
+      const others = boxes.filter((q) => q.uid !== p.item.uid);
+      const face = facing(p, depth);
 
       for (const door of doors) {
-        const reach = largestSwing(door, p.x, others, FULL_SWING, 22, p.unit.mountY);
-        const sector = swingSector(door, p.x, Math.max(reach, 0.08), p.unit.mountY);
+        const shut = swingSector(door, p.x, FULL_SWING, p.unit.mountY);
+        const placedSector = face.flip
+          ? mirrorSector(shut, face.offset)
+          : { ...shut, cz: shut.cz + face.offset };
+
+        const { angle } = openUntilBlocked(placedSector, others);
+        const reach = Math.max(angle, 0.08);
         out.push({
           key: `${p.item.uid}-${door.code}`,
-          sector,
-          reach,
-          blocked: reach < FULL_SWING - 0.01,
+          sector: partSector(placedSector, reach / Math.abs(placedSector.to - placedSector.from)),
+          reach: angle,
+          blocked: angle < FULL_SWING - 0.01,
         });
       }
     }
     return out;
-  }, [lay, selected]);
+  }, [lay, cfg, selected]);
 
   return arcs.map((a) => <Arc key={a.key} {...a} />);
 }

@@ -154,9 +154,22 @@ describe('fixings are counted off the drilling, not guessed', () => {
     const count = fixingCount(project, { allUnits, drillUnit });
     expect(count).toBeGreaterThan(0);
 
+    /* The hole the fixing itself goes in, whichever kind of joint it is: a
+       clearance hole through the side for a confirmat, the pocket itself for
+       a pocket screw. Counting the pilot in the mating edge as well would
+       order two screws per joint. */
     const byHand = allUnits(project).reduce((a, { unit }) => a + drillUnit(unit)
-      .reduce((b, panel) => b + panel.holes.filter((h) => h.kind === 'construction').length, 0), 0);
+      .reduce((b, panel) => b + panel.holes.filter(
+        (h) => h.kind === 'construction' || h.kind === 'pocket').length, 0), 0);
     expect(count).toBe(byHand);
+  });
+
+  it('names the fixing after the joint the kitchen is actually built with', () => {
+    const pocketed = order({ ...project, cfg: { ...project.cfg, jointMethod: 'pocket-screw' } });
+    const row = pocketed.other.find((r) => /pocket screw/i.test(r.what));
+    expect(row).toBeDefined();
+    expect(row.what).toMatch(/#8 x 32mm/);
+    expect(row.needed).toBeGreaterThan(0);
   });
 
   it('a dowelled carcass orders dowels and a screwed one orders screws', () => {

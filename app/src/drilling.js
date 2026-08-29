@@ -11,6 +11,10 @@
 
 import { whole } from './mm.js';
 import { CUP_RADIUS, cupCentre, hingeCentres, hingeCountFor, hingeProfile } from './hardware.js';
+import {
+  POCKET, canPocket, pocketFaceOffset, pocketNote, pocketPositions, pocketRule, pocketScrew,
+  pocketSlotLength,
+} from './pocket.js';
 
 export const DRILL = {
   pitch: 32,          // system hole spacing
@@ -73,12 +77,35 @@ export function rearRowX(depth, mode = 'grid', d = SYS32) {
 /* ---------------------------------------------------------------------------
    How the carcass is held together.
 
-   Both halves of a joint are drilled, and they are drilled differently: the
-   panel the screw passes through gets a clearance hole, the panel it screws
-   into gets a pilot down its edge. Drawing only one half is how a carcass
-   ends up with a bottom that will not line up with its sides.
+   Three ways, and they are drilled differently enough that the method has to
+   be a setting rather than an assumption.
+
+   A pocket screw is drilled in one panel only: the one that butts into the
+   other. The pocket goes in its face, near the end, and the pilot comes out
+   of its end edge to cross the joint into the face of the panel it lands on,
+   which needs nothing drilled in it at all. So a pocket built carcass has
+   holes in the bottom, the top and the rails, and a side panel with nothing
+   in it but shelf pins and hinge plates.
+
+   A confirmat and a dowel are the other way round: both halves are drilled,
+   the panel the screw passes through gets a clearance hole and the panel it
+   screws into gets a pilot down its edge. Drawing only one half of those is
+   how a carcass ends up with a bottom that will not line up with its sides.
    --------------------------------------------------------------------------- */
 export const JOINTS = {
+  'pocket-screw': {
+    id: 'pocket-screw',
+    name: 'Pocket screw',
+    /* The flag the schedule turns on. Everything else about a pocket comes
+       out of pocket.js, which is where the jig geometry lives. */
+    pocket: true,
+    faceDia: POCKET.bore,
+    faceDepth: 0,
+    faceThrough: true,
+    edgeDia: POCKET.pilot,
+    edgeDepth: 0,
+    note: 'One panel is drilled, the one that butts into the other. Set the jig and the stop collar to the thickness of the panel in the jig, not to the thickness of what it screws into. Clamp the joint before you drive the screw: a pocket screw pulls the panel sideways if nothing is holding it.',
+  },
   'confirmat-7x50': {
     id: 'confirmat-7x50',
     name: 'Confirmat 7 x 50',
@@ -102,7 +129,24 @@ export const JOINTS = {
 };
 
 export const JOINT_LIST = Object.values(JOINTS);
-export const jointMethod = (id) => JOINTS[id] || JOINTS['confirmat-7x50'];
+export const jointMethod = (id) => JOINTS[id] || JOINTS['pocket-screw'];
+
+/* ---------------------------------------------------------------------------
+   How a shelf is held up.
+
+   Two answers, and they are different shelves. On pins it is adjustable and
+   the holes are in the sides. Pocket screwed it is fixed, the holes are in
+   the shelf itself and they go in its underside where nobody looks up at
+   them, and it braces the carcass instead of just sitting in it.
+   --------------------------------------------------------------------------- */
+export const SHELF_FIXES = [
+  { id: 'pocket', name: 'Fixed, pocket screwed',
+    note: 'Pockets down both long edges of the shelf, drilled in its underside so they are not seen. A fixed shelf stiffens the cabinet, which is what stops a wide one sagging.' },
+  { id: 'pins', name: 'Adjustable, on pins',
+    note: 'Shelf pin holes in the sides, two either side of the shelf so it moves 64mm up or down. Nothing is drilled in the shelf.' },
+];
+
+export const shelfFixOf = (id) => SHELF_FIXES.find((f) => f.id === id) || SHELF_FIXES[0];
 
 /**
  * Where the joint holes sit along the depth of a side panel, measured from
@@ -116,7 +160,11 @@ export const jointMethod = (id) => JOINTS[id] || JOINTS['confirmat-7x50'];
 /* The panels that screw into the edge of a side: the bottom, the top, and
    the top rails of a base cabinet. A shelf is not one of them, it sits on
    pins and stays adjustable. */
-export const JOINTED = /-(BOT|TOP|RAIL-TB|RAIL-TF)$/;
+export const JOINTED = /-(BOT|TOP|RAIL-TB|RAIL-TF|BACK-RAIL)$/;
+
+/* The drawer box panels that screw into the box sides. The base is separate:
+   it is thin enough that it often cannot take a pocket at all. */
+export const BOX_JOINTED = /-(FRONT|BACK)$/;
 
 export function jointXs(depth, inset = 80) {
   const back = Math.min(inset, depth / 3);
@@ -127,6 +175,44 @@ export function jointXs(depth, inset = 80) {
    and a jig is drilled to a mark, not to a tenth. */
 const hole = (x, y, dia, depth, kind, label) =>
   ({ x: whole(x), y: whole(y), dia, depth, kind, label });
+
+/**
+ * One pocket, at a hole centre on the face of the panel.
+ *
+ * `towards` is the edge the pilot comes out of, as the panel is drawn, so the
+ * drawing can put the slot the right way round. A pocket pointing the wrong
+ * way is a pocket drilled into the wrong end of the board.
+ */
+const pocket = (x, y, towards, thickness, label = '') => ({
+  x: whole(x), y: whole(y),
+  dia: POCKET.bore, depth: 0, kind: 'pocket', label,
+  len: Math.round(pocketSlotLength()),
+  towards,
+  screw: pocketScrew(thickness).name,
+});
+
+/**
+ * Pockets down one joint on a panel drawn flat.
+ *
+ * The joint runs along one edge of the panel. The pockets sit a fixed
+ * distance in from that edge, spread along it by the rule.
+ *
+ * @param {'left'|'right'|'top'|'bottom'} edge  which edge the joint is on
+ * @param {number} w   panel width as drawn
+ * @param {number} h   panel height as drawn
+ * @param {number} thk thickness of THIS panel, which is what sets the jig
+ * @param {object} rule one of POCKET_RULES
+ */
+function pocketsOnEdge(edge, w, h, thk, rule) {
+  const off = pocketFaceOffset(thk);
+  const along = (edge === 'left' || edge === 'right') ? h : w;
+  return pocketPositions(along, rule).map((t) => {
+    if (edge === 'left') return pocket(off, t, 'left', thk);
+    if (edge === 'right') return pocket(w - off, t, 'right', thk);
+    if (edge === 'bottom') return pocket(t, off, 'bottom', thk);
+    return pocket(t, h - off, 'top', thk);
+  });
+}
 
 /**
  * Shelf pin positions. The template is for shelves, so instead of a full
@@ -185,9 +271,13 @@ export function drillPanel(unit, part, d = DRILL) {
     const frontX = depth - d.frontSetback;
     const joint = jointMethod(cfg.jointMethod);
 
-    const shelfYs = unit.parts
-      .filter((q) => q.group === 'shelf')
-      .map((q) => q.pos[1] + q.size[1] / 2);
+    /* A shelf on pins is drilled here, in the side. A shelf that is pocket
+       screwed is a fixed shelf: the holes are in the shelf itself and this
+       panel gets nothing for it. */
+    const shelfFix = shelfFixOf(cfg.shelfFix);
+    const shelfYs = shelfFix.id === 'pins'
+      ? unit.parts.filter((q) => q.group === 'shelf').map((q) => q.pos[1] + q.size[1] / 2)
+      : [];
 
     for (const y of shelfHoles(shelfYs, height, d)) {
       holes.push(hole(backX, Math.round(y), d.systemDia, d.systemDepth, 'system', ''));
@@ -221,16 +311,21 @@ export function drillPanel(unit, part, d = DRILL) {
       }
     }
 
-    /* Both halves of the carcass joint. These go through the side and into
-       the edge of whatever is behind them, and the mating panel is drilled to
-       the same figures from its own front edge. */
+    /* The carcass joint, when the method puts a hole in this panel.
+
+       A pocket screw does not. It is drilled in the panel that butts into
+       this one and lands in this face with nothing bored for it, which is
+       half the reason to build a carcass that way: the outside of the side
+       panel stays whole. */
     const t = cfg.carcassThk ?? 16;
     const mates = unit.parts.filter((q) => q.group === 'carcass' && JOINTED.test(q.code));
-    for (const m of mates) {
-      const y = m.pos[1] + t / 2;
-      for (const x of jointXs(depth)) {
-        holes.push(hole(x, Math.round(y), joint.faceDia,
-          joint.faceThrough ? t : joint.faceDepth, 'construction', ''));
+    if (!joint.pocket) {
+      for (const m of mates) {
+        const y = m.pos[1] + t / 2;
+        for (const x of jointXs(depth)) {
+          holes.push(hole(x, Math.round(y), joint.faceDia,
+            joint.faceThrough ? t : joint.faceDepth, 'construction', ''));
+        }
       }
     }
 
@@ -248,8 +343,15 @@ export function drillPanel(unit, part, d = DRILL) {
       notes.push(`${d.adjustSteps} holes either side of each shelf, so it moves ${d.adjustSteps * d.pitch}mm up or down.`);
     }
     if (plates) notes.push(`${plates} hinge plate holes on the ${hp.plateSetback}mm line, ${hp.plateDia}mm, ${hp.plateDepth}mm deep.`);
-    notes.push(`${joint.name}: ${joint.faceDia}mm ${joint.faceThrough ? 'through the side' : `${joint.faceDepth}mm deep`}.`);
-    notes.push(joint.note);
+    if (joint.pocket) {
+      notes.push(`${joint.name} carcass. Nothing is drilled in this panel for the joint: the bottom, the top and the rails carry the pockets and land on this face.`);
+    } else {
+      notes.push(`${joint.name}: ${joint.faceDia}mm ${joint.faceThrough ? 'through the side' : `${joint.faceDepth}mm deep`}.`);
+      notes.push(joint.note);
+    }
+    if (shelfFix.id !== 'pins' && unit.parts.some((q) => q.group === 'shelf')) {
+      notes.push('Shelves are fixed and pocket screwed, so there are no pin holes in this panel. The shelves carry their own.');
+    }
 
     return {
       code: part.code, name: part.name, w: depth, h: height, hand,
@@ -257,14 +359,42 @@ export function drillPanel(unit, part, d = DRILL) {
     };
   }
 
-  /* The panel the screws go into. Its holes are down the two end edges, not
-     in the face, so they are drawn straddling the edge as a reminder of which
-     way the panel goes on the bench. */
+  /* The panel that meets the sides: the bottom, the top, the rails, the back
+     rail. Which half of the joint lands in it depends entirely on the method.
+
+     Pocket screwed, this panel carries the whole joint. The pockets go in its
+     face, near each end, and the pilots come out of the end edges into the
+     sides. Drilled face down on the bench, which for a bottom is its
+     underside and for a top is the side you will never see.
+
+     Confirmat or dowel, it is the other half: pilots down the two end edges,
+     drawn straddling the edge as a reminder of which way the panel goes on
+     the bench. */
   if (part.group === 'carcass' && JOINTED.test(part.code)) {
     const joint = jointMethod(cfg.jointMethod);
     const w = part.L;   // across, the internal width of the carcass
     const h = part.W;   // the depth of the panel
     const holes = [];
+
+    if (joint.pocket) {
+      const thk = part.T;
+      if (!canPocket(thk)) return null;
+      const rule = pocketRule('carcass');
+      holes.push(...pocketsOnEdge('left', w, h, thk, rule));
+      holes.push(...pocketsOnEdge('right', w, h, thk, rule));
+      return {
+        code: part.code, name: part.name, w, h,
+        xLabel: 'Width', yLabel: 'Depth',
+        pockets: true,
+        holes,
+        notes: [
+          'Front edge is at the bottom as drawn. Pockets are in the face that will not be seen: the underside of a bottom, the top of a top, the inside of a rail.',
+          pocketNote(thk, h, rule),
+          `The pilot comes out of the end edge and lands in the face of the side panel, so nothing is drilled in the side for this joint.`,
+          joint.note,
+        ],
+      };
+    }
 
     /* The side is drilled from its back edge and this panel is measured from
        its front, so the same joint is the same distance from the front of the
@@ -289,6 +419,96 @@ export function drillPanel(unit, part, d = DRILL) {
         `${joint.edgeDia}mm, ${joint.edgeDepth}mm deep, down the centre of the edge.`,
         'Same distances from the front as the side panel, so the two halves land on each other.',
         joint.note,
+      ],
+    };
+  }
+
+  /* A fixed shelf. Pockets down both long edges, in the underside, so a
+     shelf that is holding the cabinet square is not a shelf covered in holes
+     you can see. Nothing here when the shelves are on pins: those are drilled
+     in the sides and the shelf itself is a plain rectangle. */
+  if (part.group === 'shelf') {
+    const joint = jointMethod(cfg.jointMethod);
+    if (shelfFixOf(cfg.shelfFix).id !== 'pocket') return null;
+    const thk = part.T;
+    if (!canPocket(thk)) return null;
+
+    const w = part.L;   // across, the width of the shelf
+    const h = part.W;   // the depth of the shelf
+    const rule = pocketRule('shelf');
+    const holes = [
+      ...pocketsOnEdge('left', w, h, thk, rule),
+      ...pocketsOnEdge('right', w, h, thk, rule),
+    ];
+
+    return {
+      code: part.code, name: part.name, w, h,
+      xLabel: 'Width', yLabel: 'Depth',
+      pockets: true,
+      holes,
+      notes: [
+        'Drilled in the UNDERSIDE, front edge at the bottom as drawn. A pocket in the top of a shelf is a pocket you look into every time you open the door.',
+        pocketNote(thk, h, rule),
+        'Screwed to the sides, so this shelf is fixed. Set it out on the sides before you assemble the carcass and mark both together.',
+        joint.note,
+      ],
+    };
+  }
+
+  /* The drawer box front and back, which screw into the box sides. Two
+     pockets each end is what a box that size takes. */
+  if (part.group === 'box' && BOX_JOINTED.test(part.code)) {
+    const thk = part.T;
+    if (!canPocket(thk)) return null;
+    const w = part.L;   // across, the inside width of the box
+    const h = part.W;   // the height of the box side
+    const rule = pocketRule('box');
+    const holes = [
+      ...pocketsOnEdge('left', w, h, thk, rule),
+      ...pocketsOnEdge('right', w, h, thk, rule),
+    ];
+
+    return {
+      code: part.code, name: part.name, w, h,
+      xLabel: 'Width', yLabel: 'Height',
+      pockets: true,
+      holes,
+      notes: [
+        'Drilled in the face that ends up inside the box, so the pockets are hidden once the drawer is together.',
+        pocketNote(thk, h, rule),
+        'The pilots come out of the end edges into the box sides. The sides are not drilled.',
+      ],
+    };
+  }
+
+  /* The drawer bottom. The app has always called a recessed base pocket
+     screwed, and never drew a single one of the pockets. A butted base goes
+     under the sides and is screwed or pinned up through, not pocketed, and a
+     6mm bottom cannot take a 9.5mm pocket at all, so both of those come back
+     as nothing rather than as holes you cannot drill. */
+  if (part.group === 'box' && part.code.endsWith('-BASE')) {
+    // Anything but an explicit butted base is the recessed, pocket screwed one.
+    if ((cfg.boxBaseFix ?? 'screwed') === 'butted') return null;
+    const thk = part.T;
+    if (!canPocket(thk)) return null;
+
+    const w = part.L;   // across, the width of the base
+    const h = part.W;   // its depth
+    const rule = pocketRule('box');
+    const holes = [
+      ...pocketsOnEdge('left', w, h, thk, rule),
+      ...pocketsOnEdge('right', w, h, thk, rule),
+    ];
+
+    return {
+      code: part.code, name: part.name, w, h,
+      xLabel: 'Width', yLabel: 'Depth',
+      pockets: true,
+      holes,
+      notes: [
+        'Drilled in the underside, so the pockets are under the drawer where nothing is loaded on them.',
+        pocketNote(thk, h, rule),
+        'Screwed up into the bottom edges of the box sides. The sides are not drilled.',
       ],
     };
   }
@@ -329,12 +549,34 @@ export function drillPanel(unit, part, d = DRILL) {
   return null;
 }
 
+/**
+ * What kind of panel this is, for filtering a schedule down to the job in
+ * front of you. Drilling a kitchen is done a kind at a time: every side, then
+ * every shelf, then every door, because that is when the jig is set for it.
+ */
+export function panelKind(panel) {
+  if (/-SIDE-[LR]$/.test(panel.code)) return 'side';
+  if (/-SHELF-\d+$/.test(panel.code)) return 'shelf';
+  if (panel.code.includes('DOOR')) return 'door';
+  if (/-DRWR\d+-/.test(panel.code)) return 'box';
+  return 'carcass';
+}
+
+export const PANEL_KINDS = [
+  { id: 'side', name: 'Sides' },
+  { id: 'carcass', name: 'Tops, bottoms and rails' },
+  { id: 'shelf', name: 'Shelves' },
+  { id: 'door', name: 'Doors' },
+  { id: 'box', name: 'Drawer boxes' },
+];
+
 /** Every drilled panel in a cabinet. */
 export function drillUnit(unit, d = DRILL) {
   return unit.parts.map((p) => drillPanel(unit, p, d)).filter(Boolean);
 }
 
 export const HOLE_STYLE = {
+  pocket: { fill: 'var(--accent)', label: `${POCKET.bore}mm pocket, ${POCKET.angle} degrees` },
   system: { fill: 'var(--dw-line)', label: '5mm shelf pin' },
   construction: { fill: 'var(--accent)', label: 'Carcass joint, through the side' },
   cup: { fill: 'var(--warn)', label: '35mm hinge cup' },

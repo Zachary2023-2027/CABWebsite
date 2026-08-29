@@ -71,7 +71,11 @@ These are user-imposed rules that apply to any new work:
 | `catalog.js` | `PROJECT` defaults, `PRICES`, the cabinet family table, and `buildUnit()` which turns a family plus settings into a real part list |
 | `project.js` | Walls, room shape, layout, snapping, warnings, totals, and the project-wide part/fitting/unit lists |
 | `nesting.js` | Shelf packing parts onto sheets, offcuts, cutting sequence |
-| `drilling.js` | 32mm system hole positions per panel |
+| `drilling.js` | Hole positions per panel: pocket screws, the 32mm system, hinges |
+| `pocket.js` | Pocket hole joinery: the jig geometry, spacing, screw sizes |
+| `paneldim.js` | How a drilled panel is annotated: text size, which numbers fit, runs |
+| `clearance.js` | Every carcass and front put in room coordinates and measured against each other |
+| `elevdim.js` | The dimension chains under and beside an elevation |
 | `optimise.js` | Width search per wall, and project-wide material and build plans |
 | `storage.js` | localStorage, snapshots, validation on load, file import and export |
 | `cabinet.js` | Helpers for the single-cabinet viewer: bounds, `cutSize`, `fmt` |
@@ -155,7 +159,8 @@ cut: [keys], prices, quoted }`.
 | Boards | `carcassBoard`, `frontBoard`, `backBoard`, `boxBoard`, `boxBaseBoard` (empty means follow the sides) |
 | Build | `backType 'full' \| 'rail'`, `backRailHeight 120`, `boxBaseFix 'screwed' \| 'butted'` |
 | Drawers | `runnerLength 500`, `runnerClearance 21`, `boxHeight 140`, `boxSetback 20`, `baseGroove 10`, `boxClearTop 20`, `boxClearBottom 5` |
-| Gaps | `reveal 3`, `shelfSetback 20`, `blindClearance 50` |
+| Gaps | `reveal 3`, `shelfSetback 20`, `blindClearance 50`, `frontClearance 40` |
+| Joinery | `jointMethod 'pocket-screw'`, `shelfFix 'pocket' \| 'pins'`, `rearRow 'grid'` |
 | Saw | `kerf 3.2`, `trim 10`, `minOffcut 150` |
 
 **Per-cabinet overrides** live at `unit.settings.cfg` and are layered over the
@@ -181,7 +186,9 @@ it is. `fronts` decides what gets built.
 **Base:** `base-1door`, `base-2door`, `base-3drawer`, `base-4drawer`,
 `base-sink` (false front over two doors), `base-corner` (plain blind corner),
 `base-blind-l` (blind corner for an L, see below), `base-micro` (open microwave
-bay over a drawer), `base-bin` (one door on a bin runner).
+bay over a drawer), `base-bin` (one full height drawer front on a bin runner:
+a drawer, not a cupboard, and no wooden box is cut because the bin carrier is
+the box).
 
 **Wall:** `wall-1door`, `wall-2door`, `wall-bridge` (short, over a cooktop or
 window), `wall-open` (no doors, all edges taped).
@@ -205,8 +212,12 @@ the next wall butt against its side, so part of its front is dead. That dead
 width is **derived, not typed**: it is the benchtop depth plus an extra you
 set (`blindExtra`, default 50), so widening the benchtop widens the blind panel
 and the door keeps clearing. The door takes whatever is left. `blindSide`
-picks which end runs into the corner. The unit exposes `cornerReturn` (its own
-depth), which is how far along the next wall the run has to start.
+picks which end runs into the corner. The unit exposes `cornerReturn`, its own
+depth **plus a front thickness**, which is how far along the next wall the run
+has to start. The front thickness matters: the blind panel and the door stand
+proud of the carcass, and a return that started at the carcass depth put one
+wall's front inside the other's by a board thickness in the corner. It is
+18mm, it is invisible in plan, and it is why the doors would not go on.
 
 ---
 
@@ -228,6 +239,14 @@ neighbour on either side, the start of the wall, the end of the wall. Tolerance
 same distance, because the corner is the only place it works. The join that
 took hold is drawn as a line up the wall and named.
 
+**Islands face outward.** The two sides of an island face opposite ways: the
+front run's doors open out of the front face at z 0, the back run's out of the
+back face at z depth. That is what makes it an island rather than two cabinets
+glued back to back with their doors looking at each other, and it is the same
+convention the walkway check has always measured an island by. `facing()` and
+`zRange()` in `project.js` are the one place that says so, read by the 3D that
+draws it, the swing arcs and the clearance check.
+
 **Room shapes.** `straight` (one wall), `l` (two), `u` (three). The joined
 walls are taken in order from the wall list, excluding the island. An L turns
 at the right hand end of the first wall and runs toward the viewer; a U comes
@@ -239,12 +258,33 @@ to the `cornerReturn` of the corner cabinet on the wall before it.
 the next wall in the run and follows it there. Dragging one off the end does
 the same; dragging it back before the start returns it.
 
-**Warnings** are computed per cabinet (`unitWarnings`) and per wall
-(`wallWarnings`) and are drawn on the cabinet itself: past the end of the wall,
-overlaps another cabinet, shelf span over 800mm, drawer over 900mm, filler over
-100mm, doors over 1000mm, blind panel too narrow, door opening under 300mm,
-runs into an obstacle, gaps in the run with their position, a wall that turns a
-corner with no corner cabinet, a corner cabinet that is not last.
+**Warnings** are computed per cabinet (`unitWarnings`), per wall
+(`wallWarnings`) and across the whole floor (`clearance.js`), and all three are
+listed in one strip under the drawing as well as being drawn on the cabinet:
+past the end of the wall, every cabinet it overlaps, shelf span over 800mm,
+drawer over 900mm, filler over 100mm, a door over 1000mm wide, blind panel too
+narrow, door opening under 300mm, runs into an obstacle, gaps in the run with
+their position, a wall that turns a corner with no corner cabinet, a corner
+cabinet that is not last, and everything measured across the room below.
+
+**Obstacles that block are not advice.** An obstacle set to "In the way" is a
+stretch of wall that does not exist as far as the run is concerned, at the
+heights it actually occupies. It comes out of `firstFreeX`, so a new cabinet
+never lands in a doorway; `snapX` pushes a drag clear of it whatever the snap
+wanted; and both of its edges are snap targets pulled from 250mm, so an
+appliance dragged up to a doorway lands against it. A window at 900 blocks a
+tall pantry and a wall cabinet and does not block the base cabinet under it.
+
+**Clearances are measured across the room, not along one wall** (`clearance.js`).
+Every carcass and every front is put into one set of room coordinates using the
+room layout, so wall A and wall B are measured against each other. That is the
+only frame in which the corner works: a wall by wall check cannot see the
+cabinet on the next wall, and the corner is exactly where the trouble is. It
+reports carcasses built through each other, fronts that occupy the same air
+with both of them shut, fronts on different runs closer than `frontClearance`
+(only when they are parallel: two perpendicular fronts meeting at a corner are
+meant to touch), and any door that opens less than a right angle, naming what
+it runs into.
 
 ---
 
@@ -273,6 +313,15 @@ on the right.
   already placed and never invents or moves one. Click to select, click a drawer front
   to select that drawer, drag to move with snapping. Shows kickboard,
   benchtop, obstacles, cabinet numbers and widths, and dimension lines.
+- **Dimensions.** Three chains under the drawing and one up the left, from
+  `elevdim.js`. Nearest the drawing is the base run broken into links, one per
+  cabinet with every gap as a link of its own; then the wall run; then the
+  whole wall across the bottom. A chain reads continuously, so its links add up
+  to the total by construction, and a number too wide for its link drops to a
+  second row with a leader rather than overlapping its neighbour. The height
+  chain carries the kick, the carcass, the benchtop, the wall cabinets and the
+  ceiling, dropping the label of any line too close to another to read. All of
+  it carries into the print pack, because Print renders the same component.
 - **3D** shows the whole joined run for an L or U, not one wall at a time.
   Camera presets Front/Left/Right/Top/Iso, an Eye mode that stands you in the
   room at 1600mm and walks with WASD, and toggles for walls, benchtop, wall
@@ -339,19 +388,44 @@ Sheet layouts for every material.
   the sheet size each one would need.
 
 ### Drilling
-32mm system hole positions, drawn flat as the panel sits on the bench.
+Hole positions for every panel, drawn flat as the panel sits on the bench with
+the face you drill pointing up.
 
-- Opens on every cabinet at once, with each card labelled by its cabinet.
-- The picker says how many panels each cabinet has, or that it has nothing to
-  drill.
-- **The template is for shelves.** A drawer bank carries its load on the
-  runners and a filler is a strip of board, so neither has holes. Doors are
-  drilled for their hinges and appear with their cabinet. Landing on a cabinet
-  with nothing says why and offers a way back.
-- Constants: 32mm pitch, 5mm shelf pins 13mm deep, 37mm front and back
-  setbacks, first hole 32mm up, 35mm hinge cups 12.5mm deep at 22.5mm setback,
-  hinge centres 100mm from the door ends, 8mm construction holes. Two holes
-  either side of each shelf so it moves 64mm up or down.
+- **How it goes together is edited here**, at the top of the screen: the
+  carcass joint, how shelves are held up, and the back hole row. Change one and
+  every drawing on the page is a different drawing, so they belong on it.
+- **Pocket screws by default.** A pocket screw is drilled in one panel only,
+  the one that butts into the other, so a pocket built carcass has holes in the
+  bottom, the top and the rails and a side panel with nothing in it but shelf
+  pins and hinge plates. Confirmats and dowels are still there and still drill
+  both halves.
+- The figures come from `pocket.js`: outermost pockets 50mm in from each end of
+  a joint, then no more than 150mm between them (200 on a shelf), never fewer
+  than two. 9.5mm bore at 15 degrees with a 3.2mm pilot. The pocket sits back
+  from the end by `(thickness / 2) / tan 15`, which is 30mm on a 16mm panel, so
+  it is arithmetic and not a number to look up. #8 x 32mm coarse in 16 to 19mm
+  board, from a table by thickness. A board under 12mm cannot take a pocket and
+  the schedule says so rather than drawing a hole nobody can drill.
+- **Shelves are drilled too.** A pocket screwed shelf is a fixed shelf and
+  carries its pockets in its underside, and the sides then have no pin holes
+  for it. On pins it is adjustable, nothing is drilled in the shelf, and the
+  32mm template in the sides is what it was.
+- Drawer boxes: the box front and back carry pockets into the sides, and so
+  does a recessed base once it is thick enough. The app called that base
+  "pocket screwed" for a long time before it drew a single one of the pockets.
+- **Filter by kind.** Sides, then tops and rails, then shelves, then doors,
+  then drawer boxes, because that is the order you drill them in and when the
+  jig is set for each.
+- **The numbers are readable**, which is what `paneldim.js` is for. Text is
+  sized off the panel, so a 100mm rail and a 2100mm door come out the same size
+  on screen; a number that will not fit is not written, but every position is
+  in the setting out table beside the drawing, one row per line of holes, with
+  a run at an even pitch said as "12 at 32, 96 to 448" rather than as twelve
+  numbers on top of each other.
+- 32mm system constants, still used for shelf pins and hinges: 32mm pitch, 5mm
+  pins 13mm deep, 37mm setbacks, first hole 32mm up, 35mm cups at 22.5mm,
+  hinge centres 100mm from the door ends. Two holes either side of an
+  adjustable shelf so it moves 64mm up or down.
 
 ### Hardware
 Grouped totals for hinges, runner pairs, handles and bin runners, with the
@@ -389,7 +463,8 @@ else. A4 or Letter. Toggle which documents to include:
   the drawing has outlined.
 - **Cut list**: 40 rows per page.
 - **Sheet layouts**: one page per sheet.
-- **Drilling schedule**: four panels per page.
+- **Drilling schedule**: four panels per page, each with every hole position
+  written out under its drawing.
 - **Shopping list**: sheets, hardware, your own hardware, edge tape, benchtop
   and kickboard, and the project total.
 
@@ -486,5 +561,7 @@ Not bugs, just not built:
   UI to add or edit them.
 - The plain `base-corner` family predates `base-blind-l` and has no corner
   geometry; it is kept so older projects still open.
+- A drawer that cannot come out because something stands in front of it is not
+  checked. Doors are; drawers pull straight forward and the case is rarer.
 - Wall tabs number appliances as cabinets (A4 may be a dishwasher) while the
   "Cabinets" total does not count them. The label is a position in the run.

@@ -89,10 +89,18 @@ export const PROJECT = {
      line jig gives you. They are different holes, so pick one and stay with
      it across the kitchen. */
   rearRow: 'grid',
-  /* How the carcass is held together. Both halves of every joint are drawn
-     from this: a clearance hole through the side, a pilot down the edge of
+  /* How the carcass is held together, and what the schedule drills.
+
+     A pocket screw is drilled in one panel only, the one that butts into the
+     other, so a pocket built carcass has holes in the bottom, the top and the
+     rails and a side panel with nothing in it. A confirmat or a dowel drills
+     both halves: a clearance hole through the side, a pilot down the edge of
      what it screws into. */
-  jointMethod: 'confirmat-7x50',
+  jointMethod: 'pocket-screw',
+  /* How a shelf is held up. Pocket screwed it is fixed and carries its own
+     holes in its underside; on pins it is adjustable and the holes are in the
+     sides. Two different shelves, so it is a choice and not a default. */
+  shelfFix: 'pocket',
   boxSideThk: 16,
   boxBaseThk: 6,
   boxHeight: 140,
@@ -191,6 +199,10 @@ export const PROJECT = {
   reachHeight: 1800,
   doorMinWidth: 200,
   doorMinSwing: 75,
+  /* The air between two fronts belonging to different runs, which is the gap
+     at an inside corner and across the end of an island. Not the reveal: that
+     is the gap between two fronts on one cabinet and it is set out exactly. */
+  frontClearance: 40,
 
   /* The breakfast bar figures, from the one file that holds them. Spread here
      so a project carries its own copy like every other clearance, and so the
@@ -385,8 +397,8 @@ export const FAMILIES = [
     widths: [500, 600, 700, 800], def: { width: 600, drawers: 1, microH: 380 }, glyph: 'micro' },
 
   { id: 'base-bin', group: 'Base', name: 'Pull-out bin', kind: 'base', fronts: 'bin',
-    desc: 'One door on a bin runner. No shelf.',
-    widths: [300, 400, 450, 500, 600], def: { width: 450, doors: 1, shelves: 0 }, glyph: 'bin' },
+    desc: 'One full height drawer front on a bin runner. The bin carrier is the box.',
+    widths: [300, 400, 450, 500, 600], def: { width: 450, drawers: 1, shelves: 0 }, glyph: 'bin' },
 
   { id: 'app-fridge', group: 'Appliance', name: 'Fridge space', kind: 'tall', fronts: 'none',
     cavity: true, appliance: 'fridge',
@@ -594,7 +606,13 @@ export function defaultStackFor(fam, s, H, P) {
     }
 
     case 'bin':
-      return [{ type: 'doors', height: 'fill', doors: 1, hingeSide: 'left' }];
+      /* A bin unit is a drawer, not a cupboard. It is a single front on a
+         bin runner that pulls straight out, and it was drawn and built as a
+         hinged door: a handle on the opening stile, a swing arc into the
+         room, a hinge count in the fittings, and a door in the door total.
+         None of that is what a bin does. The `bin` flag says the carrier is
+         the box, so no wooden drawer box is cut for it. */
+      return [{ type: 'drawer', height: 'fill', bin: true }];
 
     // Open shelves, fillers, cavities and the blind corner have no stack.
     default:
@@ -875,7 +893,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
   };
 
-  const addDrawers = (n, y, h, heights, rowIndex) => {
+  const addDrawers = (n, y, h, heights, rowIndex, bin = false) => {
     /* Remember the opening these drawers have to fill. The inspector checks
        typed heights against this, not against the whole carcass, so a
        microwave unit with a bay above the drawer is judged correctly. */
@@ -950,6 +968,16 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
         size: [frontW, each, FT], pos: [sideGap, fy, D], explode: [0, 0, 340],
         edging: 'All four edges',
       }));
+
+      /* A bin is a bought carrier running on its own runner. There is no
+         box to cut, so the front, the handle and the runner are the whole of
+         it and the box arithmetic below is skipped rather than producing
+         panels nobody makes. */
+      if (bin) {
+        fittings.push({ type: 'binRunner', qty: 1, code: code(`BIN-RUNNER-${num}`) });
+        fittings.push({ type: 'handle', qty: 1, code: code(`HANDLE-D${num}`) });
+        continue;
+      }
 
       /* This drawer's real opening: its front row, clipped to the carcass
          interior. For every drawer but the bottom and top one these are the
@@ -1029,7 +1057,7 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
       if (row.type === 'doors') {
         addDoors(row.doors ?? 1, row.y, row.height, row.hingeSide, i);
       } else if (row.type === 'drawer') {
-        addDrawers(1, row.y, row.height, null, i);
+        addDrawers(1, row.y, row.height, null, i, !!row.bin);
       } else if (row.type === 'false') {
         parts.push(mkPart({
           code: code('FALSE'), name: 'False front', group: 'front', material: MAT.front,
@@ -1084,10 +1112,6 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     }
   }
 
-  if (fam.fronts === 'bin') {
-    fittings.push({ type: 'binRunner', qty: 1, code: code('BIN-RUNNER') });
-  }
-
   return {
     id, familyId, family: fam, name: fam.name, kind, settings: s,
     width: W, height: H, depth: D, mountY, size: [W, H, D],
@@ -1100,8 +1124,15 @@ export function buildUnit(id, familyId, inst = {}, cfg = PROJECT) {
     blindExtra,
     /* How far along the next wall the corner is used up. The return cabinets
        start after this, which is what stops them being drawn inside the
-       corner cabinet. */
-    cornerReturn: fam.corner ? D : 0,
+       corner cabinet.
+
+       The carcass depth is not the whole of it. The blind panel and the door
+       stand a front thickness proud of the carcass, and the return run's own
+       fronts stand proud of theirs, so a return starting at the carcass depth
+       puts an 18mm square of one wall's front inside the other wall's front,
+       right in the corner, on every L shaped kitchen. It is small, it is
+       invisible in plan, and it is the reason the doors will not go on. */
+    cornerReturn: fam.corner ? round1(D + FT) : 0,
     ovenCavity: fam.fronts === 'oven' ? { y: 300 + P.reveal, h: s.ovenH ?? 600 } : null,
     microBay: fam.fronts === 'microwave'
       ? { y: H - (s.microH ?? 380), h: s.microH ?? 380 } : null,

@@ -598,7 +598,7 @@ export default function App() {
                                       onWorkshop={() => setScreen('workshop')} />;
       case 'nesting': return <Nesting project={project} setProject={setProject} />;
       case 'hardware': return <Hardware project={project} setProject={setProject} prices={prices} setPrices={setPrices} />;
-      case 'drilling': return <Drilling project={project} />;
+      case 'drilling': return <Drilling project={project} setProject={setProject} />;
       case 'costing': return <Costing project={project} quoted={quoted} setQuoted={setQuoted} />;
       case 'settings': return <Settings project={project} setProject={setProject}
                                         prices={prices} setPrices={setPrices} />;

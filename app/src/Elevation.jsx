@@ -14,6 +14,7 @@ import {
 import { natureOf, obstacleKind } from './obstacles.js';
 import { snapX, unitWarnings } from './project.js';
 import { benchSegments } from './fixtures.js';
+import { CHAIN, elevationChains, heightChain, labelRows, labelStops } from './elevdim.js';
 
 const S = 4;        // hairline, mm at drawing scale
 /* Text sizes in millimetres of drawing.
@@ -288,9 +289,19 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
   const wall = lay.wall;
   const CEIL = cfg.ceiling;
   const L = wall.length;
-  const padX = 220;
+  /* Room for the dimensions. The left pad carries the height chain, the
+     bottom pad carries however many horizontal chains this wall has, and both
+     are worked out from the chains rather than being constants somebody has
+     to remember to change. */
+  const shownChains = useMemo(
+    () => elevationChains(lay, shown, (p) => (drag && drag.uid === p.item.uid ? drag.x : p.x)),
+    [lay, shown, drag],
+  );
+  const heights = useMemo(() => heightChain(lay, cfg, shown), [lay, cfg, shown]);
+
+  const padX = 460;
   const padTop = 140;
-  const padBottom = 380;
+  const padBottom = CHAIN.first + CHAIN.step * shownChains.chains.length + 240;
 
   const Y = (above) => CEIL - above;   // floor is at CEIL in svg space
 
@@ -587,22 +598,139 @@ export default function Elevation({ lay, cfg, selected, selDrawer, onSelect, onH
         </text>
       )}
 
-      {/* dimension line along the bottom */}
-      <g>
-        <line x1="0" y1={CEIL + 210} x2={L} y2={CEIL + 210} stroke="var(--dw-dim)" strokeWidth={S} />
-        <line x1="0" y1={CEIL + 170} x2="0" y2={CEIL + 250} stroke="var(--dw-dim)" strokeWidth={S} />
-        <line x1={L} y1={CEIL + 170} x2={L} y2={CEIL + 250} stroke="var(--dw-dim)" strokeWidth={S} />
-        <text x={L / 2} y={CEIL + 182} textAnchor="middle" fill="var(--dw-dim)"
-              fontFamily="var(--font-mono)" fontSize={FS_DIM}>{L}</text>
-        {lay.baseRun > 0 && lay.baseRun < L && (
-          <>
-            <line x1="0" y1={CEIL + 330} x2={lay.baseRun} y2={CEIL + 330}
-                  stroke="var(--dw-dim)" strokeWidth={S} strokeDasharray="20 14" />
-            <text x={lay.baseRun / 2} y={CEIL + 306} textAnchor="middle" fill="var(--dw-dim)"
-                  fontFamily="var(--font-mono)" fontSize={FS}>base run {Math.round(lay.baseRun)}</text>
-          </>
-        )}
-      </g>
+      {/* ------------------------------------------------------------------
+          The dimensions.
+
+          Every cabinet on its own, every gap on its own, and the whole wall
+          across the bottom of the lot. The chain is continuous, so its links
+          add up to the total on the drawing rather than in your head, which
+          is the only reason to put a chain on a drawing at all. */}
+      {shownChains.chains.map((chain, ci) => (
+        <Chain key={chain.id} chain={chain} y={CEIL + CHAIN.first + ci * CHAIN.step} />
+      ))}
+
+      {/* And the heights, up the left. */}
+      <HeightChain chain={heights} ceil={CEIL} />
     </svg>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   One chain of dimensions.
+
+   Drawn the way a chain is drawn: a witness line down from each stop, one
+   dimension line through the lot, a terminator at every stop, and the number
+   for each link centred on it. A link too narrow for its number drops to a
+   second row with a leader back to the middle of the link it belongs to,
+   rather than overlapping the number next to it or being left off.
+   --------------------------------------------------------------------------- */
+
+/** A terminator at a stop. Slashes, because arrowheads at this pitch merge. */
+const Tick = ({ x, y }) => (
+  <line x1={x - 22} y1={y + 22} x2={x + 22} y2={y - 22}
+        stroke="var(--dw-dim)" strokeWidth={S * 1.2} />
+);
+
+function Chain({ chain, y }) {
+  const { links } = chain;
+  if (!links.length) return null;
+
+  const size = chain.overall ? FS_DIM : FS;
+  /* A monospaced digit is about 0.6 of its point size wide, which is what
+     decides whether a number fits in the link it belongs to. */
+  const rows = labelRows(links, size * 0.6);
+  const from = links[0].x0;
+  const to = links[links.length - 1].x1;
+
+  return (
+    <g className={`elev-chain elev-chain--${chain.id}`} pointerEvents="none">
+      <line x1={from} y1={y} x2={to} y2={y} stroke="var(--dw-dim)" strokeWidth={S} />
+      {links.map((l, i) => (
+        <line key={`w${i}`} x1={l.x0} y1={y - CHAIN.tick} x2={l.x0} y2={y + CHAIN.tick / 2}
+              stroke="var(--dw-dim)" strokeWidth={S} opacity="0.75" />
+      ))}
+      <line x1={to} y1={y - CHAIN.tick} x2={to} y2={y + CHAIN.tick / 2}
+            stroke="var(--dw-dim)" strokeWidth={S} opacity="0.75" />
+      {links.map((l, i) => <Tick key={`t${i}`} x={l.x0} y={y} />)}
+      <Tick x={to} y={y} />
+
+      {links.map((l, i) => {
+        const mid = (l.x0 + l.x1) / 2;
+        const { row } = rows[i];
+        const ty = y - CHAIN.tick / 2 - row * CHAIN.stagger;
+        const dim = l.kind === 'gap' || l.kind === 'corner';
+        return (
+          <g key={`l${i}`} opacity={dim ? 0.72 : 1}>
+            {row > 0 && (
+              <line x1={mid} y1={y - 8} x2={mid} y2={ty + 12}
+                    stroke="var(--dw-dim)" strokeWidth={S * 0.8} strokeDasharray="14 10" />
+            )}
+            <text x={mid} y={ty} textAnchor="middle" fill="var(--dw-dim)"
+                  fontFamily="var(--font-mono)" fontSize={size}
+                  fontStyle={l.kind === 'gap' ? 'italic' : undefined}>
+              {Math.round(l.label)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* What this chain is, out past the end of it, so three chains stacked
+          up are three named things rather than three rows of numbers. */}
+      <text x={to + 60} y={y + size * 0.36} textAnchor="start" fill="var(--dw-dim)"
+            fontFamily="var(--font-mono)" fontSize={FS * 0.8} opacity="0.8">
+        {chain.name}
+      </text>
+    </g>
+  );
+}
+
+/* The same chain stood on end, up the left hand side: kick, carcass,
+   benchtop, wall cabinets, ceiling. Every horizontal line on the drawing that
+   somebody has to set out with a tape. */
+function HeightChain({ chain, ceil }) {
+  if (!chain.links.length) return null;
+  const x = -300;
+  const Y = (above) => ceil - above;
+
+  return (
+    <g className="elev-chain elev-chain--height" pointerEvents="none">
+      <line x1={x} y1={Y(chain.stops[0].y)} x2={x} y2={Y(chain.stops[chain.stops.length - 1].y)}
+            stroke="var(--dw-dim)" strokeWidth={S} />
+      {chain.stops.map((s) => (
+        <g key={s.y}>
+          <line x1={x - 40} y1={Y(s.y)} x2={-40} y2={Y(s.y)}
+                stroke="var(--dw-dim)" strokeWidth={S} opacity="0.4" strokeDasharray="18 14" />
+          <line x1={x - 34} y1={Y(s.y) + 22} x2={x + 34} y2={Y(s.y) - 22}
+                stroke="var(--dw-dim)" strokeWidth={S * 1.2} />
+        </g>
+      ))}
+      {/* The gaps, on the chain line and turned to read up it. */}
+      {chain.links.map((l) => {
+        const cy = Y((l.y0 + l.y1) / 2);
+        return (
+          <text key={`${l.y0}-${l.y1}`} x={x - 34} y={cy} textAnchor="middle"
+                dominantBaseline="middle" transform={`rotate(-90 ${x - 34} ${cy})`}
+                fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS}>
+            {Math.round(l.label)}
+          </text>
+        );
+      })}
+
+      {/* And the finished heights themselves, against the lines they belong
+          to. A benchtop at 900 is the number you set out from, and the gaps
+          on their own make you add up to get it.
+
+          Numbers only, no names. The drawing already says which line is the
+          benchtop and which is the kick, and a name against each one either
+          runs into the cabinets or pushes the whole drawing sideways to make
+          room for a word you can already see. */}
+      {labelStops(chain.stops.slice(1), FS).map((s) => (
+        <text key={`n${s.y}`} x={-56} y={Y(s.y) - 18} textAnchor="end"
+              fill="var(--dw-dim)" fontFamily="var(--font-mono)" fontSize={FS * 0.85}
+              opacity="0.85">
+          {Math.round(s.y)}
+        </text>
+      ))}
+    </g>
   );
 }

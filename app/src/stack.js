@@ -229,6 +229,10 @@ export function cleanStack(stack) {
         if (Number.isFinite(Number(r.boxHeight)) && Number(r.boxHeight) > 0) {
           row.boxHeight = Number(r.boxHeight);
         }
+        /* A bin runs on a bought carrier, so no wooden box is cut for it.
+           Carried through a save, or a bin unit reopens as a drawer with a
+           box that nobody is going to build. */
+        if (r.bin) row.bin = true;
       }
       if (r.type === 'bay') {
         row.appliance = APPLIANCES.includes(r.appliance) ? r.appliance : 'other';

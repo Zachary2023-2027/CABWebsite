@@ -14,7 +14,7 @@ import {
   HINGE_LIST, boringInRange, cupCentre, hingeProfile,
   longestFitting, runnerProfile,
 } from './hardware.js';
-import { JOINT_LIST, REAR_ROWS, SYS32, jointMethod, rearRowX } from './drilling.js';
+import { JOINT_LIST, REAR_ROWS, SHELF_FIXES, SYS32, jointMethod, rearRowX, shelfFixOf } from './drilling.js';
 import {
   FINISH_GROUPS, FINISH_LIST, clearFinishes, finish, finishFor, finishKey, isTwoTone, twoTone,
 } from './finishes.js';
@@ -212,19 +212,26 @@ export function Advanced({ cfg, onChange, onReset, onClose }) {
           <section className="adv-group">
             <span className="field__label">Drilling</span>
             <p className="note">
-              Where the back row of shelf pin holes goes, and how the carcass is
-              held together. Both halves of every joint are drawn from this: a hole
-              through the side and a pilot down the edge of what it screws into.
+              How the carcass is held together and how a shelf is held up. Every
+              drawing on the Drilling screen is drawn from these, and so is what the
+              order list buys. A pocket screw is drilled in one panel only, the one
+              that butts into the other; a confirmat and a dowel drill both halves.
             </p>
             <div className="settings-grid">
-              <Choice label="Back row of holes" value={cfg.rearRow || 'grid'}
-                      options={REAR_ROWS.map((r) => ({ value: r.id, label: r.name }))}
-                      onChange={(v) => onChange({ rearRow: v })} />
-              <Choice label="Carcass joint" value={cfg.jointMethod || 'confirmat-7x50'}
+              <Choice label="Carcass joint" value={cfg.jointMethod || 'pocket-screw'}
                       options={JOINT_LIST.map((j) => ({ value: j.id, label: j.name }))}
                       onChange={(v) => onChange({ jointMethod: v })} />
+              <Choice label="Shelves" value={shelfFixOf(cfg.shelfFix).id}
+                      options={SHELF_FIXES.map((f) => ({ value: f.id, label: f.name }))}
+                      onChange={(v) => onChange({ shelfFix: v })} />
+              {shelfFixOf(cfg.shelfFix).id === 'pins' && (
+                <Choice label="Back row of holes" value={cfg.rearRow || 'grid'}
+                        options={REAR_ROWS.map((r) => ({ value: r.id, label: r.name }))}
+                        onChange={(v) => onChange({ rearRow: v })} />
+              )}
             </div>
-            <p className="note">
+            <p className="note">{shelfFixOf(cfg.shelfFix).note}</p>
+            <p className="note" hidden={shelfFixOf(cfg.shelfFix).id !== 'pins'}>
               {(cfg.rearRow || 'grid') === 'grid'
                 ? `On a ${cfg.baseDepth}mm deep side the back row lands ${rearRowX(cfg.baseDepth, 'grid')}mm in, a whole number of 32mm steps behind the front row, so one jig setting drills both.`
                 : `The back row sits ${SYS32.frontSetback}mm in from the back edge, mirroring the front. It is not on the same grid as the front row.`}

@@ -16,7 +16,9 @@ import {
 } from './project.js';
 import Elevation from './Elevation.jsx';
 import { NEST, cutSequence, nestProject } from './nesting.js';
-import { HOLE_STYLE, drillUnit } from './drilling.js';
+import { HOLE_STYLE, drillUnit, jointMethod } from './drilling.js';
+import { POCKET } from './pocket.js';
+import { axisValues, labelled, settingOut, textSize } from './paneldim.js';
 import { PRICES, sheetFor } from './catalog.js';
 import { fmt } from './mm.js';
 import { Swatch } from './Fields.jsx';
@@ -90,22 +92,72 @@ function PrintSheet({ sheet }) {
   );
 }
 
+/* The same panel on paper. Black on white, and sized off the panel for the
+   same reason the screen is: a fixed text size is too big on a rail and too
+   small on a pantry door, and on paper there is nowhere for it to overflow
+   to. Every exact position is in the table under it, not on it. */
 function PrintPanel({ panel }) {
-  const pad = 70;
   const { w, h, holes } = panel;
+  const u = textSize(w, h);
+  const padL = u * 5;
+  const padB = u * 4;
+  const padT = u * 1.4;
+  const padR = u * 1.4;
+
+  const cols = axisValues(holes, 'x');
+  const rows = axisValues(holes, 'y');
+  const wide = (v) => String(v).length * u * 0.62 + u * 0.8;
+  const colLabels = labelled(cols, Math.max(...cols.map(wide), u * 2));
+  const rowLabels = labelled(rows, u * 1.5);
+  const line = Math.max(u * 0.07, 1.5);
+
   return (
-    <svg className="p-panel" viewBox={`${-pad} ${-pad} ${w + pad * 2} ${h + pad * 2}`}
+    <svg className="p-panel"
+         viewBox={`${-padL} ${-padT} ${w + padL + padR} ${h + padT + padB}`}
          preserveAspectRatio="xMidYMid meet">
-      <rect x="0" y="0" width={w} height={h} fill="none" stroke="#000" strokeWidth="4" />
-      {holes.map((o, i) => (
-        <circle key={i} cx={o.x} cy={h - o.y} r={Math.max(o.dia / 2, 3)}
-                fill={o.kind === 'cup' ? 'none' : '#000'} stroke="#000" strokeWidth="2" />
+      <rect x="0" y="0" width={w} height={h} fill="none" stroke="#000" strokeWidth={line * 1.6} />
+
+      {holes.map((o, i) => {
+        if (o.kind !== 'pocket') {
+          return (
+            <circle key={i} cx={o.x} cy={h - o.y} r={Math.max(o.dia / 2, u * 0.16)}
+                    fill={o.kind === 'cup' ? 'none' : '#000'} stroke="#000" strokeWidth={line} />
+          );
+        }
+        /* A pocket is a slot pointing at the edge its pilot leaves by, which
+           is the one thing about it you cannot get wrong twice. */
+        const vertical = o.towards === 'top' || o.towards === 'bottom';
+        const len = o.len || 36;
+        const bw = vertical ? POCKET.bore : len;
+        const bh = vertical ? len : POCKET.bore;
+        return (
+          <rect key={i} x={o.x - bw / 2} y={(h - o.y) - bh / 2} width={bw} height={bh}
+                rx={POCKET.bore / 2} fill="#000" />
+        );
+      })}
+
+      {cols.map((c) => (
+        <line key={`xt${c}`} x1={c} y1={h} x2={c} y2={h + u * (colLabels.includes(c) ? 1 : 0.5)}
+              stroke="#000" strokeWidth={line} />
       ))}
-      <text x={w / 2} y={h + 52} textAnchor="middle" fontFamily="monospace" fontSize="30">
-        {panel.xLabel} {w}
-      </text>
-      <text x={-26} y={h / 2} textAnchor="middle" fontFamily="monospace" fontSize="30"
-            transform={`rotate(-90 ${-26} ${h / 2})`}>{panel.yLabel} {h}</text>
+      {colLabels.map((c) => (
+        <text key={`xd${c}`} x={c} y={h + u * 2.1} textAnchor="middle"
+              fontFamily="monospace" fontSize={u}>{c}</text>
+      ))}
+      {rows.map((r) => (
+        <line key={`yt${r}`} x1={-u * (rowLabels.includes(r) ? 0.8 : 0.4)} y1={h - r}
+              x2="0" y2={h - r} stroke="#000" strokeWidth={line} />
+      ))}
+      {rowLabels.map((r) => (
+        <text key={`yd${r}`} x={-u} y={h - r + u * 0.36} textAnchor="end"
+              fontFamily="monospace" fontSize={u}>{r}</text>
+      ))}
+
+      <text x={w / 2} y={h + u * 3.6} textAnchor="middle" fontFamily="monospace"
+            fontSize={u * 1.1}>{panel.xLabel} {w}</text>
+      <text x={-padL + u * 0.9} y={h / 2} textAnchor="middle" fontFamily="monospace"
+            fontSize={u * 1.1}
+            transform={`rotate(-90 ${-padL + u * 0.9} ${h / 2})`}>{panel.yLabel} {h}</text>
     </svg>
   );
 }
@@ -219,7 +271,8 @@ function PageBody({ page, project, cut }) {
           <thead>
             <tr>
               <th>No</th><th>Cabinet</th><th className="p-n">Along</th>
-              <th className="p-n">Width</th><th className="p-n">Height</th>
+              <th className="p-n">Width</th><th className="p-n">Runs to</th>
+              <th className="p-n">Height</th>
               <th className="p-n">Depth</th><th className="p-n">Off floor</th>
             </tr>
           </thead>
@@ -230,6 +283,10 @@ function PageBody({ page, project, cut }) {
                 <td>{p.unit.family.name}</td>
                 <td className="p-n">{Math.round(p.x)}</td>
                 <td className="p-n">{p.unit.width}</td>
+                {/* Where its far side lands, which is the number you set the
+                    next cabinet out from and the one you would otherwise be
+                    adding up in your head off the drawing. */}
+                <td className="p-n">{Math.round(p.x + p.unit.width)}</td>
                 <td className="p-n">{p.unit.height}</td>
                 <td className="p-n">{p.unit.depth}</td>
                 <td className="p-n">{p.unit.mountY}</td>
@@ -245,7 +302,9 @@ function PageBody({ page, project, cut }) {
         )}
         <p className="p-est">
           Along is the distance from the left hand end of the wall to the left hand side
-          of the cabinet. A cabinet outlined on the drawing has a note against it below.
+          of the cabinet, and Runs to is where its far side lands. The chains under the
+          drawing carry the same numbers: every cabinet, every gap, and the whole wall
+          across the bottom. A cabinet outlined on the drawing has a note against it below.
         </p>
       </div>
     );
@@ -326,7 +385,9 @@ function PageBody({ page, project, cut }) {
       <div className="p-drill-page">
         <div className="p-sheet-head">
           <b>{page.unit.label} {page.unit.unit.family.name} {page.unit.unit.width}</b>
-          <span>{page.unit.wallName} · 32mm system · positions to hole centres</span>
+          <span>
+            {page.unit.wallName} · {jointMethod(project.cfg.jointMethod).name} · positions to hole centres
+          </span>
         </div>
         <div className="p-panels">
           {page.panels.map((p) => (
@@ -334,7 +395,27 @@ function PageBody({ page, project, cut }) {
               <PrintPanel panel={p} />
               <figcaption>
                 <b>{p.code}</b> {p.name} · {p.w} x {p.h} · {p.holes.length} holes
+                {p.hand ? ` · ${p.hand === 'left' ? 'LEFT' : 'RIGHT'} hand` : ''}
               </figcaption>
+              {/* Every position written out, because a number measured off a
+                  printed drawing is a number you have measured wrong. */}
+              <table className="p-table p-table--tight p-setout">
+                <thead>
+                  <tr>
+                    <th className="p-n">{p.xLabel}</th><th className="p-n">Dia</th>
+                    <th>{p.yLabel} positions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {settingOut(p).map((l, i) => (
+                    <tr key={i}>
+                      <td className="p-n">{l.along}</td>
+                      <td className="p-n">{fmt(l.dia)}</td>
+                      <td>{l.at}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </figure>
           ))}
         </div>
