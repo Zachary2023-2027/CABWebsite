@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Elevation from './Elevation.jsx';
+import FloorView from './FloorView.jsx';
 import Kitchen3D from './Kitchen3D.jsx';
 import { finishFor } from './finishes.js';
 import {
@@ -429,6 +430,9 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
   const [showOpen, setShowOpen] = useState(false);
   const [selObstacle, setSelObstacle] = useState(null);
   const elevRef = useRef(null);
+  const floorRef = useRef(null);
+  /* Walls the room shape leaves off the plan, reported up by the drawing. */
+  const [offPlan, setOffPlan] = useState([]);
   /* Which side of an island you are working on. Meaningless on a wall, and
      harmless there: a wall's cabinets are all on its one side. */
   const [side, setSide] = useState('front');
@@ -1080,6 +1084,55 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
     </div>
   );
 
+  /* ---------------------------------------------------------------------------
+     The plan.
+
+     Clicking a cabinet here takes you to the wall it is on with it selected,
+     because the plan is where you see there is a problem and the elevation is
+     where you fix it. Dragging an island writes its position once, on release.
+     --------------------------------------------------------------------------- */
+  const floorview = (
+    <div className="floor-wrap" ref={floorRef}>
+      <FloorView project={project} selected={selected}
+                 onPick={({ wallId, uid: hit, side: on }) => {
+                   setProject((p) => ({ ...p, activeWall: wallId }));
+                   if (on) setSide(on);
+                   pickUnit(hit || null);
+                 }}
+                 onMoveIsland={(id, at) => changeWall(id, { at })}
+                 onMissing={setOffPlan} />
+
+      <div className="floor-legend no-print">
+        <span><i className="plan-key plan-key--base" /> On the floor</span>
+        <span><i className="plan-key plan-key--wall" /> Above your head</span>
+        <span><i className="plan-key plan-key--bar" /> Breakfast bar</span>
+        <span className="note">
+          Drag an island to move it. It pulls to
+          a {project.cfg.walkwayMin ?? CLEARANCE_DEFAULTS.walkwayMin} and
+          a {project.cfg.walkwayComfortable ?? CLEARANCE_DEFAULTS.walkwayComfortable} walkway,
+          and to the middle of the floor.
+          {offPlan.length > 0 && (
+            <>
+              {' '}{offPlan.map((w) => w.name).join(', ')} {offPlan.length === 1 ? 'is' : 'are'}
+              {' '}past the room shape, so the plan has nowhere to put
+              {' '}{offPlan.length === 1 ? 'it' : 'them'}.
+            </>
+          )}
+        </span>
+      </div>
+
+      <button className="btn btn--ghost elev-svg no-print"
+              title="Save this plan as an SVG you can open anywhere"
+              onClick={(e) => {
+                e.stopPropagation();
+                const svg = floorRef.current?.querySelector('svg');
+                downloadSvg(svg, safeFileName(`${project.name} plan`, '.svg'));
+              }}>
+        SVG
+      </button>
+    </div>
+  );
+
   return (
     <div className="planner">
 
@@ -1101,8 +1154,11 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
 
         <div className="wall-len">
           <div className="seg" role="group" aria-label="Arrangement">
-            {[['plan', '2D'], ['focus', 'Focus']].map(([k, label]) => (
+            {[['plan', '2D', 'The elevation of this wall on its own'],
+              ['floor', 'Plan', 'The kitchen from above. Drag the island'],
+              ['focus', 'Focus', 'The room in three dimensions']].map(([k, label, why]) => (
               <button key={k} className="seg__item" aria-pressed={arrangement === k}
+                      title={why}
                       onClick={() => setArrangement(k)}>{label}</button>
             ))}
           </div>
@@ -1134,6 +1190,8 @@ export default function Planner({ project, setProject, onOpen3D, arrangement, se
               {view3d}
               <div className="inset">{elevation}</div>
             </div>
+          ) : arrangement === 'floor' ? (
+            <div className="plan-arr">{floorview}</div>
           ) : (
             <div className="plan-arr">{elevation}</div>
           )}

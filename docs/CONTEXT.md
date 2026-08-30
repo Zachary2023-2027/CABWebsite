@@ -76,6 +76,7 @@ These are user-imposed rules that apply to any new work:
 | `paneldim.js` | How a drilled panel is annotated: text size, which numbers fit, runs |
 | `clearance.js` | Every carcass and front put in room coordinates and measured against each other |
 | `elevdim.js` | The dimension chains under and beside an elevation |
+| `floor.js` | The kitchen from above: plan rectangles, the island's footprint, the gaps between runs, and where a dragged island lands |
 | `stack.js` | The front stack, and `reveals()`/`frontSpan()`: every gap around a front |
 | `optimise.js` | Width search per wall, and project-wide material and build plans |
 | `storage.js` | localStorage, snapshots, validation on load, file import and export |
@@ -83,7 +84,7 @@ These are user-imposed rules that apply to any new work:
 | `draw2d.js` | Front detail for the elevation: door styles, handles, panels, grain, appliance glyphs. Geometry only, in millimetres |
 
 **Screens (React):** `App.jsx` (shell, rail, top strip, undo, start screen),
-`Planner.jsx`, `Elevation.jsx`, `Kitchen3D.jsx`, `Viewer.jsx`, `Advanced.jsx`,
+`Planner.jsx`, `Elevation.jsx`, `FloorView.jsx`, `Kitchen3D.jsx`, `Viewer.jsx`, `Advanced.jsx`,
 `Fields.jsx`, `Screen.jsx`, `CutList.jsx`, `Nesting.jsx`, `Drilling.jsx`,
 `Hardware.jsx`, `Costing.jsx`, `Settings.jsx`, `Reference.jsx`,
 `Workshop.jsx`, `Print.jsx`, `Appearance.jsx`, `app.css`.
@@ -371,6 +372,29 @@ on the right.
   chain carries the kick, the carcass, the benchtop, the wall cabinets and the
   ceiling, dropping the label of any line too close to another to read. All of
   it carries into the print pack, because Print renders the same component.
+- **Plan** is the third arrangement beside 2D and Focus, and the only drawing
+  that shows the floor. Every carcass is a rectangle in room coordinates, from
+  the same transform the clearance checks measure with, so a cabinet is drawn
+  where it is measured; base cabinets are solid, wall cabinets are a dashed
+  outline over the top, appliance cavities are dashed and grey. A breakfast bar
+  is drawn as the strip of top it is, along the part of its side it really
+  runs. Every walkway between the island and the rest of the room is dimensioned
+  and coloured by the same three figures the checks use, measured to the near
+  side of the island rather than through it.
+
+  **The island is dragged here.** Its position used to be two typed fields, so
+  setting it out was type, look, type again, and the walkway you were actually
+  after was never the number you were typing. Now you take hold of it, the gaps
+  redraw as you go, and it pulls to the positions worth landing on: the minimum
+  walkway, a comfortable one, or centred between two runs that face each other.
+  What it locked on to is named on the drawing. The snap is about the outer
+  edge, top and all, so a bar on the front holds the carcass back by the
+  overhang. The view freezes while you drag, because a frame that grows to fit
+  the island makes the island run away from the pointer. A press that does not
+  travel is a tap, and a tap selects the cabinet under it and takes you to its
+  wall. Walls the room shape has no place for are named in the legend rather
+  than silently left off. The same drawing is the first page of the print pack,
+  with the island's position and every walkway written out underneath it.
 - **3D** shows the whole joined run for an L or U, not one wall at a time.
   Camera presets Front/Left/Right/Top/Iso, an Eye mode that stands you in the
   room at 1600mm and walks with WASD, and toggles for walls, benchtop, wall

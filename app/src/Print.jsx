@@ -11,16 +11,18 @@
 
 import { useMemo, useState } from 'react';
 import {
-  allFittings, allParts, allUnits, layoutFor, money, projectExtras, roomOffsets, totals,
-  nestCfg, unitWarnings, wallWarnings,
+  allFittings, allParts, allUnits, floorPlan, isIsland, islandAt, islandDepth, layoutFor, money,
+  projectExtras, roomOffsets, totals, nestCfg, unitWarnings, wallWarnings,
 } from './project.js';
 import Elevation from './Elevation.jsx';
+import FloorView from './FloorView.jsx';
 import { NEST, cutSequence, nestProject } from './nesting.js';
 import { HOLE_STYLE, drillUnit, jointMethod } from './drilling.js';
 import { POCKET } from './pocket.js';
 import { axisValues, labelled, settingOut, textSize } from './paneldim.js';
 import { PRICES, sheetFor } from './catalog.js';
 import { fmt } from './mm.js';
+import { gapArrows, missingFromPlan } from './floor.js';
 import { pieceVolume } from './runs.js';
 import { Swatch } from './Fields.jsx';
 import { partLabel } from './workshop.js';
@@ -170,7 +172,12 @@ function buildPages(project, docs, cut) {
   const parts = allParts(project);
   const nest = nestProject(parts, nestCfg(project));
 
-  /* The elevations come first, because they are the pages that say where
+  /* The floor first of all, because it is the page that says where the runs
+     are in the room. An elevation tells you what is on a wall; only the plan
+     tells you which wall, and where the island stands between them. */
+  if (docs.floor) pages.push({ doc: 'Floor plan', kind: 'floor' });
+
+  /* Then the elevations, because they are the pages that say where
      everything goes. A pack of cut sizes with no plan is a pile of board. */
   if (docs.plan) {
     const offsets = roomOffsets(project);
@@ -255,8 +262,83 @@ function Labels({ rows }) {
   );
 }
 
+/* The plan, on paper.
+
+   The same drawing the planner shows, with the numbers underneath it written
+   out. On screen you drag the island and read the walkway off the drawing; on
+   paper there is nothing to drag, so what the position actually is has to be
+   in a table you can set out from with a tape. */
+function FloorPage({ project }) {
+  const entries = floorPlan(project);
+  const islands = project.walls.filter(isIsland);
+  const missing = missingFromPlan(project, entries);
+  const gaps = islands.flatMap((w) => gapArrows(entries, project.cfg, w.id)
+    .map((g) => ({ ...g, wall: w.name })));
+
+  return (
+    <div className="p-plan">
+      <b>Floor plan</b>
+      <div className="p-floor">
+        <FloorView project={project} selected={null} />
+      </div>
+
+      {islands.length > 0 && (
+        <table className="p-table">
+          <thead>
+            <tr>
+              <th>Island</th><th className="p-n">Long</th><th className="p-n">Deep</th>
+              <th className="p-n">Along the back wall</th>
+              <th className="p-n">Out from the back wall</th>
+            </tr>
+          </thead>
+          <tbody>
+            {islands.map((w) => {
+              const at = islandAt(w, project.cfg);
+              return (
+                <tr key={w.id}>
+                  <td>{w.name}</td>
+                  <td className="p-n">{fmt(w.length)}</td>
+                  <td className="p-n">{fmt(islandDepth(w, project.cfg))}</td>
+                  <td className="p-n">{fmt(at.x)}</td>
+                  <td className="p-n">{fmt(at.y)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {gaps.length > 0 && (
+        <table className="p-table">
+          <thead>
+            <tr><th>Walkway</th><th className="p-n">Gap</th><th className="p-n">Along</th></tr>
+          </thead>
+          <tbody>
+            {gaps.map((g, i) => (
+              <tr key={i}>
+                <td>{g.between.join(' to ')}</td>
+                <td className="p-n">{fmt(g.gap)}</td>
+                <td className="p-n">{fmt(g.overlap)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {missing.length > 0 && (
+        <p className="p-note">
+          {missing.map((w) => w.name).join(', ')} {missing.length === 1 ? 'is' : 'are'} past
+          this room shape, so {missing.length === 1 ? 'it is' : 'they are'} not on the plan.
+          {' '}Their elevations follow.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PageBody({ page, project, cut }) {
   if (page.kind === 'labels') return <Labels rows={page.rows} />;
+  if (page.kind === 'floor') return <FloorPage project={project} />;
   if (page.kind === 'plan') {
     const { lay, wall } = page;
     const rows = lay.placed.filter((p) => p.label);
@@ -609,7 +691,7 @@ const BAR_EDGE = { front: 'front', back: 'back', left: 'left end', right: 'right
 
 export default function Print({ project, cut }) {
   const [docs, setDocs] = useState({
-    plan: true, cutlist: true, sheets: true, drilling: false, shopping: true,
+    floor: true, plan: true, cutlist: true, sheets: true, drilling: false, shopping: true,
     notes: true, labels: false,
   });
   const [size, setSize] = useState('a4');
@@ -638,7 +720,8 @@ export default function Print({ project, cut }) {
       </header>
 
       <div className="print-controls no-print">
-        {[['plan', 'Elevations'], ['cutlist', 'Cut list'], ['sheets', 'Sheet layouts'],
+        {[['floor', 'Floor plan'], ['plan', 'Elevations'], ['cutlist', 'Cut list'],
+          ['sheets', 'Sheet layouts'],
           ['drilling', 'Drilling schedule'], ['shopping', 'Shopping list'],
           ['notes', 'Notes'], ['labels', 'Labels']].map(([k, label]) => (
           <label className="check" key={k}>

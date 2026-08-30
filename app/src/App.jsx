@@ -591,7 +591,7 @@ export default function App() {
     switch (screen) {
       case 'planner':
         return <Planner project={project} setProject={setProject} onOpen3D={openDetail}
-                        arrangement={webgl ? arrangement : 'plan'} setArrangement={setArrangement} />;
+                        arrangement={webgl || arrangement === 'floor' ? arrangement : 'plan'} setArrangement={setArrangement} />;
       case 'cabinet':
         return detail
           ? <CabinetDetail unit={detail.unit} label={detail.label} resolvedTheme={resolvedTheme} />

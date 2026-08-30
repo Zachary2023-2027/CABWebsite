@@ -1089,6 +1089,11 @@ body {
 .p-plan > b { font-size: 9pt; }
 .p-elev { min-height: 0; display: flex; overflow: hidden; }
 .p-elev .elevation { width: 100%; height: 100%; max-height: 105mm; }
+
+/* The floor plan page. Taller than an elevation, because a plan is as deep as
+   the room and an elevation is only as tall as a wall. */
+.p-floor { min-height: 0; display: flex; overflow: hidden; }
+.p-floor .floorplan { width: 100%; height: 100%; max-height: 150mm; }
 .p-warns { font-size: 7.4pt; }
 .p-warns b { display: block; margin-bottom: 1mm; }
 .p-warns ul { margin: 0; padding-left: 4mm; }
@@ -1537,6 +1542,64 @@ kbd {
 /* Saving a drawing as it stands. */
 .elev-svg { position: absolute; right: var(--sp-3); bottom: var(--sp-3); z-index: 4; }
 .elev-wrap { position: relative; }
+
+/* ---------------------------------------------------------------------------
+   The plan. The kitchen from above.
+
+   The drawing fills the pane the elevation would have filled, so switching
+   between the two does not move the kitchen around under the pointer. The
+   legend sits along the bottom out of the way of the drawing, because on a
+   plan the middle is where the floor is and the floor is the point.
+   --------------------------------------------------------------------------- */
+.floor-wrap {
+  position: relative;
+  flex: 1; min-height: 0; min-width: 0;
+  display: grid; place-items: center; padding: var(--sp-4);
+  background: var(--bg);
+}
+.floorplan {
+  width: 100%; height: 100%; max-height: 100%;
+  touch-action: pan-y; user-select: none;
+}
+.floorplan text { font-family: var(--font-mono); fill: var(--dw-dim); }
+.plan-label { fill: var(--dw-line); opacity: 0.75; }
+.plan-name { fill: var(--dw-dim); font-weight: var(--fw-medium); }
+.plan-snap { fill: var(--accent); }
+.plan-missing { fill: var(--text-2); font-style: italic; }
+
+/* A gap somebody has to walk through, coloured by whether they can. */
+.plan-gap { stroke: var(--dw-dim); }
+.plan-gap text { fill: var(--dw-dim); }
+.plan-gap--warn { stroke: var(--warn); }
+.plan-gap--warn text { fill: var(--warn); }
+.plan-gap--error { stroke: var(--err); }
+.plan-gap--error text { fill: var(--err); }
+
+.plan-island { touch-action: none; }
+.plan-island.is-moving .plan-box { opacity: 0.9; }
+
+.floor-legend {
+  position: absolute; left: var(--sp-3); bottom: var(--sp-3); z-index: 4;
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  max-width: calc(100% - 120px);
+  background: var(--surface);
+  border: var(--bw) solid var(--border);
+  border-radius: var(--r-1);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-2); color: var(--text-2);
+}
+.floor-legend .note { margin: 0; }
+.plan-key {
+  display: inline-block; width: 14px; height: 10px; vertical-align: -1px;
+  border: var(--bw) solid var(--dw-line);
+}
+.plan-key--base { background: var(--dw-door); }
+.plan-key--wall { background: none; border-style: dashed; }
+.plan-key--bar { background: var(--dw-benchtop); }
+
+@media (max-width: 900px) {
+  .floor-legend .note { display: none; }
+}
 
 /* Which side of an island you are working on. */
 .elev-side { position: absolute; left: var(--sp-3); top: var(--sp-3); z-index: 4; }
